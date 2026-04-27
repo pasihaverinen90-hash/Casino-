@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/Casino-/',
+  base: '/Casino-hotel/',
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
