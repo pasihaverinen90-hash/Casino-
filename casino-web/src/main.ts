@@ -1,6 +1,6 @@
 // main.ts — entry point. Bootstraps Phaser and all HTML UI components.
 import Phaser from 'phaser';
-import { GridScene, GAME_W, GAME_H } from './game/GridScene';
+import { GridScene } from './game/GridScene';
 import { uiBus }       from './events/UIBus';
 import { gameState }   from './state/GameState';
 import { TopHUD }      from './ui/TopHUD';
@@ -19,31 +19,17 @@ const uiRoot = document.createElement('div');
 uiRoot.id    = 'ui-root';
 appEl.appendChild(uiRoot);
 
-// ── Viewport scaling ──────────────────────────────────────────────────────
-// CSS-scale the whole #app so the 390×844 game fills whatever screen it's on.
-// Phaser corrects its own pointer coords via getBoundingClientRect(), so no
-// extra work is needed — input stays accurate at any scale.
-function scaleApp(): void {
-  const scale = Math.max(0.1, Math.min(
-    window.innerWidth  / GAME_W,
-    window.innerHeight / GAME_H,
-  ));
-  appEl.style.transform = `scale(${scale})`;
-}
-scaleApp();
-window.addEventListener('resize', scaleApp);
-
-// ── Phaser game (renders the grid canvas) ─────────────────────────────────
+// ── Phaser game (renders the grid canvas, fills the window) ───────────────
 new Phaser.Game({
   type      : Phaser.AUTO,
-  width     : GAME_W,
-  height    : GAME_H,
+  width     : window.innerWidth,
+  height    : window.innerHeight,
   parent    : 'app',
   backgroundColor: '#0a0c14',
   scene     : [GridScene],
   input     : { touch: true, mouse: true },
   scale     : {
-    mode      : Phaser.Scale.NONE,   // we handle scaling ourselves via CSS
+    mode      : Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.NO_CENTER,
   },
   render    : { antialias: false },

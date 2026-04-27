@@ -6,18 +6,15 @@ import * as PV from '../logic/PlacementValidator';
 import { gameState } from '../state/GameState';
 import { uiBus }     from '../events/UIBus';
 
-// Layout constants shared with HTML overlay (must match style.css zones)
-export const GAME_W      = 390;
-export const GAME_H      = 844;
+// Fixed layout zone heights (px). CSS must match these values.
 export const HUD_H       = 56;
 export const TICKER_H    = 40;
 export const BOTTOMBAR_H = 80;
 export const GRID_AREA_Y = HUD_H;
-export const GRID_AREA_H = GAME_H - HUD_H - TICKER_H - BOTTOMBAR_H; // 668
 
-const TILE_MIN = 10;
-const TILE_MAX = 30;
-const TILE_DEFAULT = 18;
+const TILE_MIN     = 10;
+const TILE_MAX     = 48;
+const TILE_DEFAULT = 24;
 
 export class GridScene extends Phaser.Scene {
   private gfx!      : Phaser.GameObjects.Graphics;
@@ -56,9 +53,15 @@ export class GridScene extends Phaser.Scene {
   create(): void {
     this.gfx = this.add.graphics();
 
-    // Center grid horizontally on start (grid 36×18 = 648 > 390 viewport)
+    // Center grid horizontally on start
     const gridW = GC.GRID_COLS * this.tileSize;
-    this.ox = Math.min(0, (GAME_W - gridW) / 2);
+    this.ox = (this.scale.width - gridW) / 2;
+
+    // ── Window resize ─────────────────────────────────────────────────────
+    this.scale.on('resize', () => {
+      this._clampOffset();
+      this._redraw();
+    });
 
     // ── Game state events ─────────────────────────────────────────────────
     gameState.on('state_changed', () => this._redraw());
@@ -127,10 +130,16 @@ export class GridScene extends Phaser.Scene {
     this._redraw();
   }
 
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  private get _gridAreaH(): number {
+    return this.scale.height - HUD_H - TICKER_H - BOTTOMBAR_H;
+  }
+
   // ── Input ─────────────────────────────────────────────────────────────────
 
   private _inGrid(py: number): boolean {
-    return py >= GRID_AREA_Y && py < GRID_AREA_Y + GRID_AREA_H;
+    return py >= GRID_AREA_Y && py < GRID_AREA_Y + this._gridAreaH;
   }
 
   /** Convert logical canvas position → grid tile, or null if out of bounds. */
@@ -150,7 +159,7 @@ export class GridScene extends Phaser.Scene {
     this.dragStartOY = this.oy;
     this.dragged     = false;
 
-    // Right-click / two-finger tap = rotate ghost
+    // Right-click = rotate ghost
     if (ptr.rightButtonDown() && this.placing) {
       this.placeRot = !this.placeRot;
       this._updateGhost(ptr.x, ptr.y);
@@ -160,7 +169,6 @@ export class GridScene extends Phaser.Scene {
 
   private _onMove(ptr: Phaser.Input.Pointer): void {
     if (!ptr.isDown) {
-      // Hover: update ghost and cursor
       if (this.placing && this._inGrid(ptr.y)) {
         this._updateGhost(ptr.x, ptr.y);
         this._redraw();
@@ -189,7 +197,6 @@ export class GridScene extends Phaser.Scene {
   private _onUp(ptr: Phaser.Input.Pointer): void {
     if (!this.dragged && this._inGrid(ptr.y)) this._tap(ptr.x, ptr.y);
 
-    // Restore cursor after drag
     if (this.dragged && !this.placing && !this.demolishing) {
       this._setCursor('default');
     }
@@ -242,31 +249,29 @@ export class GridScene extends Phaser.Scene {
   private _onWheel(e: WheelEvent): void {
     e.preventDefault();
 
-    // Convert screen position → logical canvas coordinates,
-    // accounting for any CSS transform (scale) applied to #app.
     const canvas = this.sys.game.canvas;
     const rect   = canvas.getBoundingClientRect();
-    const cssScaleX = rect.width  / GAME_W;
-    const cssScaleY = rect.height / GAME_H;
-    const mx = (e.clientX - rect.left) / cssScaleX;
-    const my = (e.clientY - rect.top)  / cssScaleY;
+    // Account for any browser zoom or CSS scaling on the canvas
+    const scaleX = rect.width  / this.scale.width;
+    const scaleY = rect.height / this.scale.height;
+    const mx = (e.clientX - rect.left) / scaleX;
+    const my = (e.clientY - rect.top)  / scaleY;
 
     if (!this._inGrid(my)) return;
 
     const oldTs = this.tileSize;
-    // Trackpad sends small fractional deltas; clamp to ±1 per event
     const sign  = e.deltaY < 0 ? 1 : -1;
-    const newTs = Math.max(TILE_MIN, Math.min(TILE_MAX, oldTs + sign));
+    const step  = Math.max(1, Math.round(oldTs * 0.08)); // smoother zoom at larger sizes
+    const newTs = Math.max(TILE_MIN, Math.min(TILE_MAX, oldTs + sign * step));
 
     if (newTs === oldTs) return;
 
-    // Zoom toward cursor: keep the tile under the cursor in place.
-    // col = (mx - ox) / oldTs  →  ox_new = mx - col * newTs
-    const col = (mx - this.ox)              / oldTs;
+    // Zoom toward cursor: keep the tile under cursor fixed
+    const col = (mx - this.ox)               / oldTs;
     const row = (my - GRID_AREA_Y - this.oy) / oldTs;
 
     this.tileSize = newTs;
-    this.ox = mx            - col * newTs;
+    this.ox = mx              - col * newTs;
     this.oy = (my - GRID_AREA_Y) - row * newTs;
 
     this._clampOffset();
@@ -276,16 +281,16 @@ export class GridScene extends Phaser.Scene {
   // ── Pan clamping ───────────────────────────────────────────────────────────
 
   private _clampOffset(): void {
-    const ts    = this.tileSize;
-    const gridW = GC.GRID_COLS * ts;
-    const gridH = GC.GRID_ROWS * ts;
+    const ts     = this.tileSize;
+    const gridW  = GC.GRID_COLS * ts;
+    const gridH  = GC.GRID_ROWS * ts;
+    const viewW  = this.scale.width;
+    const viewH  = this._gridAreaH;
+    const padX   = viewW * 0.5;
+    const padY   = viewH * 0.5;
 
-    // Allow up to half a view of empty space on either side
-    const padX = GAME_W    * 0.5;
-    const padY = GRID_AREA_H * 0.5;
-
-    this.ox = Math.max(GAME_W    - gridW - padX, Math.min(padX, this.ox));
-    this.oy = Math.max(GRID_AREA_H - gridH - padY, Math.min(padY, this.oy));
+    this.ox = Math.max(viewW - gridW - padX, Math.min(padX, this.ox));
+    this.oy = Math.max(viewH - gridH - padY, Math.min(padY, this.oy));
   }
 
   // ── Draw ──────────────────────────────────────────────────────────────────
@@ -314,20 +319,19 @@ export class GridScene extends Phaser.Scene {
       g.fillStyle(color, 1);
       g.fillRect(baseX + obj.col * ts, baseY + obj.row * ts, obj.w * ts - 1, obj.h * ts - 1);
 
-      // Abbreviated label — only show when tiles are large enough to be readable
       usedIds.add(obj.id);
       let txt = this.labelPool.get(obj.id);
       if (!txt) {
         const def = GC.getDef(obj.type as GC.ObjType);
         txt = this.add.text(0, 0, def.label.slice(0, 2), {
-          fontSize: '9px', color: '#fff', fontFamily: 'monospace',
+          fontSize: '10px', color: '#fff', fontFamily: 'monospace',
         }).setDepth(2);
         this.labelPool.set(obj.id, txt);
       }
       const visible = ts >= 14;
       txt.setVisible(visible);
       if (visible) {
-        txt.setPosition(baseX + obj.col * ts + 1, baseY + obj.row * ts + ts * 0.3);
+        txt.setPosition(baseX + obj.col * ts + 2, baseY + obj.row * ts + ts * 0.25);
       }
     }
 
@@ -362,8 +366,6 @@ export class GridScene extends Phaser.Scene {
       default:                  return GC.COL_FLOOR;
     }
   }
-
-  // ── Helpers ───────────────────────────────────────────────────────────────
 
   private _setCursor(cursor: string): void {
     this.sys.game.canvas.style.cursor = cursor;
