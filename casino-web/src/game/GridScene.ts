@@ -46,6 +46,11 @@ export class GridScene extends Phaser.Scene {
   private dragStartOY = 0;
   private dragged     = false;
 
+  // Drag-placement tracking (per mouse-down → mouse-up cycle)
+  private placedAnyDuringPress = false;
+  private dragPlaceLastCol     = -1;
+  private dragPlaceLastRow     = -1;
+
   constructor() {
     super({ key: 'GridScene' });
   }
@@ -158,12 +163,27 @@ export class GridScene extends Phaser.Scene {
     this.dragStartOX = this.ox;
     this.dragStartOY = this.oy;
     this.dragged     = false;
+    this.placedAnyDuringPress = false;
+    this.dragPlaceLastCol     = -1;
+    this.dragPlaceLastRow     = -1;
 
     // Right-click = rotate ghost
     if (ptr.rightButtonDown() && this.placing) {
       this.placeRot = !this.placeRot;
       this._updateGhost(ptr.x, ptr.y);
       this._redraw();
+      return;
+    }
+
+    // Left-click in placement mode: attempt placement on the starting tile.
+    // Subsequent tiles are handled by drag-placement in _onMove.
+    if (ptr.leftButtonDown() && this.placing) {
+      const coord = this._toTile(ptr.x, ptr.y);
+      if (coord) {
+        this._tryDragPlace(coord.col, coord.row);
+        this._updateGhost(ptr.x, ptr.y);
+        this._redraw();
+      }
     }
   }
 
@@ -176,25 +196,54 @@ export class GridScene extends Phaser.Scene {
       return;
     }
 
+    // Drag-placement: while placing and dragging, place on each new tile entered.
+    // Invalid tiles are skipped silently. No 6px threshold — every new tile counts.
+    if (this.placing) {
+      this.dragged = true;
+      if (this._inGrid(ptr.y)) {
+        const coord = this._toTile(ptr.x, ptr.y);
+        if (coord && (coord.col !== this.dragPlaceLastCol || coord.row !== this.dragPlaceLastRow)) {
+          this._tryDragPlace(coord.col, coord.row);
+        }
+        this._updateGhost(ptr.x, ptr.y);
+      }
+      this._redraw();
+      return;
+    }
+
     const dx = ptr.x - this.dragStartX;
     const dy = ptr.y - this.dragStartY;
 
     if (Math.hypot(dx, dy) > 6) {
       this.dragged = true;
-
-      if (this.placing) {
-        this._updateGhost(ptr.x, ptr.y);
-      } else {
-        this._setCursor('grabbing');
-        this.ox = this.dragStartOX + dx;
-        this.oy = this.dragStartOY + dy;
-        this._clampOffset();
-      }
+      this._setCursor('grabbing');
+      this.ox = this.dragStartOX + dx;
+      this.oy = this.dragStartOY + dy;
+      this._clampOffset();
       this._redraw();
     }
   }
 
   private _onUp(ptr: Phaser.Input.Pointer): void {
+    // Placement just finished (click or drag). Exit placement mode unless Ctrl is held.
+    if (this.placing && this.placedAnyDuringPress) {
+      const ev   = ptr.event as MouseEvent | PointerEvent | undefined;
+      const ctrl = !!(ev && ev.ctrlKey);
+      if (!ctrl) {
+        this.placing  = false;
+        this.ghostCol = -1;
+        this.ghostRow = -1;
+        this._setCursor('default');
+        uiBus.emit('placement_confirmed');
+      }
+      this._redraw();
+      this.dragged = false;
+      this.placedAnyDuringPress = false;
+      this.dragPlaceLastCol = -1;
+      this.dragPlaceLastRow = -1;
+      return;
+    }
+
     if (!this.dragged && this._inGrid(ptr.y)) this._tap(ptr.x, ptr.y);
 
     if (this.dragged && !this.placing && !this.demolishing) {
@@ -203,19 +252,25 @@ export class GridScene extends Phaser.Scene {
     this.dragged = false;
   }
 
+  /** Validate + place silently. Returns true if a placement happened. */
+  private _tryDragPlace(col: number, row: number): void {
+    this.dragPlaceLastCol = col;
+    this.dragPlaceLastRow = row;
+
+    const result = PV.validate(
+      { type: this.placeType as GC.ObjType, col, row, rotated: this.placeRot },
+      gameState.tiles, gameState.placedObjs, gameState.cash, gameState.barExists,
+    );
+    if (result !== GC.ValResult.VALID) return; // silent skip
+
+    if (gameState.tryPlace(col, row, this.placeType as GC.ObjType, this.placeRot, this.placeVar)) {
+      this.placedAnyDuringPress = true;
+    }
+  }
+
   private _tap(px: number, py: number): void {
     const coord = this._toTile(px, py);
     if (!coord) return;
-
-    if (this.placing) {
-      gameState.tryPlace(coord.col, coord.row, this.placeType as GC.ObjType, this.placeRot, this.placeVar);
-      this.placing = false;
-      this.ghostCol = -1; this.ghostRow = -1;
-      this._setCursor('default');
-      this._redraw();
-      uiBus.emit('placement_confirmed');
-      return;
-    }
 
     if (this.demolishing) {
       const t = gameState.tiles[coord.row * GC.GRID_COLS + coord.col];
