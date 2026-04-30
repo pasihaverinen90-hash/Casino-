@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { GridScene } from './game/GridScene';
 import { uiBus }       from './events/UIBus';
 import { gameState }   from './state/GameState';
+import { TimeController } from './state/TimeController';
 import { TopHUD }      from './ui/TopHUD';
 import { BottomBar }   from './ui/BottomBar';
 import { GoalTicker }  from './ui/GoalTicker';
@@ -50,18 +51,23 @@ new GoalTicker(uiRoot, () => {
   goalsPanel.open();
 });
 
-const bottomBar = new BottomBar(uiRoot, {
+const time = new TimeController(() => gameState.advanceDay());
+
+const bottomBar = new BottomBar(uiRoot, time, {
   onBuild: () => {
     hotelPanel.close(); statsPanel.close(); goalsPanel.close();
     buildPanel.open();
+    time.setAutoPause(true);
   },
   onHotel: () => {
     buildPanel.close(); statsPanel.close(); goalsPanel.close();
     hotelPanel.open();
+    time.setAutoPause(true);
   },
   onStats: () => {
     buildPanel.close(); hotelPanel.close(); goalsPanel.close();
     statsPanel.open();
+    time.setAutoPause(false);
   },
   onCloseAll: _closeAll,
 });
@@ -71,6 +77,7 @@ function _closeAll(): void {
   hotelPanel.close();
   statsPanel.close();
   goalsPanel.close();
+  time.setAutoPause(false);
   uiBus.emit('exit_placement');
   uiBus.emit('toggle_demolish', false);
 }
@@ -78,8 +85,8 @@ function _closeAll(): void {
 // ── Keyboard shortcuts ────────────────────────────────────────────────────
 // B = Build panel toggle       H = Hotel panel toggle
 // S = Stats panel toggle       G = Goals panel toggle
-// Space / Enter = Advance day  Escape = close everything
-// R = rotate placement ghost (handled inside GridScene)
+// Space = pause / resume       1 = 1× speed   2 = 2× speed
+// Escape = close everything    R = rotate placement ghost (handled in GridScene)
 
 document.addEventListener('keydown', e => {
   // Don't fire while typing inside an input field
@@ -117,11 +124,16 @@ document.addEventListener('keydown', e => {
       break;
 
     case ' ':
-    case 'Enter':
       e.preventDefault();
-      _closeAll();
-      bottomBar.closeAll();
-      gameState.advanceDay();
+      time.togglePause();
+      break;
+
+    case '1':
+      time.setSpeed(1);
+      break;
+
+    case '2':
+      time.setSpeed(2);
       break;
   }
 });

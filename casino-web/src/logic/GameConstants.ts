@@ -16,12 +16,35 @@ export const CROWDING_SMOOTH = 0.4;
 
 export const BASE_DEMAND     = 30;
 
-export const REV_SLOT        = 12;
-export const REV_SMALL_TABLE = 22;
-export const REV_LARGE_TABLE = 30;
-export const REV_BAR         = 8;
-export const REV_PER_ROOM    = 25;
+export const REV_SLOT        = 8;
+export const REV_SMALL_TABLE = 16;
+export const REV_LARGE_TABLE = 22;
+export const REV_BAR         = 6;
+export const REV_PER_ROOM    = 18;
 export const BAR_DRAW_RATE   = 0.15;
+
+// Daily upkeep per object. Subtracted from gross revenue each day.
+export const UPKEEP_SLOT        = 5;
+export const UPKEEP_SMALL_TABLE = 25;
+export const UPKEEP_LARGE_TABLE = 45;
+export const UPKEEP_WC          = 3;
+export const UPKEEP_BAR         = 60;
+export const UPKEEP_PER_ROOM    = 5;
+
+// Auto-progression: one in-game day = this many real seconds at speed 1×.
+export const DAY_DURATION_SEC = 12;
+
+// Numeric thresholds for the four progression goals that use scalar targets.
+// Goals 0/2/3/8/9 are presence checks and stay hard-coded in GameState.
+export const GOAL_TARGETS = {
+  slots         : 3,
+  guests_first  : 50,
+  rating        : 2.0,
+  income        : 12_000,
+  rooms         : 8,
+  guests_busy   : 85,
+  quality       : 2,
+} as const;
 
 export const GOAL_REWARDS = [500, 800, 600, 1200, 1000, 1500, 1000, 2000, 1500, 3000];
 export const GOAL_LABELS  = [
@@ -30,15 +53,15 @@ export const GOAL_LABELS  = [
   'Quality Service','Grand Bar',
 ];
 export const GOAL_DESCS = [
-  'Build 3 slot machines',
-  'Reach 35 guests/day',
+  `Build ${GOAL_TARGETS.slots} slot machines`,
+  `Reach ${GOAL_TARGETS.guests_first} guests/day`,
   'Build your first WC',
   'Build your first small table',
-  'Reach Resort Rating 2.0',
-  'Earn 5,000 total',
-  'Expand hotel to 4 rooms',
-  'Reach 60 guests/day',
-  'Upgrade hotel to quality 2',
+  `Reach Resort Rating ${GOAL_TARGETS.rating.toFixed(1)}`,
+  `Earn ${GOAL_TARGETS.income.toLocaleString()} total`,
+  `Expand hotel to ${GOAL_TARGETS.rooms} rooms`,
+  `Reach ${GOAL_TARGETS.guests_busy} guests/day`,
+  `Upgrade hotel to quality ${GOAL_TARGETS.quality}`,
   'Build the bar',
 ];
 

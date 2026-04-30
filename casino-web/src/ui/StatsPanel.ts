@@ -1,4 +1,5 @@
 // StatsPanel.ts — full-screen overlay: Today summary + History charts.
+import * as GC from '../logic/GameConstants';
 import { gameState } from '../state/GameState';
 import { ChartCard }  from './ChartCard';
 
@@ -23,6 +24,8 @@ export class StatsPanel {
   private lblBarRev  : HTMLElement;
   private lblHotelRev: HTMLElement;
   private lblTotalRev: HTMLElement;
+  private lblUpkeep  : HTMLElement;
+  private lblNet     : HTMLElement;
   private lblCumul   : HTMLElement;
 
   // Charts
@@ -68,6 +71,8 @@ export class StatsPanel {
     this.lblHotelRev = this.todayPanel.appendChild(statRow());
     this.todayPanel.appendChild(separator());
     this.lblTotalRev = this.todayPanel.appendChild(statRow(true));
+    this.lblUpkeep   = this.todayPanel.appendChild(statRow());
+    this.lblNet      = this.todayPanel.appendChild(statRow(true));
     this.lblCumul    = this.todayPanel.appendChild(statRow(true));
 
     // History panel
@@ -130,14 +135,18 @@ export class StatsPanel {
       this.lblBarRev.textContent   = 'Bar              —';
       this.lblHotelRev.textContent = 'Hotel Rooms      —';
       this.lblTotalRev.textContent = 'Total Revenue    —';
+      this.lblUpkeep.textContent   = 'Upkeep           —';
+      this.lblNet.textContent      = 'Net              —';
     } else {
       this.lblSlotRev.textContent  = `Slots            ${last.slot_rev} 💰`;
       this.lblTblRev.textContent   = `Tables           ${last.small_rev + last.large_rev} 💰`;
       this.lblBarRev.textContent   = `Bar              ${last.bar_rev} 💰`;
       this.lblHotelRev.textContent = `Hotel Rooms      ${last.hotel_rev} 💰`;
       this.lblTotalRev.textContent = `Total Revenue    ${last.revenue} 💰`;
+      this.lblUpkeep.textContent   = `Upkeep           −${last.costs} 💰`;
+      this.lblNet.textContent      = `Net              ${last.net >= 0 ? '+' : ''}${last.net} 💰`;
     }
-    this.lblCumul.textContent = `Total Earned     ${gs.cumulativeIncome.toLocaleString()} 💰  (goal: 5,000)`;
+    this.lblCumul.textContent = `Total Earned     ${gs.cumulativeIncome.toLocaleString()} 💰  (goal: ${GC.GOAL_TARGETS.income.toLocaleString()})`;
   }
 
   private _refreshCharts(): void {

@@ -21,15 +21,27 @@ export function calcRating(
   crowdingPenalty: number,
 ): number {
   const raw = GC.RATING_BASE
-    + 0.02 * slots
-    + 0.18 * smallTables
+    + 0.01 * slots
+    + 0.14 * smallTables
     + 0.25 * largeTables
     + 0.20 * wcCount
     + (barExists ? 0.35 : 0.0)
     + 0.03 * roomCount
-    + 0.25 * qualityLevel
+    + 0.18 * qualityLevel
     - crowdingPenalty;
   return clamp(raw, GC.RATING_MIN, GC.RATING_MAX);
+}
+
+export function calcUpkeep(
+  slots: number, smallTables: number, largeTables: number,
+  wcCount: number, barExists: boolean, roomCount: number,
+): number {
+  return slots       * GC.UPKEEP_SLOT
+       + smallTables * GC.UPKEEP_SMALL_TABLE
+       + largeTables * GC.UPKEEP_LARGE_TABLE
+       + wcCount     * GC.UPKEEP_WC
+       + (barExists  ? GC.UPKEEP_BAR : 0)
+       + roomCount   * GC.UPKEEP_PER_ROOM;
 }
 
 export function calcOccupancy(
@@ -129,14 +141,16 @@ export function runDay(s: DayInput): DayOutput {
   const total       = walkin + hotel.hotel_guests;
   const rev         = calcRevenue(total, hotel.booked,
                                    s.slots, s.small_tables, s.large_tables, s.bar_exists);
-  const net         = rev.total;
+  const upkeep      = calcUpkeep(s.slots, s.small_tables, s.large_tables,
+                                  s.wc_count, s.bar_exists, s.room_count);
+  const net         = rev.total - upkeep;
   const new_cash    = s.cash + net;
-  const new_cumul   = s.cumulative_income + net;
+  const new_cumul   = s.cumulative_income + rev.total; // total gross revenue earned
 
   const day_stats: GC.DayStats = {
     day: s.day_number, total_guests: total, walkin,
     hotel_guests: hotel.hotel_guests,
-    revenue: rev.total, costs: 0, net,
+    revenue: rev.total, costs: upkeep, net,
     cumulative: new_cumul, cash: new_cash,
     slot_rev: rev.slot_rev, small_rev: rev.small_rev,
     large_rev: rev.large_rev, bar_rev: rev.bar_rev,

@@ -1,5 +1,5 @@
-// BottomBar.ts — bottom action bar: Build | Hotel | Stats | Day ▶
-import { gameState } from '../state/GameState';
+// BottomBar.ts — bottom action bar: Build | Hotel | Stats | ⏸ 1× 2×
+import { TimeController, type Speed } from '../state/TimeController';
 
 type PanelId = 'build' | 'hotel' | 'stats' | '';
 
@@ -15,28 +15,43 @@ export class BottomBar {
   private btnBuild   : HTMLButtonElement;
   private btnHotel   : HTMLButtonElement;
   private btnStats   : HTMLButtonElement;
-  private _callbacks : BottomBarCallbacks;
+  private btnPause   : HTMLButtonElement;
+  private btn1x      : HTMLButtonElement;
+  private btn2x      : HTMLButtonElement;
+  private _time      : TimeController;
 
-  constructor(parent: HTMLElement, cb: BottomBarCallbacks) {
-    this._callbacks = cb;
+  constructor(parent: HTMLElement, time: TimeController, cb: BottomBarCallbacks) {
+    this._time = time;
+
     const el = document.createElement('div');
     el.className = 'bottom-bar interactive';
 
     this.btnBuild = btn('🔨 Build', 'bottom-btn', 'B');
     this.btnHotel = btn('🏨 Hotel', 'bottom-btn', 'H');
     this.btnStats = btn('📊 Stats', 'bottom-btn', 'S');
-    const btnDay  = btn('▶ Day',   'bottom-btn day-btn', 'Space');
 
     this.btnBuild.onclick = () => this._toggle('build', cb.onBuild,    cb.onCloseAll);
     this.btnHotel.onclick = () => this._toggle('hotel', cb.onHotel,    cb.onCloseAll);
     this.btnStats.onclick = () => this._toggle('stats', cb.onStats,    cb.onCloseAll);
-    btnDay.onclick        = () => { this.closeAll(cb.onCloseAll); gameState.advanceDay(); };
 
-    el.append(this.btnBuild, this.btnHotel, this.btnStats, btnDay);
+    // Speed segmented control
+    const speedGroup = document.createElement('div');
+    speedGroup.className = 'speed-group';
+    this.btnPause = btn('⏸',  'speed-btn', 'Space');
+    this.btn1x    = btn('1×', 'speed-btn', '1');
+    this.btn2x    = btn('2×', 'speed-btn', '2');
+    this.btnPause.onclick = () => time.setSpeed(0);
+    this.btn1x.onclick    = () => time.setSpeed(1);
+    this.btn2x.onclick    = () => time.setSpeed(2);
+    speedGroup.append(this.btnPause, this.btn1x, this.btn2x);
+
+    el.append(this.btnBuild, this.btnHotel, this.btnStats, speedGroup);
     parent.appendChild(el);
+
+    time.onChange = () => this._refreshSpeed();
+    this._refreshSpeed();
   }
 
-  // Simulate pressing a named button (used by keyboard shortcuts in main.ts)
   pressButton(id: 'build' | 'hotel' | 'stats'): void {
     ({ build: this.btnBuild, hotel: this.btnHotel, stats: this.btnStats }[id]).click();
   }
@@ -61,6 +76,13 @@ export class BottomBar {
     this.btnBuild.classList.toggle('active', this.active === 'build');
     this.btnHotel.classList.toggle('active', this.active === 'hotel');
     this.btnStats.classList.toggle('active', this.active === 'stats');
+  }
+
+  private _refreshSpeed(): void {
+    const s: Speed = this._time.speed;
+    this.btnPause.classList.toggle('active', s === 0);
+    this.btn1x.classList.toggle   ('active', s === 1);
+    this.btn2x.classList.toggle   ('active', s === 2);
   }
 }
 

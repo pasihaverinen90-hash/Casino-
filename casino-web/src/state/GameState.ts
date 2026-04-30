@@ -268,32 +268,34 @@ class GameState extends EventEmitter {
   }
 
   private _isGoalMet(idx: number): boolean {
+    const T = GC.GOAL_TARGETS;
     switch (idx) {
-      case 0: return this.slotCount        >= 3;
-      case 1: return this.totalGuests      >= 35;
+      case 0: return this.slotCount        >= T.slots;
+      case 1: return this.totalGuests      >= T.guests_first;
       case 2: return this.wcCount          >= 1;
       case 3: return this.smallTableCount  >= 1;
-      case 4: return this.resortRating     >= 2.0;
-      case 5: return this.cumulativeIncome >= 5000;
-      case 6: return this.roomCount        >= 4;
-      case 7: return this.totalGuests      >= 60;
-      case 8: return this.qualityLevel     >= 2;
+      case 4: return this.resortRating     >= T.rating;
+      case 5: return this.cumulativeIncome >= T.income;
+      case 6: return this.roomCount        >= T.rooms;
+      case 7: return this.totalGuests      >= T.guests_busy;
+      case 8: return this.qualityLevel     >= T.quality;
       case 9: return this.barExists;
     }
     return false;
   }
 
   getGoalProgress(idx: number): number {
+    const T = GC.GOAL_TARGETS;
     switch (idx) {
-      case 0: return Math.min(1, this.slotCount        / 3);
-      case 1: return Math.min(1, this.totalGuests      / 35);
+      case 0: return Math.min(1, this.slotCount        / T.slots);
+      case 1: return Math.min(1, this.totalGuests      / T.guests_first);
       case 2: return this.wcCount          >= 1 ? 1 : 0;
       case 3: return this.smallTableCount  >= 1 ? 1 : 0;
-      case 4: return Math.min(1, this.resortRating     / 2.0);
-      case 5: return Math.min(1, this.cumulativeIncome / 5000);
-      case 6: return Math.min(1, this.roomCount        / 4);
-      case 7: return Math.min(1, this.totalGuests      / 60);
-      case 8: return this.qualityLevel     >= 2 ? 1 : 0;
+      case 4: return Math.min(1, this.resortRating     / T.rating);
+      case 5: return Math.min(1, this.cumulativeIncome / T.income);
+      case 6: return Math.min(1, this.roomCount        / T.rooms);
+      case 7: return Math.min(1, this.totalGuests      / T.guests_busy);
+      case 8: return this.qualityLevel     >= T.quality ? 1 : 0;
       case 9: return this.barExists ? 1 : 0;
     }
     return 0;

@@ -142,13 +142,34 @@ body {
   color: #ffdd55;
 }
 
-.bottom-btn.day-btn {
+/* Speed control: pause / 1× / 2× — sits where the old Day button was */
+.speed-group {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.speed-btn {
+  width: 56px;
+  height: 56px;
+  background: rgba(28, 33, 52, 0.9);
+  border: 1px solid #2a3050;
+  color: #c8cce0;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  user-select: none;
+}
+
+.speed-btn:active { opacity: 0.75; }
+
+.speed-btn.active {
   background: rgba(40, 160, 80, 0.25);
   border-color: #2a804a;
   color: #55dd88;
 }
-
-.bottom-btn.day-btn:active { background: rgba(40, 160, 80, 0.45); }
 
 /* ── Panels ──────────────────────────────────────────────────────────────── */
 .panel {
