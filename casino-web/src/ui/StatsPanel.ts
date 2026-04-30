@@ -71,7 +71,11 @@ export class StatsPanel {
     this.lblHotelRev = this.todayPanel.appendChild(statRow());
     this.todayPanel.appendChild(separator());
     this.lblTotalRev = this.todayPanel.appendChild(statRow(true));
+    // Upkeep row is hidden in this MVP — costs will return with real
+    // staff/operations systems. Element kept so existing refresh code
+    // can write into it without conditional branches.
     this.lblUpkeep   = this.todayPanel.appendChild(statRow());
+    this.lblUpkeep.style.display = 'none';
     this.lblNet      = this.todayPanel.appendChild(statRow(true));
     this.lblCumul    = this.todayPanel.appendChild(statRow(true));
 

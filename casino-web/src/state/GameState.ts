@@ -383,6 +383,13 @@ class GameState extends EventEmitter {
       this.activeGoal       = d.active_goal;
       this.completedGoals   = d.completed;
       this.statsRecords     = d.stats;
+      // Costs are gone in this MVP. Rewrite historical records so the
+      // displayed Net always equals Revenue, regardless of when the
+      // save was created.
+      for (const r of this.statsRecords) {
+        r.costs = 0;
+        r.net   = r.revenue;
+      }
       this.chartDays        = d.ch_days;   this.chartGuests   = d.ch_guests;
       this.chartRevenue     = d.ch_rev;    this.chartRating   = d.ch_rating;
       this.chartOccupancy   = d.ch_occ;    this.chartCapacity = d.ch_cap;
