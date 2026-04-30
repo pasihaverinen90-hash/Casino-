@@ -6,6 +6,7 @@ import { fmtCash } from './TopHUD';
 
 export class StartScreen {
   private el: HTMLElement;
+  private slotList: HTMLElement;
   private onPicked: () => void;
 
   constructor(parent: HTMLElement, onPicked: () => void) {
@@ -27,18 +28,23 @@ export class StartScreen {
     subtitle.textContent = 'Select a save slot';
     card.appendChild(subtitle);
 
-    const slotList = document.createElement('div');
-    slotList.className = 'slot-list';
-    for (let i = 1; i <= Slots.SLOT_COUNT; i++) {
-      slotList.appendChild(this._buildSlotRow(i));
-    }
-    card.appendChild(slotList);
+    this.slotList = document.createElement('div');
+    this.slotList.className = 'slot-list';
+    card.appendChild(this.slotList);
 
     this.el.appendChild(card);
     parent.appendChild(this.el);
   }
 
-  show(): void { this.el.classList.add('visible'); }
+  // Rebuild slot rows on every show so summaries reflect the latest saves.
+  show(): void {
+    this.slotList.replaceChildren();
+    for (let i = 1; i <= Slots.SLOT_COUNT; i++) {
+      this.slotList.appendChild(this._buildSlotRow(i));
+    }
+    this.el.classList.add('visible');
+  }
+
   hide(): void { this.el.classList.remove('visible'); }
 
   private _buildSlotRow(slot: number): HTMLElement {

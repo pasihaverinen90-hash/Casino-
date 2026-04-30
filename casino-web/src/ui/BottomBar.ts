@@ -1,4 +1,4 @@
-// BottomBar.ts — bottom action bar: Build | Hotel | Stats | ⏸ 1× 2×
+// BottomBar.ts — bottom action bar: Build | Hotel | Stats | ⏸ 1× 2× | Save | Menu
 import { TimeController, type Speed } from '../state/TimeController';
 
 type PanelId = 'build' | 'hotel' | 'stats' | '';
@@ -7,6 +7,8 @@ export interface BottomBarCallbacks {
   onBuild   : () => void;
   onHotel   : () => void;
   onStats   : () => void;
+  onSave    : () => void;
+  onMenu    : () => void;
   onCloseAll: () => void;
 }
 
@@ -45,7 +47,12 @@ export class BottomBar {
     this.btn2x.onclick    = () => time.setSpeed(2);
     speedGroup.append(this.btnPause, this.btn1x, this.btn2x);
 
-    el.append(this.btnBuild, this.btnHotel, this.btnStats, speedGroup);
+    const btnSave = btn('💾 Save', 'bottom-btn aux', '');
+    btnSave.onclick = () => cb.onSave();
+    const btnMenu = btn('🏠 Menu', 'bottom-btn aux', '');
+    btnMenu.onclick = () => cb.onMenu();
+
+    el.append(this.btnBuild, this.btnHotel, this.btnStats, speedGroup, btnSave, btnMenu);
     parent.appendChild(el);
 
     time.onChange = () => this._refreshSpeed();

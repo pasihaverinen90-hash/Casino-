@@ -23,13 +23,14 @@ export const REV_BAR         = 6;
 export const REV_PER_ROOM    = 18;
 export const BAR_DRAW_RATE   = 0.15;
 
-// Daily upkeep per object. Subtracted from gross revenue each day.
-export const UPKEEP_SLOT        = 3;
-export const UPKEEP_SMALL_TABLE = 25;
-export const UPKEEP_LARGE_TABLE = 45;
-export const UPKEEP_WC          = 3;
-export const UPKEEP_BAR         = 60;
-export const UPKEEP_PER_ROOM    = 5;
+// Daily upkeep per object. Disabled in this MVP — costs will return later
+// once real staff/operations systems exist.
+export const UPKEEP_SLOT        = 0;
+export const UPKEEP_SMALL_TABLE = 0;
+export const UPKEEP_LARGE_TABLE = 0;
+export const UPKEEP_WC          = 0;
+export const UPKEEP_BAR         = 0;
+export const UPKEEP_PER_ROOM    = 0;
 
 // Auto-progression: one in-game day = this many real seconds at speed 1×.
 export const DAY_DURATION_SEC = 10;

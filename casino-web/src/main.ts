@@ -84,8 +84,59 @@ const bottomBar = new BottomBar(uiRoot, time, {
     statsPanel.open();
     time.setAutoPause(false);
   },
+  onSave: () => {
+    if (gameState.save()) gameState.emit('toast_requested', '✓ Game saved');
+  },
+  onMenu: () => {
+    _closeAll();
+    bottomBar.closeAll();
+    time.setAutoPause(true);   // pause while the confirm is up; restored on cancel
+    _confirmReturnToMenu();
+  },
   onCloseAll: _closeAll,
 });
+
+function _confirmReturnToMenu(): void {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay interactive';
+
+  const card = document.createElement('div');
+  card.className = 'modal-card';
+
+  const title = document.createElement('div');
+  title.className   = 'modal-title';
+  title.textContent = 'Return to Main Menu?';
+  card.appendChild(title);
+
+  const body = document.createElement('div');
+  body.className   = 'modal-body';
+  body.textContent = 'Unsaved progress will be lost.';
+  card.appendChild(body);
+
+  const btnGo = document.createElement('button');
+  btnGo.className   = 'modal-btn danger';
+  btnGo.textContent = 'Return to Menu';
+  btnGo.onclick     = () => {
+    overlay.remove();
+    started = false;
+    time.setSpeed(0);
+    gameState.clearActiveSlot();
+    startScreen.show();
+  };
+  card.appendChild(btnGo);
+
+  const btnCancel = document.createElement('button');
+  btnCancel.className   = 'modal-btn';
+  btnCancel.textContent = 'Cancel';
+  btnCancel.onclick     = () => {
+    overlay.remove();
+    time.setAutoPause(false);
+  };
+  card.appendChild(btnCancel);
+
+  overlay.appendChild(card);
+  uiRoot.appendChild(overlay);
+}
 
 function _closeAll(): void {
   buildPanel.close();

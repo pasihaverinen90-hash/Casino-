@@ -49,9 +49,9 @@ class GameState extends EventEmitter {
   chartOccupancy: number[] = [];
   chartCapacity : number[] = [];
 
-  // Active save slot (1..SLOT_COUNT). Null until the start screen picks one;
-  // _save() is a no-op while null so the empty bootstrap state never lands
-  // in storage.
+  // Active save slot (1..SLOT_COUNT). Null until the start screen picks one
+  // and again after Return-to-Menu, so manual save() is a no-op outside an
+  // active session.
   private _activeSlot: number | null = null;
 
   constructor() {
@@ -71,22 +71,31 @@ class GameState extends EventEmitter {
     this._activeSlot = slot;
     Slots.setLastUsed(slot);
     const ok = this._tryLoad(Slots.slotKey(slot));
-    if (!ok) {
-      this._newGame();
-      this._save();
-    }
+    if (!ok) this._newGame();
     this.emit('state_changed');
     return ok;
   }
 
-  // Activate a slot and start a fresh game in it, overwriting any prior save.
+  // Activate a slot and start a fresh game in it. Does not persist — the
+  // slot's prior save is left in storage until the player presses Save.
   newGameInSlot(slot: number): void {
     this._activeSlot = slot;
     Slots.setLastUsed(slot);
-    Slots.deleteSlot(slot);
     this._newGame();
-    this._save();
     this.emit('state_changed');
+  }
+
+  // Manual save — wires to the current active slot. No-op before a slot
+  // has been picked. Returns true on success.
+  save(): boolean {
+    if (this._activeSlot === null) return false;
+    this._writeSave();
+    return true;
+  }
+
+  // Detach the active slot without saving (used by "Return to Main Menu").
+  clearActiveSlot(): void {
+    this._activeSlot = null;
   }
 
   // ── Init ───────────────────────────────────────────────────────────────────
@@ -158,7 +167,6 @@ class GameState extends EventEmitter {
     this.cash -= def.cost;
     this._updateCounts();
     this._checkGoals();
-    this._save();
     this.emit('state_changed');
     return true;
   }
@@ -179,7 +187,6 @@ class GameState extends EventEmitter {
     this.cash += refund;
     this._updateCounts();
     this._checkGoals();
-    this._save();
     this.emit('state_changed');
     this.emit('toast_requested', `Demolished. +${refund} cash`);
   }
@@ -192,7 +199,6 @@ class GameState extends EventEmitter {
     this.roomCount += roomsToAdd;
     this._recomputeDerived();
     this._checkGoals();
-    this._save();
     this.emit('state_changed');
     return true;
   }
@@ -206,7 +212,6 @@ class GameState extends EventEmitter {
     this.qualityLevel++;
     this._recomputeDerived();
     this._checkGoals();
-    this._save();
     this.emit('state_changed');
     return true;
   }
@@ -241,7 +246,6 @@ class GameState extends EventEmitter {
     this._appendStats(r.day_stats);
     this.dayNumber++;
     this._checkGoals();
-    this._save();
     this.emit('state_changed');
   }
 
@@ -337,7 +341,7 @@ class GameState extends EventEmitter {
 
   // ── Save / Load ───────────────────────────────────────────────────────────
 
-  private _save(): void {
+  private _writeSave(): void {
     if (this._activeSlot === null) return;
     const saveObjs = this.placedObjs.map(o => ({
       id: o.id, type: o.type, col: o.col, row: o.row,
@@ -410,7 +414,6 @@ class GameState extends EventEmitter {
   resetGame(): void {
     if (this._activeSlot !== null) Slots.deleteSlot(this._activeSlot);
     this._newGame();
-    this._save();
     this.emit('state_changed');
   }
 }

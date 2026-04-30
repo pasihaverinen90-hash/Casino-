@@ -142,6 +142,10 @@ body {
   color: #ffdd55;
 }
 
+.bottom-btn.aux {
+  width: 88px;
+}
+
 /* Speed control: pause / 1× / 2× — sits where the old Day button was */
 .speed-group {
   display: flex;
