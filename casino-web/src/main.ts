@@ -13,6 +13,8 @@ import { StatsPanel }  from './ui/StatsPanel';
 import { GoalsPanel }  from './ui/GoalsPanel';
 import { Toast }       from './ui/Toast';
 import { EndScreen }   from './ui/EndScreen';
+import { StartScreen } from './ui/StartScreen';
+import * as Slots      from './state/SaveSlots';
 
 // ── DOM structure ─────────────────────────────────────────────────────────
 const appEl  = document.getElementById('app')!;
@@ -51,7 +53,20 @@ new GoalTicker(uiRoot, () => {
   goalsPanel.open();
 });
 
+// Migrate any pre-slot save into slot 1 the first time we boot.
+Slots.migrateLegacy();
+
 const time = new TimeController(() => gameState.advanceDay());
+// Stay paused until the user picks a slot from the start screen.
+time.setSpeed(0);
+
+let started = false;
+const startScreen = new StartScreen(uiRoot, () => {
+  // Slot has been picked and gameState is populated. Resume time.
+  started = true;
+  time.setSpeed(1);
+});
+startScreen.show();
 
 const bottomBar = new BottomBar(uiRoot, time, {
   onBuild: () => {
@@ -91,6 +106,8 @@ function _closeAll(): void {
 document.addEventListener('keydown', e => {
   // Don't fire while typing inside an input field
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+  // Ignore shortcuts until the start screen has been dismissed.
+  if (!started) return;
 
   switch (e.key) {
     case 'Escape':

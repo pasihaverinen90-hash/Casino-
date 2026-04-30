@@ -4,8 +4,7 @@ import * as GC from '../logic/GameConstants';
 import * as Sim from '../logic/Simulation';
 import * as PV from '../logic/PlacementValidator';
 import { EventEmitter } from './EventEmitter';
-
-const SAVE_KEY = 'casino_resort_v1';
+import * as Slots from './SaveSlots';
 
 class GameState extends EventEmitter {
   // Map
@@ -50,9 +49,44 @@ class GameState extends EventEmitter {
   chartOccupancy: number[] = [];
   chartCapacity : number[] = [];
 
+  // Active save slot (1..SLOT_COUNT). Null until the start screen picks one;
+  // _save() is a no-op while null so the empty bootstrap state never lands
+  // in storage.
+  private _activeSlot: number | null = null;
+
   constructor() {
     super();
-    if (!this._tryLoad()) this._newGame();
+    // Build a default empty world so the grid renders behind the start screen.
+    // Loading / new-game-into-slot is deferred until setActiveSlot is called.
+    this._newGame();
+  }
+
+  // ── Slot lifecycle ────────────────────────────────────────────────────────
+
+  getActiveSlot(): number | null { return this._activeSlot; }
+
+  // Activate a slot and load its save. Returns true on success; if the slot
+  // is empty or corrupt, falls back to a fresh game in that slot.
+  loadSlot(slot: number): boolean {
+    this._activeSlot = slot;
+    Slots.setLastUsed(slot);
+    const ok = this._tryLoad(Slots.slotKey(slot));
+    if (!ok) {
+      this._newGame();
+      this._save();
+    }
+    this.emit('state_changed');
+    return ok;
+  }
+
+  // Activate a slot and start a fresh game in it, overwriting any prior save.
+  newGameInSlot(slot: number): void {
+    this._activeSlot = slot;
+    Slots.setLastUsed(slot);
+    Slots.deleteSlot(slot);
+    this._newGame();
+    this._save();
+    this.emit('state_changed');
   }
 
   // ── Init ───────────────────────────────────────────────────────────────────
@@ -304,6 +338,7 @@ class GameState extends EventEmitter {
   // ── Save / Load ───────────────────────────────────────────────────────────
 
   private _save(): void {
+    if (this._activeSlot === null) return;
     const saveObjs = this.placedObjs.map(o => ({
       id: o.id, type: o.type, col: o.col, row: o.row,
       rotated: o.rotated, variant: o.variant,
@@ -321,12 +356,12 @@ class GameState extends EventEmitter {
       ch_rev: this.chartRevenue, ch_rating: this.chartRating,
       ch_occ: this.chartOccupancy, ch_cap: this.chartCapacity,
     };
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch { /* quota exceeded */ }
+    try { localStorage.setItem(Slots.slotKey(this._activeSlot), JSON.stringify(data)); } catch { /* quota exceeded */ }
   }
 
-  private _tryLoad(): boolean {
+  private _tryLoad(key: string): boolean {
     try {
-      const raw = localStorage.getItem(SAVE_KEY);
+      const raw = localStorage.getItem(key);
       if (!raw) return false;
       const d = JSON.parse(raw);
       if (d.ver !== '1.1.0') return false;
@@ -373,8 +408,9 @@ class GameState extends EventEmitter {
   }
 
   resetGame(): void {
-    try { localStorage.removeItem(SAVE_KEY); } catch { /* ignore */ }
+    if (this._activeSlot !== null) Slots.deleteSlot(this._activeSlot);
     this._newGame();
+    this._save();
     this.emit('state_changed');
   }
 }
