@@ -4,8 +4,8 @@
 //   • validate       — composes the two for callsites that want both
 //
 // The split exists so future *operational* validation (e.g. "this attraction
-// is currently inactive because no path is adjacent") lives outside placement
-// validation: it should not block placement, just operation.
+// is currently inactive because no open floor borders it") lives outside
+// placement validation: it should not block placement, just operation.
 import * as GC from './GameConstants';
 
 export interface PlaceReq {
@@ -29,12 +29,11 @@ export function checkResources(
 }
 
 // Pure spatial validity — does not consult cash or instance counts.
-// `placed` is consulted only to identify PATH tiles, which count as
-// walkable for access/door-inward checks (collision still rejects them).
+// Walkable = FLOOR with no occupant, or LOBBY. There is no buildable
+// path tile any more; open floor itself acts as the access surface.
 export function checkSpatial(
-  req    : PlaceReq,
-  tiles  : GC.Tile[],
-  placed : GC.PlacedObj[],
+  req   : PlaceReq,
+  tiles : GC.Tile[],
 ): GC.ValResult {
   const def = GC.getDef(req.type);
   const w   = req.rotated ? def.fh : def.fw;
@@ -55,22 +54,20 @@ export function checkSpatial(
       return GC.ValResult.FAIL_COLLISION;
   }
 
-  const pathIds = pathIdSet(placed);
-
   if (def.is_wall) {
     const wallDir = detectWallDir(req.col, req.row, w, h, tiles);
     if (!wallDir) return GC.ValResult.FAIL_WALL_INVALID;
     const doors = getDoorTiles(req, w, h);
     for (const door of doors) {
       const inward = getInward(door, wallDir);
-      if (!isWalkable(tiles, pathIds, inward.x, inward.y))
+      if (!isOpenFloor(tiles, inward.x, inward.y))
         return GC.ValResult.FAIL_DOOR_BLOCKED;
     }
   } else if (def.accessSides === 1) {
-    if (countFreeNeighbours(tiles, pathIds, req.col, req.row) === 0)
+    if (countFreeNeighbours(tiles, req.col, req.row, w, h) === 0)
       return GC.ValResult.FAIL_NO_ACCESS;
   } else if (def.accessSides === 2) {
-    if (countAccessibleSides(tiles, pathIds, req.col, req.row, w, h) < 2)
+    if (countAccessibleSides(tiles, req.col, req.row, w, h) < 2)
       return GC.ValResult.FAIL_NO_ACCESS;
   }
 
@@ -80,13 +77,12 @@ export function checkSpatial(
 export function validate(
   req      : PlaceReq,
   tiles    : GC.Tile[],
-  placed   : GC.PlacedObj[],
   cash     : number,
   barExists: boolean,
 ): GC.ValResult {
   const r = checkResources(req.type, cash, barExists);
   if (r !== GC.ValResult.VALID) return r;
-  return checkSpatial(req, tiles, placed);
+  return checkSpatial(req, tiles);
 }
 
 export function computeFootprint(col: number, row: number, w: number, h: number): GC.Vec2[] {
@@ -103,29 +99,13 @@ export function getTile(tiles: GC.Tile[], col: number, row: number): GC.Tile {
   return tiles[row * GC.GRID_COLS + col];
 }
 
-export function isFreeFloor(tiles: GC.Tile[], col: number, row: number): boolean {
+// Open walkable floor: an unoccupied FLOOR tile, or any LOBBY tile. Lobby
+// tiles count because they are the casino's reception/walk-in surface.
+export function isOpenFloor(tiles: GC.Tile[], col: number, row: number): boolean {
   if (col < 0 || col >= GC.GRID_COLS || row < 0 || row >= GC.GRID_ROWS) return false;
   const t = tiles[row * GC.GRID_COLS + col];
+  if (t.tile_type === GC.TileType.LOBBY) return true;
   return t.tile_type === GC.TileType.FLOOR && t.obj_id === '';
-}
-
-// Like isFreeFloor, but also accepts FLOOR tiles whose only occupant is a
-// PATH tile. Used by access checks (slot/table reach) and door-inward
-// checks (wall services), since guests can walk over paths.
-function pathIdSet(placed: GC.PlacedObj[]): Set<string> {
-  const out = new Set<string>();
-  for (const o of placed) if (o.type === GC.ObjType.PATH) out.add(o.id);
-  return out;
-}
-
-function isWalkable(
-  tiles: GC.Tile[], pathIds: Set<string>, col: number, row: number,
-): boolean {
-  if (col < 0 || col >= GC.GRID_COLS || row < 0 || row >= GC.GRID_ROWS) return false;
-  const t = tiles[row * GC.GRID_COLS + col];
-  if (t.tile_type !== GC.TileType.FLOOR) return false;
-  if (t.obj_id === '') return true;
-  return pathIds.has(t.obj_id);
 }
 
 export function detectWallDir(col: number, row: number, w: number, h: number, tiles: GC.Tile[]): string {
@@ -177,20 +157,32 @@ export function getInward(door: GC.Vec2, wallDir: string): GC.Vec2 {
   return door;
 }
 
+// Count footprint-adjacent open floor tiles. Used by 1-access objects
+// (slots) — works for any footprint, not just 1×1.
 function countFreeNeighbours(
-  tiles: GC.Tile[], pathIds: Set<string>, col: number, row: number,
+  tiles: GC.Tile[], col: number, row: number, w: number, h: number,
 ): number {
-  const dirs: GC.Vec2[] = [{ x: -1, y: 0 }, { x: 1, y: 0 }, { x: 0, y: -1 }, { x: 0, y: 1 }];
-  return dirs.filter(d => isWalkable(tiles, pathIds, col + d.x, row + d.y)).length;
+  let n = 0;
+  for (let c = col; c < col + w; c++) {
+    if (isOpenFloor(tiles, c, row - 1)) n++;
+    if (isOpenFloor(tiles, c, row + h)) n++;
+  }
+  for (let r = row; r < row + h; r++) {
+    if (isOpenFloor(tiles, col - 1, r)) n++;
+    if (isOpenFloor(tiles, col + w, r)) n++;
+  }
+  return n;
 }
 
+// Count distinct sides of the footprint that have at least one open
+// floor tile against them. Used by 2-access objects (tables).
 function countAccessibleSides(
-  tiles: GC.Tile[], pathIds: Set<string>,
+  tiles: GC.Tile[],
   col: number, row: number, w: number, h: number,
 ): number {
   let sides = 0;
-  const checkH = (r: number) => { for (let c = col; c < col + w; c++) if (isWalkable(tiles, pathIds, c, r)) { sides++; return; } };
-  const checkV = (c: number) => { for (let r = row; r < row + h; r++) if (isWalkable(tiles, pathIds, c, r)) { sides++; return; } };
+  const checkH = (r: number) => { for (let c = col; c < col + w; c++) if (isOpenFloor(tiles, c, r)) { sides++; return; } };
+  const checkV = (c: number) => { for (let r = row; r < row + h; r++) if (isOpenFloor(tiles, c, r)) { sides++; return; } };
   checkH(row - 1); checkH(row + h);
   checkV(col - 1); checkV(col + w);
   return sides;

@@ -2,11 +2,10 @@
 import * as GC from '../logic/GameConstants';
 import { gameState }  from '../state/GameState';
 import { uiBus }      from '../events/UIBus';
+import { paintThumb } from '../game/ObjectArt';
 
-// Order is purely UI presentation — paths first because they're the
-// foundation of operational connectivity, then attractions, then services.
+// Order is purely UI presentation: attractions first, then services.
 const OBJ_TYPES = [
-  GC.ObjType.PATH,
   GC.ObjType.SLOT_MACHINE,
   GC.ObjType.SMALL_TABLE,
   GC.ObjType.LARGE_TABLE,
@@ -14,6 +13,8 @@ const OBJ_TYPES = [
   GC.ObjType.WC,
   GC.ObjType.BAR,
 ];
+
+const THUMB_PX = 56;
 
 export class BuildPanel {
   private el         : HTMLElement;
@@ -90,6 +91,21 @@ export class BuildPanel {
       b.className            = 'build-item-btn';
       b.dataset['type']      = String(t);
       b.onclick              = () => this._onItemClick(t, def);
+
+      // Thumbnail canvas
+      const canvas = document.createElement('canvas');
+      canvas.className = 'build-thumb';
+      canvas.width  = THUMB_PX;
+      canvas.height = THUMB_PX;
+      const ctx = canvas.getContext('2d');
+      if (ctx) paintThumb(ctx, t, THUMB_PX, THUMB_PX);
+      b.appendChild(canvas);
+
+      // Label + cost lines (text node held in a <span> we'll update on refresh)
+      const meta = document.createElement('span');
+      meta.className = 'build-meta';
+      b.appendChild(meta);
+
       this.itemGrid.appendChild(b);
     }
     this._refreshButtons();
@@ -105,10 +121,13 @@ export class BuildPanel {
 
       b.disabled = unaffordable || atLimit;
 
-      if (atLimit) {
-        b.textContent = `${def.label}\nAlready built`;
-      } else {
-        b.textContent = `${def.label}\n${_sizeLabel(def)}\n${def.cost} 💰`;
+      const meta = b.querySelector('.build-meta') as HTMLElement | null;
+      if (meta) {
+        if (atLimit) {
+          meta.textContent = `${def.label}\nAlready built`;
+        } else {
+          meta.textContent = `${def.label}\n${_sizeLabel(def)}\n${def.cost} 💰`;
+        }
       }
     }
   }

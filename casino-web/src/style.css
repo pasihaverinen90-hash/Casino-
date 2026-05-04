@@ -288,13 +288,16 @@ body {
   background: rgba(30, 38, 60, 0.9);
   border: 1px solid #2a3458;
   color: #c8cce0;
-  padding: 14px 8px;
+  padding: 10px 8px 12px;
   border-radius: 10px;
   font-size: 12px;
   cursor: pointer;
   text-align: center;
-  white-space: pre-line;
-  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.4;
   transition: background 0.15s, border-color 0.15s;
 }
 
@@ -306,6 +309,19 @@ body {
 .build-item-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+.build-thumb {
+  width: 56px;
+  height: 56px;
+  background: rgba(8, 10, 16, 0.6);
+  border-radius: 6px;
+  image-rendering: pixelated;
+}
+
+.build-meta {
+  white-space: pre-line;
+  display: block;
 }
 
 /* ── Hotel panel ─────────────────────────────────────────────────────────── */

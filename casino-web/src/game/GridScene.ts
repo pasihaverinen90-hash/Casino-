@@ -5,6 +5,7 @@ import * as GC from '../logic/GameConstants';
 import * as PV from '../logic/PlacementValidator';
 import { gameState } from '../state/GameState';
 import { uiBus }     from '../events/UIBus';
+import { paintObject } from './ObjectArt';
 
 // Fixed layout zone heights (px). CSS must match these values.
 export const HUD_H       = 56;
@@ -18,6 +19,8 @@ const TILE_DEFAULT = 24;
 
 export class GridScene extends Phaser.Scene {
   private gfx!      : Phaser.GameObjects.Graphics;
+  // Persistent text labels for wall services (WC, BAR, $) — kept in a pool
+  // so we don't churn Text objects on every redraw.
   private labelPool : Map<string, Phaser.GameObjects.Text> = new Map();
 
   // Zoom-able tile size
@@ -39,17 +42,12 @@ export class GridScene extends Phaser.Scene {
   // Demolish state
   private demolishing = false;
 
-  // Drag tracking
+  // Drag tracking (used to distinguish a click from a pan)
   private dragStartX  = 0;
   private dragStartY  = 0;
   private dragStartOX = 0;
   private dragStartOY = 0;
   private dragged     = false;
-
-  // Drag-placement tracking (per mouse-down → mouse-up cycle)
-  private placedAnyDuringPress = false;
-  private dragPlaceLastCol     = -1;
-  private dragPlaceLastRow     = -1;
 
   constructor() {
     super({ key: 'GridScene' });
@@ -167,27 +165,12 @@ export class GridScene extends Phaser.Scene {
     this.dragStartOX = this.ox;
     this.dragStartOY = this.oy;
     this.dragged     = false;
-    this.placedAnyDuringPress = false;
-    this.dragPlaceLastCol     = -1;
-    this.dragPlaceLastRow     = -1;
 
     // Right-click = rotate ghost
     if (ptr.rightButtonDown() && this.placing) {
       this.placeRot = !this.placeRot;
       this._updateGhost(ptr.x, ptr.y);
       this._redraw();
-      return;
-    }
-
-    // Left-click in placement mode: attempt placement on the starting tile.
-    // Subsequent tiles are handled by drag-placement in _onMove.
-    if (ptr.leftButtonDown() && this.placing) {
-      const coord = this._toTile(ptr.x, ptr.y);
-      if (coord) {
-        this._tryDragPlace(coord.col, coord.row);
-        this._updateGhost(ptr.x, ptr.y);
-        this._redraw();
-      }
     }
   }
 
@@ -200,81 +183,57 @@ export class GridScene extends Phaser.Scene {
       return;
     }
 
-    // Drag-placement: while placing and dragging, place on each new tile entered.
-    // Invalid tiles are skipped silently. No 6px threshold — every new tile counts.
-    if (this.placing) {
-      this.dragged = true;
-      if (this._inGrid(ptr.y)) {
-        const coord = this._toTile(ptr.x, ptr.y);
-        if (coord && (coord.col !== this.dragPlaceLastCol || coord.row !== this.dragPlaceLastRow)) {
-          this._tryDragPlace(coord.col, coord.row);
-        }
-        this._updateGhost(ptr.x, ptr.y);
-      }
-      this._redraw();
-      return;
-    }
-
     const dx = ptr.x - this.dragStartX;
     const dy = ptr.y - this.dragStartY;
 
+    // Drag pans the view in any mode (placing too — this lets the player
+    // reposition before committing). No drag-to-place: each placement is
+    // an explicit click, which avoids accidental purchases.
     if (Math.hypot(dx, dy) > 6) {
       this.dragged = true;
       this._setCursor('grabbing');
       this.ox = this.dragStartOX + dx;
       this.oy = this.dragStartOY + dy;
       this._clampOffset();
+      if (this.placing) this._updateGhost(ptr.x, ptr.y);
       this._redraw();
     }
   }
 
   private _onUp(ptr: Phaser.Input.Pointer): void {
-    // Placement just finished (click or drag). Exit placement mode unless Ctrl is held.
-    if (this.placing && this.placedAnyDuringPress) {
-      const ev   = ptr.event as MouseEvent | PointerEvent | undefined;
-      const ctrl = !!(ev && ev.ctrlKey);
-      if (!ctrl) {
-        this.placing  = false;
-        this.ghostCol = -1;
-        this.ghostRow = -1;
-        this._setCursor('default');
-        uiBus.emit('placement_confirmed');
-      }
-      this._redraw();
-      this.dragged = false;
-      this.placedAnyDuringPress = false;
-      this.dragPlaceLastCol = -1;
-      this.dragPlaceLastRow = -1;
-      return;
-    }
-
-    if (!this.dragged && this._inGrid(ptr.y)) this._tap(ptr.x, ptr.y);
+    if (!this.dragged && this._inGrid(ptr.y)) this._tap(ptr);
 
     if (this.dragged && !this.placing && !this.demolishing) {
       this._setCursor('default');
+    } else if (this.dragged && this.placing) {
+      this._setCursor('crosshair');
     }
     this.dragged = false;
   }
 
-  /** Validate + place silently. Returns true if a placement happened. */
-  private _tryDragPlace(col: number, row: number): void {
-    this.dragPlaceLastCol = col;
-    this.dragPlaceLastRow = row;
-
-    const result = PV.validate(
-      { type: this.placeType as GC.ObjType, col, row, rotated: this.placeRot },
-      gameState.tiles, gameState.placedObjs, gameState.cash, gameState.barExists,
-    );
-    if (result !== GC.ValResult.VALID) return; // silent skip
-
-    if (gameState.tryPlace(col, row, this.placeType as GC.ObjType, this.placeRot, this.placeVar)) {
-      this.placedAnyDuringPress = true;
-    }
-  }
-
-  private _tap(px: number, py: number): void {
-    const coord = this._toTile(px, py);
+  private _tap(ptr: Phaser.Input.Pointer): void {
+    const coord = this._toTile(ptr.x, ptr.y);
     if (!coord) return;
+
+    if (this.placing) {
+      const ok = gameState.tryPlace(coord.col, coord.row, this.placeType as GC.ObjType, this.placeRot, this.placeVar);
+      if (ok) {
+        // Ctrl-click keeps placement mode open for repeat placements.
+        const ev   = ptr.event as MouseEvent | PointerEvent | undefined;
+        const ctrl = !!(ev && ev.ctrlKey);
+        if (!ctrl) {
+          this.placing  = false;
+          this.ghostCol = -1;
+          this.ghostRow = -1;
+          this._setCursor('default');
+          uiBus.emit('placement_confirmed');
+        } else {
+          this._revalidateGhost();
+        }
+      }
+      this._redraw();
+      return;
+    }
 
     if (this.demolishing) {
       const t = gameState.tiles[coord.row * GC.GRID_COLS + coord.col];
@@ -298,7 +257,7 @@ export class GridScene extends Phaser.Scene {
     if (this.ghostCol < 0) return;
     const result = PV.validate(
       { type: this.placeType as GC.ObjType, col: this.ghostCol, row: this.ghostRow, rotated: this.placeRot },
-      gameState.tiles, gameState.placedObjs, gameState.cash, gameState.barExists,
+      gameState.tiles, gameState.cash, gameState.barExists,
     );
     this.ghostOk = result === GC.ValResult.VALID;
   }
@@ -368,32 +327,56 @@ export class GridScene extends Phaser.Scene {
         const t = gameState.tiles[row * GC.GRID_COLS + col];
         g.fillStyle(this._tileColor(t.tile_type), 1);
         g.fillRect(baseX + col * ts, baseY + row * ts, ts - 1, ts - 1);
+
+        // Lobby gets a subtle accent stripe so the entrance reads at a glance.
+        if (t.tile_type === GC.TileType.LOBBY) {
+          g.fillStyle(0x6a5a2a, 1);
+          g.fillRect(baseX + col * ts + 2, baseY + row * ts + 2, ts - 5, 2);
+        }
       }
     }
 
-    // 2. Placed objects — non-functional ones (no path adjacency) render
-    // dimmed so the player can see at a glance which builds are inert.
+    // 2. Placed objects — non-functional ones (no open-floor adjacency)
+    // render dimmed so the player can see at a glance which builds are inert.
     const usedIds = new Set<string>();
     for (const obj of gameState.placedObjs) {
-      const color  = GC.getDef(obj.type).color;
       const isFunc = gameState.functionalIds.has(obj.id);
-      g.fillStyle(color, isFunc ? 1 : 0.35);
-      g.fillRect(baseX + obj.col * ts, baseY + obj.row * ts, obj.w * ts - 1, obj.h * ts - 1);
+      const alpha  = isFunc ? 1 : 0.45;
+      paintObject(
+        g, obj.type,
+        baseX + obj.col * ts, baseY + obj.row * ts,
+        obj.w * ts, obj.h * ts,
+        alpha,
+      );
 
-      usedIds.add(obj.id);
-      let txt = this.labelPool.get(obj.id);
-      if (!txt) {
-        const def = GC.getDef(obj.type as GC.ObjType);
-        txt = this.add.text(0, 0, def.label.slice(0, 2), {
-          fontSize: '10px', color: '#fff', fontFamily: 'monospace',
-        }).setDepth(2);
-        this.labelPool.set(obj.id, txt);
+      // Subtle red corner mark for non-functional objects so the dim
+      // alpha isn't the only signal.
+      if (!isFunc) {
+        const m = Math.max(2, Math.round(ts * 0.18));
+        g.fillStyle(0xff5050, 0.85);
+        g.fillRect(baseX + obj.col * ts + 1, baseY + obj.row * ts + 1, m, m);
       }
-      const visible = ts >= 14;
-      txt.setVisible(visible);
-      txt.setAlpha(isFunc ? 1 : 0.5);
-      if (visible) {
-        txt.setPosition(baseX + obj.col * ts + 2, baseY + obj.row * ts + ts * 0.25);
+
+      // Wall services keep a small letter label so they're unambiguous.
+      const labelText = _wallLabel(obj.type);
+      if (labelText) {
+        usedIds.add(obj.id);
+        let txt = this.labelPool.get(obj.id);
+        if (!txt) {
+          txt = this.add.text(0, 0, labelText, {
+            fontSize: '11px', color: '#fff', fontFamily: 'monospace',
+          }).setDepth(2);
+          this.labelPool.set(obj.id, txt);
+        }
+        const visible = ts >= 14;
+        txt.setVisible(visible);
+        txt.setAlpha(isFunc ? 0.95 : 0.55);
+        if (visible) {
+          const cx = baseX + (obj.col + obj.w / 2) * ts;
+          const cy = baseY + (obj.row + obj.h / 2) * ts;
+          txt.setOrigin(0.5, 0.5);
+          txt.setPosition(cx, cy);
+        }
       }
     }
 
@@ -402,19 +385,30 @@ export class GridScene extends Phaser.Scene {
       if (!usedIds.has(id)) { txt.destroy(); this.labelPool.delete(id); }
     }
 
-    // 3. Placement ghost
+    // 3. Placement ghost — render the actual shape under a green/red tint
+    // and a colored frame, so rotation and footprint read instantly.
     if (this.placing && this.ghostCol >= 0) {
       const def = GC.getDef(this.placeType as GC.ObjType);
       const w   = this.placeRot ? def.fh : def.fw;
       const h   = this.placeRot ? def.fw : def.fh;
-      g.fillStyle(this.ghostOk ? 0x33e64d : 0xe63333, 0.5);
-      g.fillRect(baseX + this.ghostCol * ts, baseY + this.ghostRow * ts, w * ts, h * ts);
+      const gx  = baseX + this.ghostCol * ts;
+      const gy  = baseY + this.ghostRow * ts;
+
+      paintObject(g, this.placeType as GC.ObjType, gx, gy, w * ts, h * ts, 0.6);
+
+      // Color overlay
+      g.fillStyle(this.ghostOk ? 0x33e64d : 0xe63333, 0.28);
+      g.fillRect(gx, gy, w * ts, h * ts);
+
+      // Outline frame
+      g.lineStyle(2, this.ghostOk ? 0x33e64d : 0xe63333, 1);
+      g.strokeRect(gx + 1, gy + 1, w * ts - 2, h * ts - 2);
     }
 
     // 4. Demolish overlay
     if (this.demolishing) {
       for (const obj of gameState.placedObjs) {
-        g.fillStyle(0xff3333, 0.35);
+        g.fillStyle(0xff3333, 0.32);
         g.fillRect(baseX + obj.col * ts, baseY + obj.row * ts, obj.w * ts - 1, obj.h * ts - 1);
       }
     }
@@ -432,4 +426,13 @@ export class GridScene extends Phaser.Scene {
   private _setCursor(cursor: string): void {
     this.sys.game.canvas.style.cursor = cursor;
   }
+}
+
+function _wallLabel(type: GC.ObjType): string {
+  switch (type) {
+    case GC.ObjType.WC:      return 'WC';
+    case GC.ObjType.BAR:     return 'BAR';
+    case GC.ObjType.CASHIER: return '$';
+  }
+  return '';
 }

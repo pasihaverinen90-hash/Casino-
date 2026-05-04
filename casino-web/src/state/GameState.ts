@@ -12,7 +12,7 @@ import * as Slots from './SaveSlots';
 // SAVE_MIGRATIONS that upgrades the previous version's payload to the new
 // shape. `normalizeSave` then fills in any newly-introduced fields with
 // safe defaults so partial / hand-edited saves still load.
-const SAVE_VERSION = '1.2.0';
+const SAVE_VERSION = '1.3.0';
 
 interface SavedObj {
   id: string; type: GC.ObjType;
@@ -45,11 +45,20 @@ interface SavePayload {
 // Each migration upgrades a payload one version forward. New entries are
 // added when SAVE_VERSION is bumped.
 const SAVE_MIGRATIONS: Record<string, (d: any) => any> = {
-  // 1.1.0 → 1.2.0: introduces PATH/CASHIER object types and operational
-  // path-adjacency rules. No payload shape changes; old saves are forward-
-  // compatible (they simply have no path tiles, so all attractions start
-  // non-functional until the player lays paths).
+  // 1.1.0 → 1.2.0: introduced PATH/CASHIER object types. No payload-shape
+  // change; the new types simply weren't present in older saves.
   '1.1.0': (d) => ({ ...d, ver: '1.2.0' }),
+  // 1.2.0 → 1.3.0: PATH removed (open floor is now the walkable surface).
+  // Strip any saved path objects and remap CASHIER's enum value 6 → 5,
+  // which closes the gap left by removing PATH (was 5).
+  '1.2.0': (d) => {
+    const objects = Array.isArray(d.objects)
+      ? d.objects
+          .filter((o: any) => o && o.type !== 5) // drop PATH
+          .map((o: any) => o.type === 6 ? { ...o, type: 5 } : o) // CASHIER 6→5
+      : [];
+    return { ...d, ver: '1.3.0', objects };
+  },
 };
 
 function migrateSave(d: any): any | null {
@@ -130,8 +139,7 @@ class GameState extends EventEmitter {
   wcCount          = 0;
   barExists        = false;
   cashierCount     = 0;
-  pathCount        = 0;
-  // Functional counts — only objects whose path-adjacency check passes.
+  // Functional counts — only objects whose open-floor adjacency passes.
   // Fed into Simulation so non-functional objects contribute nothing.
   funcSlot         = 0;
   funcSmall        = 0;
@@ -226,7 +234,7 @@ class GameState extends EventEmitter {
     this.lastGuests = 0; this.prevCrowding = 0;
     this.slotCount = 0; this.smallTableCount = 0; this.largeTableCount = 0;
     this.wcCount = 0; this.barExists = false;
-    this.cashierCount = 0; this.pathCount = 0;
+    this.cashierCount = 0;
     this.funcSlot = 0; this.funcSmall = 0; this.funcLarge = 0;
     this.funcWc = 0; this.funcBarExists = false; this.funcCashier = 0;
     this.functionalIds = new Set();
@@ -252,8 +260,8 @@ class GameState extends EventEmitter {
     //     wall-run validation uses them to keep the entrance from being
     //     walled off.
     //   • Two symmetric pillar clusters and one central island for floor
-    //     interest. Players lay PATH tiles outward from the reception room
-    //     to make distant attractions functional.
+    //     interest. All open floor counts as walkable access space, so
+    //     attractions just need at least one open-floor neighbour to work.
     this.tiles = [];
     for (let row = 0; row < GC.GRID_ROWS; row++) {
       for (let col = 0; col < GC.GRID_COLS; col++) {
@@ -287,7 +295,7 @@ class GameState extends EventEmitter {
 
   tryPlace(col: number, row: number, objType: GC.ObjType, rotated: boolean, variant = ''): boolean {
     const req = { type: objType, col, row, rotated };
-    const result = PV.validate(req, this.tiles, this.placedObjs, this.cash, this.barExists);
+    const result = PV.validate(req, this.tiles, this.cash, this.barExists);
     if (result !== GC.ValResult.VALID) {
       this.emit('placement_failed', GC.valMessage(result));
       return false;
@@ -397,7 +405,7 @@ class GameState extends EventEmitter {
     // Reset both physical and functional counts.
     this.slotCount = 0; this.smallTableCount = 0; this.largeTableCount = 0;
     this.wcCount = 0; this.barExists = false;
-    this.cashierCount = 0; this.pathCount = 0;
+    this.cashierCount = 0;
     this.funcSlot = 0; this.funcSmall = 0; this.funcLarge = 0;
     this.funcWc = 0; this.funcBarExists = false; this.funcCashier = 0;
 
@@ -423,9 +431,6 @@ class GameState extends EventEmitter {
           break;
         case GC.ObjType.CASHIER:
           this.cashierCount++; if (isFunc) this.funcCashier++;
-          break;
-        case GC.ObjType.PATH:
-          this.pathCount++;
           break;
       }
     }

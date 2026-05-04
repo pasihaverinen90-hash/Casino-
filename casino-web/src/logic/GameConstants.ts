@@ -74,7 +74,8 @@ export const COL_BLOCKED = 0x262d40;
 
 export const enum TileType { FLOOR, WALL, LOBBY, BLOCKED }
 // Enum order is fixed — values are persisted in saves. Append new entries.
-export const enum ObjType  { SLOT_MACHINE, SMALL_TABLE, LARGE_TABLE, WC, BAR, PATH, CASHIER }
+// (Old index 5 was PATH, removed in save 1.3.0; CASHIER moved 6 → 5 via migration.)
+export const enum ObjType  { SLOT_MACHINE, SMALL_TABLE, LARGE_TABLE, WC, BAR, CASHIER }
 export const enum ValResult {
   VALID,
   FAIL_LIMIT, FAIL_AFFORD, FAIL_OUT_OF_BOUNDS,
@@ -83,7 +84,7 @@ export const enum ValResult {
 }
 
 // accessSides: how many open floor sides a placement requires.
-//   0 = no requirement (wall objects, future path tiles)
+//   0 = no requirement (wall objects use door-inward checks instead)
 //   1 = at least one open neighbour (slot machines)
 //   2 = at least two open sides (tables — guests need to approach)
 export interface ObjDef {
@@ -126,11 +127,6 @@ export const OBJ_DEFS: Record<ObjType, ObjDef> = {
     label: 'Bar',          cost: 6500, fw: 8, fh: 1, cap: 0,
     is_wall: true,  max: 1,  rating: 0.35, flat: true,
     color: 0xcc4d33, accessSides: 0, variants: [],
-  },
-  [ObjType.PATH]: {
-    label: 'Path Tile',    cost: 50,   fw: 1, fh: 1, cap: 0,
-    is_wall: false, max: -1, rating: 0.0,  flat: true,
-    color: 0x8a7a5a, accessSides: 0, variants: [],
   },
   [ObjType.CASHIER]: {
     label: 'Cashier',      cost: 1500, fw: 1, fh: 1, cap: 0,
