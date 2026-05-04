@@ -72,17 +72,9 @@ export const COL_WALL    = 0x1e2124;
 export const COL_LOBBY   = 0x403824;
 export const COL_BLOCKED = 0x262d40;
 
-// Phaser hex colours for placed objects
-export const OBJ_COLOURS: Record<number, number> = {
-  0: 0xccb31a, // SLOT_MACHINE — gold
-  1: 0x3380e6, // SMALL_TABLE  — blue
-  2: 0x1a4dcc, // LARGE_TABLE  — dark blue
-  3: 0x4db368, // WC           — green
-  4: 0xcc4d33, // BAR          — red
-};
-
 export const enum TileType { FLOOR, WALL, LOBBY, BLOCKED }
-export const enum ObjType  { SLOT_MACHINE, SMALL_TABLE, LARGE_TABLE, WC, BAR }
+// Enum order is fixed — values are persisted in saves. Append new entries.
+export const enum ObjType  { SLOT_MACHINE, SMALL_TABLE, LARGE_TABLE, WC, BAR, PATH, CASHIER }
 export const enum ValResult {
   VALID,
   FAIL_LIMIT, FAIL_AFFORD, FAIL_OUT_OF_BOUNDS,
@@ -90,32 +82,64 @@ export const enum ValResult {
   FAIL_WALL_INVALID, FAIL_DOOR_BLOCKED, FAIL_NO_ACCESS,
 }
 
+// accessSides: how many open floor sides a placement requires.
+//   0 = no requirement (wall objects, future path tiles)
+//   1 = at least one open neighbour (slot machines)
+//   2 = at least two open sides (tables — guests need to approach)
 export interface ObjDef {
-  label   : string;
-  cost    : number;
-  fw      : number;
-  fh      : number;
-  cap     : number;
-  is_wall : boolean;
-  max     : number;   // -1 = unlimited
-  rating  : number;
-  flat    : boolean;
+  label       : string;
+  cost        : number;
+  fw          : number;
+  fh          : number;
+  cap         : number;
+  is_wall     : boolean;
+  max         : number;   // -1 = unlimited
+  rating      : number;
+  flat        : boolean;
+  color       : number;
+  accessSides : 0 | 1 | 2;
+  variants    : string[]; // empty = no variant picker
 }
 
-export function getDef(type: ObjType): ObjDef {
-  switch (type) {
-    case ObjType.SLOT_MACHINE:
-      return { label: 'Slot Machine', cost: 750,  fw: 1, fh: 1, cap: 1, is_wall: false, max: -1, rating: 0.02, flat: false };
-    case ObjType.SMALL_TABLE:
-      return { label: 'Small Table',  cost: 2500, fw: 2, fh: 3, cap: 4, is_wall: false, max: -1, rating: 0.18, flat: false };
-    case ObjType.LARGE_TABLE:
-      return { label: 'Large Table',  cost: 4500, fw: 2, fh: 4, cap: 6, is_wall: false, max: -1, rating: 0.25, flat: false };
-    case ObjType.WC:
-      return { label: 'WC',           cost: 1200, fw: 3, fh: 1, cap: 0, is_wall: true,  max: -1, rating: 0.20, flat: false };
-    case ObjType.BAR:
-      return { label: 'Bar',          cost: 6500, fw: 8, fh: 1, cap: 0, is_wall: true,  max: 1,  rating: 0.35, flat: true  };
-  }
-}
+export const OBJ_DEFS: Record<ObjType, ObjDef> = {
+  [ObjType.SLOT_MACHINE]: {
+    label: 'Slot Machine', cost: 750,  fw: 1, fh: 1, cap: 1,
+    is_wall: false, max: -1, rating: 0.02, flat: false,
+    color: 0xccb31a, accessSides: 1, variants: [],
+  },
+  [ObjType.SMALL_TABLE]: {
+    label: 'Small Table',  cost: 2500, fw: 2, fh: 3, cap: 4,
+    is_wall: false, max: -1, rating: 0.18, flat: false,
+    color: 0x3380e6, accessSides: 2, variants: ['blackjack', 'poker'],
+  },
+  [ObjType.LARGE_TABLE]: {
+    label: 'Large Table',  cost: 4500, fw: 2, fh: 4, cap: 6,
+    is_wall: false, max: -1, rating: 0.25, flat: false,
+    color: 0x1a4dcc, accessSides: 2, variants: ['roulette', 'craps'],
+  },
+  [ObjType.WC]: {
+    label: 'WC',           cost: 1200, fw: 3, fh: 1, cap: 0,
+    is_wall: true,  max: -1, rating: 0.20, flat: false,
+    color: 0x4db368, accessSides: 0, variants: [],
+  },
+  [ObjType.BAR]: {
+    label: 'Bar',          cost: 6500, fw: 8, fh: 1, cap: 0,
+    is_wall: true,  max: 1,  rating: 0.35, flat: true,
+    color: 0xcc4d33, accessSides: 0, variants: [],
+  },
+  [ObjType.PATH]: {
+    label: 'Path Tile',    cost: 50,   fw: 1, fh: 1, cap: 0,
+    is_wall: false, max: -1, rating: 0.0,  flat: true,
+    color: 0x8a7a5a, accessSides: 0, variants: [],
+  },
+  [ObjType.CASHIER]: {
+    label: 'Cashier',      cost: 1500, fw: 1, fh: 1, cap: 0,
+    is_wall: true,  max: -1, rating: 0.18, flat: true,
+    color: 0x4d99cc, accessSides: 0, variants: [],
+  },
+};
+
+export function getDef(type: ObjType): ObjDef { return OBJ_DEFS[type]; }
 
 export function valMessage(result: ValResult): string {
   switch (result) {
@@ -142,16 +166,25 @@ export interface Tile {
   obj_id    : string;
 }
 
-export interface PlacedObj {
+// Persistent placement data — exactly what's serialized to a save.
+// New per-object operational state (path-connected, broken, etc.) belongs
+// on PlacedObj below, NOT here, so it stays out of the save payload.
+export interface PlacedObjData {
   id      : string;
   type    : ObjType;
   col     : number;
   row     : number;
   rotated : boolean;
   variant : string;
-  tiles   : Vec2[];
-  w       : number;
-  h       : number;
+}
+
+// In-memory representation: persistent data + cached spatial geometry.
+// `tiles`, `w`, `h` are derived from (type, col, row, rotated) and rebuilt
+// on load — never persisted.
+export interface PlacedObj extends PlacedObjData {
+  tiles : Vec2[];
+  w     : number;
+  h     : number;
 }
 
 export interface DayStats {

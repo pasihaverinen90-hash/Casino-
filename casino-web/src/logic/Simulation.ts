@@ -19,6 +19,7 @@ export function calcRating(
   wcCount: number, barExists: boolean,
   roomCount: number, qualityLevel: number,
   crowdingPenalty: number,
+  cashierCount: number = 0,
 ): number {
   const raw = GC.RATING_BASE
     + 0.01 * slots
@@ -28,6 +29,7 @@ export function calcRating(
     + (barExists ? 0.35 : 0.0)
     + 0.03 * roomCount
     + 0.18 * qualityLevel
+    + 0.18 * cashierCount
     - crowdingPenalty;
   return clamp(raw, GC.RATING_MIN, GC.RATING_MAX);
 }
@@ -105,6 +107,7 @@ export interface DayInput {
   large_tables     : number;
   wc_count         : number;
   bar_exists       : boolean;
+  cashier_count    : number;
   room_count       : number;
   quality_level    : number;
   cash             : number;
@@ -135,7 +138,8 @@ export function runDay(s: DayInput): DayOutput {
   const crowding    = calcCrowding(s.last_guests, capacity, s.prev_crowding);
   const rating      = calcRating(s.slots, s.small_tables, s.large_tables,
                                   s.wc_count, s.bar_exists,
-                                  s.room_count, s.quality_level, crowding);
+                                  s.room_count, s.quality_level, crowding,
+                                  s.cashier_count);
   const hotel       = calcOccupancy(s.room_count, s.quality_level, rating);
   const walkin      = calcWalkin(capacity, rating);
   const total       = walkin + hotel.hotel_guests;

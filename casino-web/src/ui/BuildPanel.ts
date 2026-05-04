@@ -3,10 +3,14 @@ import * as GC from '../logic/GameConstants';
 import { gameState }  from '../state/GameState';
 import { uiBus }      from '../events/UIBus';
 
+// Order is purely UI presentation — paths first because they're the
+// foundation of operational connectivity, then attractions, then services.
 const OBJ_TYPES = [
+  GC.ObjType.PATH,
   GC.ObjType.SLOT_MACHINE,
   GC.ObjType.SMALL_TABLE,
   GC.ObjType.LARGE_TABLE,
+  GC.ObjType.CASHIER,
   GC.ObjType.WC,
   GC.ObjType.BAR,
 ];
@@ -110,8 +114,8 @@ export class BuildPanel {
   }
 
   private _onItemClick(t: GC.ObjType, def: GC.ObjDef): void {
-    if (t === GC.ObjType.SMALL_TABLE || t === GC.ObjType.LARGE_TABLE) {
-      this._showVariantPicker(t);
+    if (def.variants.length > 0) {
+      this._showVariantPicker(t, def.variants);
     } else {
       uiBus.emit('start_placement', { type: t, variant: '' });
       // Panel stays open so user can see demolish; grid mode is active
@@ -119,11 +123,7 @@ export class BuildPanel {
     }
   }
 
-  private _showVariantPicker(t: GC.ObjType): void {
-    const variants = t === GC.ObjType.SMALL_TABLE
-      ? ['blackjack', 'poker']
-      : ['roulette', 'craps'];
-
+  private _showVariantPicker(t: GC.ObjType, variants: string[]): void {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay interactive';
 

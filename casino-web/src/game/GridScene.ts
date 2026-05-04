@@ -127,6 +127,10 @@ export class GridScene extends Phaser.Scene {
     this.input.on('pointermove',  this._onMove, this);
     this.input.on('pointerup',    this._onUp,   this);
 
+    // Right-click is used to rotate the placement ghost; suppress the
+    // browser context menu so the rotation feels clean.
+    this.input.mouse?.disableContextMenu();
+
     // ── Mouse-wheel zoom (non-passive so we can preventDefault) ───────────
     this.sys.game.canvas.addEventListener('wheel', (e: WheelEvent) => {
       this._onWheel(e);
@@ -367,11 +371,13 @@ export class GridScene extends Phaser.Scene {
       }
     }
 
-    // 2. Placed objects
+    // 2. Placed objects — non-functional ones (no path adjacency) render
+    // dimmed so the player can see at a glance which builds are inert.
     const usedIds = new Set<string>();
     for (const obj of gameState.placedObjs) {
-      const color = GC.OBJ_COLOURS[obj.type] ?? 0x888888;
-      g.fillStyle(color, 1);
+      const color  = GC.getDef(obj.type).color;
+      const isFunc = gameState.functionalIds.has(obj.id);
+      g.fillStyle(color, isFunc ? 1 : 0.35);
       g.fillRect(baseX + obj.col * ts, baseY + obj.row * ts, obj.w * ts - 1, obj.h * ts - 1);
 
       usedIds.add(obj.id);
@@ -385,6 +391,7 @@ export class GridScene extends Phaser.Scene {
       }
       const visible = ts >= 14;
       txt.setVisible(visible);
+      txt.setAlpha(isFunc ? 1 : 0.5);
       if (visible) {
         txt.setPosition(baseX + obj.col * ts + 2, baseY + obj.row * ts + ts * 0.25);
       }

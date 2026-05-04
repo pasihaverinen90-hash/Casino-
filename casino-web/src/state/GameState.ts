@@ -3,8 +3,113 @@
 import * as GC from '../logic/GameConstants';
 import * as Sim from '../logic/Simulation';
 import * as PV from '../logic/PlacementValidator';
+import * as OV from '../logic/OperationalValidator';
 import { EventEmitter } from './EventEmitter';
 import * as Slots from './SaveSlots';
+
+// ── Save schema ───────────────────────────────────────────────────────────
+// Bump SAVE_VERSION when the on-disk schema changes and add an entry to
+// SAVE_MIGRATIONS that upgrades the previous version's payload to the new
+// shape. `normalizeSave` then fills in any newly-introduced fields with
+// safe defaults so partial / hand-edited saves still load.
+const SAVE_VERSION = '1.2.0';
+
+interface SavedObj {
+  id: string; type: GC.ObjType;
+  col: number; row: number;
+  rotated: boolean; variant: string;
+}
+
+interface SavePayload {
+  ver         : string;
+  day         : number;
+  objects     : SavedObj[];
+  room_count  : number;
+  quality     : number;
+  cash        : number;
+  cumul       : number;
+  last_guests : number;
+  prev_crowding: number;
+  next_id     : number;
+  active_goal : number;
+  completed   : boolean[];
+  stats       : GC.DayStats[];
+  ch_days     : number[];
+  ch_guests   : number[];
+  ch_rev      : number[];
+  ch_rating   : number[];
+  ch_occ      : number[];
+  ch_cap      : number[];
+}
+
+// Each migration upgrades a payload one version forward. New entries are
+// added when SAVE_VERSION is bumped.
+const SAVE_MIGRATIONS: Record<string, (d: any) => any> = {
+  // 1.1.0 → 1.2.0: introduces PATH/CASHIER object types and operational
+  // path-adjacency rules. No payload shape changes; old saves are forward-
+  // compatible (they simply have no path tiles, so all attractions start
+  // non-functional until the player lays paths).
+  '1.1.0': (d) => ({ ...d, ver: '1.2.0' }),
+};
+
+function migrateSave(d: any): any | null {
+  if (d == null || typeof d !== 'object' || typeof d.ver !== 'string') return null;
+  let cur = d;
+  // Walk the migration chain until we hit the current version. Cap iterations
+  // so a malformed/cyclic chain can't hang the loader.
+  for (let steps = 0; steps < 16 && cur.ver !== SAVE_VERSION; steps++) {
+    const step = SAVE_MIGRATIONS[cur.ver];
+    if (!step) return null;
+    cur = step(cur);
+  }
+  return cur.ver === SAVE_VERSION ? cur : null;
+}
+
+function normalizeSave(d: any): SavePayload {
+  // Defensive defaults — saves that pre-date a field still load.
+  return {
+    ver         : SAVE_VERSION,
+    day         : d.day ?? 1,
+    objects     : Array.isArray(d.objects) ? d.objects : [],
+    room_count  : d.room_count ?? 0,
+    quality     : d.quality ?? 1,
+    cash        : d.cash ?? GC.STARTING_CASH,
+    cumul       : d.cumul ?? 0,
+    last_guests : d.last_guests ?? 0,
+    prev_crowding: d.prev_crowding ?? 0,
+    next_id     : d.next_id ?? 0,
+    active_goal : d.active_goal ?? 0,
+    completed   : Array.isArray(d.completed) ? d.completed : Array(10).fill(false),
+    stats       : Array.isArray(d.stats)     ? d.stats     : [],
+    ch_days     : Array.isArray(d.ch_days)   ? d.ch_days   : [],
+    ch_guests   : Array.isArray(d.ch_guests) ? d.ch_guests : [],
+    ch_rev      : Array.isArray(d.ch_rev)    ? d.ch_rev    : [],
+    ch_rating   : Array.isArray(d.ch_rating) ? d.ch_rating : [],
+    ch_occ      : Array.isArray(d.ch_occ)    ? d.ch_occ    : [],
+    ch_cap      : Array.isArray(d.ch_cap)    ? d.ch_cap    : [],
+  };
+}
+
+// UI-shaped read-only snapshot of "today". Decouples panels from internal
+// field names and is the one place to add derived UI inputs (overlay data,
+// variety bonus, etc.) without touching every panel.
+export interface DaySnapshot {
+  day              : number;
+  cash             : number;
+  rating           : number;
+  totalGuests      : number;
+  walkin           : number;
+  hotelGuests      : number;
+  capacity         : number;
+  crowding         : number;
+  occupancy        : number;
+  bookedRooms      : number;
+  roomCount        : number;
+  qualityLevel     : number;
+  cumulativeIncome : number;
+  barExists        : boolean;
+  lastDay          : GC.DayStats | null;
+}
 
 class GameState extends EventEmitter {
   // Map
@@ -17,11 +122,26 @@ class GameState extends EventEmitter {
   cumulativeIncome = 0;
   lastGuests       = 0;
   prevCrowding     = 0.0;
+  // Physical counts — count of placed objects regardless of operational
+  // status. Used by goals, BuildPanel "Already built", and placement gating.
   slotCount        = 0;
   smallTableCount  = 0;
   largeTableCount  = 0;
   wcCount          = 0;
   barExists        = false;
+  cashierCount     = 0;
+  pathCount        = 0;
+  // Functional counts — only objects whose path-adjacency check passes.
+  // Fed into Simulation so non-functional objects contribute nothing.
+  funcSlot         = 0;
+  funcSmall        = 0;
+  funcLarge        = 0;
+  funcWc           = 0;
+  funcBarExists    = false;
+  funcCashier      = 0;
+  // Set of placed object ids that are currently functional. Recomputed
+  // whenever placement, demolish, or load changes the world.
+  functionalIds    : Set<string> = new Set();
   casinoCapacity   = 0;
   resortRating     = 1.75;
   totalGuests      = 0;
@@ -106,6 +226,10 @@ class GameState extends EventEmitter {
     this.lastGuests = 0; this.prevCrowding = 0;
     this.slotCount = 0; this.smallTableCount = 0; this.largeTableCount = 0;
     this.wcCount = 0; this.barExists = false;
+    this.cashierCount = 0; this.pathCount = 0;
+    this.funcSlot = 0; this.funcSmall = 0; this.funcLarge = 0;
+    this.funcWc = 0; this.funcBarExists = false; this.funcCashier = 0;
+    this.functionalIds = new Set();
     this.casinoCapacity = 0; this.resortRating = 1.75;
     this.totalGuests = 0; this.walkinGuests = 0; this.dailyRevenue = 0;
     this.roomCount = 0; this.qualityLevel = 1;
@@ -120,21 +244,36 @@ class GameState extends EventEmitter {
   }
 
   private _buildGrid(): void {
+    // Layout:
+    //   • Border walls all around.
+    //   • Reception room: cols 15..20 × rows 19..22 (south end). The lobby
+    //     range constants (LOBBY_START_COL / LOBBY_END_COL) still represent
+    //     the columns of the south wall that contain the front entrance —
+    //     wall-run validation uses them to keep the entrance from being
+    //     walled off.
+    //   • Two symmetric pillar clusters and one central island for floor
+    //     interest. Players lay PATH tiles outward from the reception room
+    //     to make distant attractions functional.
     this.tiles = [];
     for (let row = 0; row < GC.GRID_ROWS; row++) {
       for (let col = 0; col < GC.GRID_COLS; col++) {
         let tile_type: GC.TileType = GC.TileType.FLOOR;
-        if (col === 0 || col === GC.GRID_COLS - 1 || row === 0 || row === GC.GRID_ROWS - 1)
+        const isBorder = col === 0 || col === GC.GRID_COLS - 1
+                      || row === 0 || row === GC.GRID_ROWS - 1;
+        if (isBorder) {
           tile_type = GC.TileType.WALL;
-        else if (col >= GC.LOBBY_START_COL && col <= GC.LOBBY_END_COL)
-          tile_type = GC.TileType.LOBBY;
+        } else {
+          const inLobby = col >= GC.LOBBY_START_COL && col <= GC.LOBBY_END_COL
+                       && row >= 19 && row <= 22;
+          if (inLobby) tile_type = GC.TileType.LOBBY;
+        }
         this.tiles.push({ col, row, tile_type, obj_id: '' });
       }
     }
-    this._markBlocked(17, 8,  3, 2);
-    this._markBlocked(14, 11, 2, 1);
-    this._markBlocked(21, 11, 2, 1);
-    this._markBlocked(16, 22, 4, 1);
+    // Pillar clusters and central island.
+    this._markBlocked( 8, 8, 2, 2);
+    this._markBlocked(26, 8, 2, 2);
+    this._markBlocked(17, 11, 2, 2);
   }
 
   private _markBlocked(col: number, row: number, w: number, h: number): void {
@@ -219,10 +358,13 @@ class GameState extends EventEmitter {
   // ── Advance day ───────────────────────────────────────────────────────────
 
   advanceDay(): void {
+    // Simulation only sees FUNCTIONAL counts — non-functional placements
+    // contribute zero capacity, revenue, and rating until path-connected.
     const s: Sim.DayInput = {
-      slots: this.slotCount, small_tables: this.smallTableCount,
-      large_tables: this.largeTableCount, wc_count: this.wcCount,
-      bar_exists: this.barExists, room_count: this.roomCount,
+      slots: this.funcSlot, small_tables: this.funcSmall,
+      large_tables: this.funcLarge, wc_count: this.funcWc,
+      bar_exists: this.funcBarExists, cashier_count: this.funcCashier,
+      room_count: this.roomCount,
       quality_level: this.qualityLevel, cash: this.cash,
       cumulative_income: this.cumulativeIncome,
       last_guests: this.lastGuests, prev_crowding: this.prevCrowding,
@@ -252,25 +394,54 @@ class GameState extends EventEmitter {
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   private _updateCounts(): void {
+    // Reset both physical and functional counts.
     this.slotCount = 0; this.smallTableCount = 0; this.largeTableCount = 0;
     this.wcCount = 0; this.barExists = false;
+    this.cashierCount = 0; this.pathCount = 0;
+    this.funcSlot = 0; this.funcSmall = 0; this.funcLarge = 0;
+    this.funcWc = 0; this.funcBarExists = false; this.funcCashier = 0;
+
+    this.functionalIds = OV.computeFunctionalIds(this.placedObjs, this.tiles);
+
     for (const obj of this.placedObjs) {
-      if      (obj.type === GC.ObjType.SLOT_MACHINE) this.slotCount++;
-      else if (obj.type === GC.ObjType.SMALL_TABLE)  this.smallTableCount++;
-      else if (obj.type === GC.ObjType.LARGE_TABLE)  this.largeTableCount++;
-      else if (obj.type === GC.ObjType.WC)           this.wcCount++;
-      else if (obj.type === GC.ObjType.BAR)          this.barExists = true;
+      const isFunc = this.functionalIds.has(obj.id);
+      switch (obj.type) {
+        case GC.ObjType.SLOT_MACHINE:
+          this.slotCount++; if (isFunc) this.funcSlot++;
+          break;
+        case GC.ObjType.SMALL_TABLE:
+          this.smallTableCount++; if (isFunc) this.funcSmall++;
+          break;
+        case GC.ObjType.LARGE_TABLE:
+          this.largeTableCount++; if (isFunc) this.funcLarge++;
+          break;
+        case GC.ObjType.WC:
+          this.wcCount++; if (isFunc) this.funcWc++;
+          break;
+        case GC.ObjType.BAR:
+          this.barExists = true; if (isFunc) this.funcBarExists = true;
+          break;
+        case GC.ObjType.CASHIER:
+          this.cashierCount++; if (isFunc) this.funcCashier++;
+          break;
+        case GC.ObjType.PATH:
+          this.pathCount++;
+          break;
+      }
     }
-    this.casinoCapacity = Sim.calcCapacity(this.slotCount, this.smallTableCount, this.largeTableCount);
+    // Capacity reflects functional attractions only — matches what the sim
+    // sees and what's shown in the UI.
+    this.casinoCapacity = Sim.calcCapacity(this.funcSlot, this.funcSmall, this.funcLarge);
   }
 
   private _recomputeDerived(): void {
     this._updateCounts();
     const crowding = Sim.calcCrowding(this.lastGuests, this.casinoCapacity, this.prevCrowding);
     this.resortRating = Sim.calcRating(
-      this.slotCount, this.smallTableCount, this.largeTableCount,
-      this.wcCount, this.barExists,
+      this.funcSlot, this.funcSmall, this.funcLarge,
+      this.funcWc, this.funcBarExists,
       this.roomCount, this.qualityLevel, crowding,
+      this.funcCashier,
     );
     const hotel = Sim.calcOccupancy(this.roomCount, this.qualityLevel, this.resortRating);
     this.occupancyRate = hotel.rate;
@@ -339,17 +510,43 @@ class GameState extends EventEmitter {
     return 0;
   }
 
+  // ── UI snapshot ───────────────────────────────────────────────────────────
+
+  // Read-only view of "today" for UI consumption. UI code should prefer
+  // this over reaching into individual fields, so adding derived values
+  // (overlay inputs, variety bonus, …) requires changes in one place.
+  getDaySnapshot(): DaySnapshot {
+    const last = this.statsRecords.length > 0
+      ? this.statsRecords[this.statsRecords.length - 1]
+      : null;
+    return {
+      day              : this.dayNumber,
+      cash             : this.cash,
+      rating           : this.resortRating,
+      totalGuests      : this.totalGuests,
+      walkin           : this.walkinGuests,
+      hotelGuests      : this.hotelGuests,
+      capacity         : this.casinoCapacity,
+      crowding         : this.prevCrowding,
+      occupancy        : this.occupancyRate,
+      bookedRooms      : this.bookedRooms,
+      roomCount        : this.roomCount,
+      qualityLevel     : this.qualityLevel,
+      cumulativeIncome : this.cumulativeIncome,
+      barExists        : this.barExists,
+      lastDay          : last,
+    };
+  }
+
   // ── Save / Load ───────────────────────────────────────────────────────────
 
-  private _writeSave(): void {
-    if (this._activeSlot === null) return;
-    const saveObjs = this.placedObjs.map(o => ({
+  private _serialize(): SavePayload {
+    const objects: SavedObj[] = this.placedObjs.map(o => ({
       id: o.id, type: o.type, col: o.col, row: o.row,
       rotated: o.rotated, variant: o.variant,
     }));
-    const data = {
-      ver: '1.1.0', day: this.dayNumber,
-      objects: saveObjs,
+    return {
+      ver: SAVE_VERSION, day: this.dayNumber, objects,
       room_count: this.roomCount, quality: this.qualityLevel,
       cash: this.cash, cumul: this.cumulativeIncome,
       last_guests: this.lastGuests, prev_crowding: this.prevCrowding,
@@ -360,58 +557,68 @@ class GameState extends EventEmitter {
       ch_rev: this.chartRevenue, ch_rating: this.chartRating,
       ch_occ: this.chartOccupancy, ch_cap: this.chartCapacity,
     };
-    try { localStorage.setItem(Slots.slotKey(this._activeSlot), JSON.stringify(data)); } catch { /* quota exceeded */ }
+  }
+
+  private _writeSave(): void {
+    if (this._activeSlot === null) return;
+    try {
+      localStorage.setItem(Slots.slotKey(this._activeSlot), JSON.stringify(this._serialize()));
+    } catch { /* quota exceeded */ }
+  }
+
+  private _apply(d: SavePayload): void {
+    this._newGame();
+
+    this.dayNumber        = d.day;
+    this.roomCount        = d.room_count;
+    this.qualityLevel     = d.quality;
+    this.cash             = d.cash;
+    this.cumulativeIncome = d.cumul;
+    this.lastGuests       = d.last_guests;
+    this.prevCrowding     = d.prev_crowding;
+    this._nextId          = d.next_id;
+    this.activeGoal       = d.active_goal;
+    this.completedGoals   = d.completed;
+    this.statsRecords     = d.stats;
+    // Costs are gone in this MVP. Rewrite historical records so the
+    // displayed Net always equals Revenue, regardless of when the
+    // save was created.
+    for (const r of this.statsRecords) {
+      r.costs = 0;
+      r.net   = r.revenue;
+    }
+    this.chartDays      = d.ch_days;   this.chartGuests   = d.ch_guests;
+    this.chartRevenue   = d.ch_rev;    this.chartRating   = d.ch_rating;
+    this.chartOccupancy = d.ch_occ;    this.chartCapacity = d.ch_cap;
+
+    for (const saved of d.objects) {
+      const def = GC.getDef(saved.type);
+      const w   = saved.rotated ? def.fh : def.fw;
+      const h   = saved.rotated ? def.fw : def.fh;
+      const fp  = PV.computeFootprint(saved.col, saved.row, w, h);
+      const obj: GC.PlacedObj = {
+        id: saved.id, type: saved.type,
+        col: saved.col, row: saved.row,
+        rotated: saved.rotated, variant: saved.variant,
+        tiles: fp, w, h,
+      };
+      this.placedObjs.push(obj);
+      for (const coord of fp)
+        this.tiles[coord.y * GC.GRID_COLS + coord.x].obj_id = saved.id;
+    }
+
+    this._recomputeDerived();
+    this._checkGoals();
   }
 
   private _tryLoad(key: string): boolean {
     try {
       const raw = localStorage.getItem(key);
       if (!raw) return false;
-      const d = JSON.parse(raw);
-      if (d.ver !== '1.1.0') return false;
-
-      this._newGame();
-
-      this.dayNumber        = d.day;
-      this.roomCount        = d.room_count;
-      this.qualityLevel     = d.quality;
-      this.cash             = d.cash;
-      this.cumulativeIncome = d.cumul;
-      this.lastGuests       = d.last_guests;
-      this.prevCrowding     = d.prev_crowding;
-      this._nextId          = d.next_id;
-      this.activeGoal       = d.active_goal;
-      this.completedGoals   = d.completed;
-      this.statsRecords     = d.stats;
-      // Costs are gone in this MVP. Rewrite historical records so the
-      // displayed Net always equals Revenue, regardless of when the
-      // save was created.
-      for (const r of this.statsRecords) {
-        r.costs = 0;
-        r.net   = r.revenue;
-      }
-      this.chartDays        = d.ch_days;   this.chartGuests   = d.ch_guests;
-      this.chartRevenue     = d.ch_rev;    this.chartRating   = d.ch_rating;
-      this.chartOccupancy   = d.ch_occ;    this.chartCapacity = d.ch_cap;
-
-      for (const saved of d.objects) {
-        const def = GC.getDef(saved.type as GC.ObjType);
-        const w   = saved.rotated ? def.fh : def.fw;
-        const h   = saved.rotated ? def.fw : def.fh;
-        const fp  = PV.computeFootprint(saved.col, saved.row, w, h);
-        const obj: GC.PlacedObj = {
-          id: saved.id, type: saved.type as GC.ObjType,
-          col: saved.col, row: saved.row,
-          rotated: saved.rotated, variant: saved.variant,
-          tiles: fp, w, h,
-        };
-        this.placedObjs.push(obj);
-        for (const coord of fp)
-          this.tiles[coord.y * GC.GRID_COLS + coord.x].obj_id = saved.id;
-      }
-
-      this._recomputeDerived();
-      this._checkGoals();
+      const parsed = JSON.parse(raw);
+      const migrated = migrateSave(parsed);
+      if (!migrated) return false;
+      this._apply(normalizeSave(migrated));
       return true;
     } catch {
       return false;

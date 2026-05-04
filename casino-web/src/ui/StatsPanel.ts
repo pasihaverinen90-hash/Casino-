@@ -120,18 +120,16 @@ export class StatsPanel {
   }
 
   private _refreshToday(): void {
-    const gs   = gameState;
-    const last = gs.statsRecords.length > 0
-      ? gs.statsRecords[gs.statsRecords.length - 1]
-      : null;
+    const s    = gameState.getDaySnapshot();
+    const last = s.lastDay;
 
-    this.lblDay.textContent      = `Day ${gs.dayNumber} Summary`;
-    this.lblRating.textContent   = `Resort Rating    ${gs.resortRating.toFixed(1)}`;
-    this.lblGuests.textContent   = `Total Guests     ${gs.totalGuests}/day`;
-    this.lblWalkin.textContent   = `  Walk-in        ${gs.walkinGuests}`;
-    this.lblHotelG.textContent   = `  Hotel          ${gs.hotelGuests}`;
-    this.lblCapacity.textContent = `Casino Capacity  ${gs.casinoCapacity}`;
-    this.lblCrowding.textContent = `Crowding         ${gs.prevCrowding.toFixed(2)}`;
+    this.lblDay.textContent      = `Day ${s.day} Summary`;
+    this.lblRating.textContent   = `Resort Rating    ${s.rating.toFixed(1)}`;
+    this.lblGuests.textContent   = `Total Guests     ${s.totalGuests}/day`;
+    this.lblWalkin.textContent   = `  Walk-in        ${s.walkin}`;
+    this.lblHotelG.textContent   = `  Hotel          ${s.hotelGuests}`;
+    this.lblCapacity.textContent = `Casino Capacity  ${s.capacity}`;
+    this.lblCrowding.textContent = `Crowding         ${s.crowding.toFixed(2)}`;
 
     if (!last) {
       this.lblSlotRev.textContent  = 'Slots            —';
@@ -150,7 +148,7 @@ export class StatsPanel {
       this.lblUpkeep.textContent   = `Upkeep           −${last.costs} 💰`;
       this.lblNet.textContent      = `Net              ${last.net >= 0 ? '+' : ''}${last.net} 💰`;
     }
-    this.lblCumul.textContent = `Total Earned     ${gs.cumulativeIncome.toLocaleString()} 💰  (goal: ${GC.GOAL_TARGETS.income.toLocaleString()})`;
+    this.lblCumul.textContent = `Total Earned     ${s.cumulativeIncome.toLocaleString()} 💰  (goal: ${GC.GOAL_TARGETS.income.toLocaleString()})`;
   }
 
   private _refreshCharts(): void {

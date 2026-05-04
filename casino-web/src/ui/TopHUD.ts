@@ -22,10 +22,11 @@ export class TopHUD {
   }
 
   private _refresh(): void {
-    this.lblRating.textContent = `★ ${gameState.resortRating.toFixed(1)}`;
-    this.lblGuests.textContent = `👥 ${gameState.totalGuests}/day`;
-    this.lblCash.textContent   = `💰 ${fmtCash(gameState.cash)}`;
-    this.lblDay.textContent    = `Day ${gameState.dayNumber}`;
+    const s = gameState.getDaySnapshot();
+    this.lblRating.textContent = `★ ${s.rating.toFixed(1)}`;
+    this.lblGuests.textContent = `👥 ${s.totalGuests}/day`;
+    this.lblCash.textContent   = `💰 ${fmtCash(s.cash)}`;
+    this.lblDay.textContent    = `Day ${s.day}`;
   }
 }
 
