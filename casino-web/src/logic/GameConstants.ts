@@ -5,7 +5,7 @@ export const GRID_ROWS       = 24;
 export const LOBBY_START_COL = 15;
 export const LOBBY_END_COL   = 20;
 
-export const STARTING_CASH   = 7500;
+export const STARTING_CASH   = 22500;
 export const HISTORY_MAX     = 60;
 export const DEMOLISH_REFUND = 0.5;
 
