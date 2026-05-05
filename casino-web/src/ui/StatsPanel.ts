@@ -79,15 +79,17 @@ export class StatsPanel {
     this.lblNet      = this.todayPanel.appendChild(statRow(true));
     this.lblCumul    = this.todayPanel.appendChild(statRow(true));
 
-    // History panel
+    // History panel — one card per daily metric. Cards record one point per
+    // completed in-game day, so the panel populates as days roll over.
     this.historyPanel = document.createElement('div');
     this.historyPanel.className = 'panel-scroll';
     this.historyPanel.style.display = 'none';
+    this.historyPanel.appendChild(sectionHeader('DAILY METRICS'));
 
-    this.chartGuests  = new ChartCard(this.historyPanel, 'Guests / Day',       '#4dcc80');
-    this.chartRevenue = new ChartCard(this.historyPanel, 'Revenue / Day',       '#e6b31a');
-    this.chartRating  = new ChartCard(this.historyPanel, 'Resort Rating',       '#e66633');
-    this.chartOcc     = new ChartCard(this.historyPanel, 'Hotel Occupancy %',   '#6699e6');
+    this.chartRevenue = new ChartCard(this.historyPanel, 'Revenue / Day',     '#e6b31a');
+    this.chartGuests  = new ChartCard(this.historyPanel, 'Guests / Day',      '#4dcc80');
+    this.chartRating  = new ChartCard(this.historyPanel, 'Resort Rating',     '#e66633');
+    this.chartOcc     = new ChartCard(this.historyPanel, 'Hotel Occupancy %', '#6699e6');
 
     this.el.append(titleRow, tabBar, this.todayPanel, this.historyPanel);
     parent.appendChild(this.el);

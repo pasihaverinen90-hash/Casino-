@@ -163,6 +163,10 @@ class GameState extends EventEmitter {
   // was actually paid into cash (matches what the player saw on the HUD).
   private _projection: Sim.DayProjection | null = null;
   private _paidToday  = 0;
+  // Counts in-game hours elapsed within the current day. Used to refresh
+  // the projected guests/day on a stable 6-hour cadence so the live HUD
+  // reacts to mid-day placements without flickering every hour.
+  private _hoursThisDay = 0;
 
   // Hotel
   roomCount    = 0;
@@ -252,7 +256,7 @@ class GameState extends EventEmitter {
     this.occupancyRate = 0; this.bookedRooms = 0; this.hotelGuests = 0;
     this.dayNumber = 1; this.activeGoal = 0;
     this.completedGoals = Array(10).fill(false);
-    this._projection = null; this._paidToday = 0;
+    this._projection = null; this._paidToday = 0; this._hoursThisDay = 0;
     this.statsRecords = [];
     this.chartDays = []; this.chartGuests = []; this.chartRevenue = [];
     this.chartRating = []; this.chartOccupancy = []; this.chartCapacity = [];
@@ -379,8 +383,17 @@ class GameState extends EventEmitter {
   // hour boundaries fire, not the per-tick amount, so revenue is tied to
   // in-game time rather than wall-clock seconds. Cash stays a precise
   // number; rounding only happens for display.
+  //
+  // Every 6 in-game hours (06:00 / 12:00 / 18:00) we re-project so the
+  // HUD's guests/day and capacity react mid-day to placements without
+  // flickering on every single hour. The 24:00 boundary is owned by
+  // endDay()'s rollup, so we cap the mid-day refresh below 24h.
   tickHour(): void {
     if (!this._projection) return;
+    this._hoursThisDay++;
+    if (this._hoursThisDay < 24 && this._hoursThisDay % 6 === 0) {
+      this._recomputeDerived();
+    }
     const inc = this._projection.revenue / 24;
     if (inc <= 0) return;
     this.cash             += inc;
@@ -429,6 +442,7 @@ class GameState extends EventEmitter {
     this.prevCrowding = p.crowding;
     this.dailyRevenue = this._paidToday;
     this._paidToday   = 0;
+    this._hoursThisDay = 0;
     this.dayNumber++;
 
     // Re-project once more so subsequent drip uses fresh crowding/rating
