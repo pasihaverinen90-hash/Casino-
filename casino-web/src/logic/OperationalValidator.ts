@@ -56,3 +56,38 @@ export function computeFunctionalIds(placed: GC.PlacedObj[], tiles: GC.Tile[]): 
   }
   return out;
 }
+
+// Open-floor tiles where a guest can stand while "using" the attraction.
+//   • Wall services (WC, BAR, CASHIER): the inward floor tile in front of
+//     each door — what the placement validator already checks.
+//   • Floor attractions (slot, table): every open-floor tile bordering the
+//     footprint, deduped.
+// Returns tile coordinates (integer col/row). Empty when the object has no
+// usable approach — the guest layer falls back to a different target.
+export function getInteractionTiles(obj: GC.PlacedObj, tiles: GC.Tile[]): GC.Vec2[] {
+  const def = GC.getDef(obj.type);
+  const out: GC.Vec2[] = [];
+  if (def.is_wall) {
+    const wallDir = detectWallDir(obj.col, obj.row, obj.w, obj.h, tiles);
+    if (!wallDir) return out;
+    const doors = getDoorTiles(
+      { type: obj.type, col: obj.col, row: obj.row, rotated: obj.rotated },
+      obj.w, obj.h,
+    );
+    for (const d of doors) {
+      const inward = getInward(d, wallDir);
+      if (isOpenFloor(tiles, inward.x, inward.y)) out.push(inward);
+    }
+    return out;
+  }
+  const { col, row, w, h } = obj;
+  for (let c = col; c < col + w; c++) {
+    if (isOpenFloor(tiles, c, row - 1)) out.push({ x: c, y: row - 1 });
+    if (isOpenFloor(tiles, c, row + h)) out.push({ x: c, y: row + h });
+  }
+  for (let r = row; r < row + h; r++) {
+    if (isOpenFloor(tiles, col - 1, r)) out.push({ x: col - 1, y: r });
+    if (isOpenFloor(tiles, col + w, r)) out.push({ x: col + w, y: r });
+  }
+  return out;
+}
