@@ -1,5 +1,5 @@
-// BottomBar.ts — bottom action bar: Build | Hotel | Stats | ⏸ 1× 2× | Save | Menu
-import { TimeController, type Speed } from '../state/TimeController';
+// BottomBar.ts — bottom action bar: Build | Hotel | Stats | ⏸ 1× 2× 4× | Save | Menu
+import { time, type Speed } from '../state/TimeController';
 
 type PanelId = 'build' | 'hotel' | 'stats' | '';
 
@@ -13,18 +13,16 @@ export interface BottomBarCallbacks {
 }
 
 export class BottomBar {
-  private active     : PanelId = '';
-  private btnBuild   : HTMLButtonElement;
-  private btnHotel   : HTMLButtonElement;
-  private btnStats   : HTMLButtonElement;
-  private btnPause   : HTMLButtonElement;
-  private btn1x      : HTMLButtonElement;
-  private btn2x      : HTMLButtonElement;
-  private _time      : TimeController;
+  private active   : PanelId = '';
+  private btnBuild : HTMLButtonElement;
+  private btnHotel : HTMLButtonElement;
+  private btnStats : HTMLButtonElement;
+  private btnPause : HTMLButtonElement;
+  private btn1x    : HTMLButtonElement;
+  private btn2x    : HTMLButtonElement;
+  private btn4x    : HTMLButtonElement;
 
-  constructor(parent: HTMLElement, time: TimeController, cb: BottomBarCallbacks) {
-    this._time = time;
-
+  constructor(parent: HTMLElement, cb: BottomBarCallbacks) {
     const el = document.createElement('div');
     el.className = 'bottom-bar interactive';
 
@@ -36,16 +34,18 @@ export class BottomBar {
     this.btnHotel.onclick = () => this._toggle('hotel', cb.onHotel,    cb.onCloseAll);
     this.btnStats.onclick = () => this._toggle('stats', cb.onStats,    cb.onCloseAll);
 
-    // Speed segmented control
+    // Speed segmented control: pause / 1× / 2× / 4×.
     const speedGroup = document.createElement('div');
     speedGroup.className = 'speed-group';
     this.btnPause = btn('⏸',  'speed-btn', 'Space');
     this.btn1x    = btn('1×', 'speed-btn', '1');
     this.btn2x    = btn('2×', 'speed-btn', '2');
+    this.btn4x    = btn('4×', 'speed-btn', '4');
     this.btnPause.onclick = () => time.setSpeed(0);
     this.btn1x.onclick    = () => time.setSpeed(1);
     this.btn2x.onclick    = () => time.setSpeed(2);
-    speedGroup.append(this.btnPause, this.btn1x, this.btn2x);
+    this.btn4x.onclick    = () => time.setSpeed(4);
+    speedGroup.append(this.btnPause, this.btn1x, this.btn2x, this.btn4x);
 
     const btnSave = btn('💾 Save', 'bottom-btn aux', '');
     btnSave.onclick = () => cb.onSave();
@@ -55,7 +55,7 @@ export class BottomBar {
     el.append(this.btnBuild, this.btnHotel, this.btnStats, speedGroup, btnSave, btnMenu);
     parent.appendChild(el);
 
-    time.onChange = () => this._refreshSpeed();
+    time.on<Speed>('speed', () => this._refreshSpeed());
     this._refreshSpeed();
   }
 
@@ -86,10 +86,11 @@ export class BottomBar {
   }
 
   private _refreshSpeed(): void {
-    const s: Speed = this._time.speed;
+    const s: Speed = time.speed;
     this.btnPause.classList.toggle('active', s === 0);
     this.btn1x.classList.toggle   ('active', s === 1);
     this.btn2x.classList.toggle   ('active', s === 2);
+    this.btn4x.classList.toggle   ('active', s === 4);
   }
 }
 

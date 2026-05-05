@@ -16,11 +16,11 @@ export const CROWDING_SMOOTH = 0.4;
 
 export const BASE_DEMAND     = 30;
 
-export const REV_SLOT        = 10;
-export const REV_SMALL_TABLE = 16;
-export const REV_LARGE_TABLE = 22;
+export const REV_SLOT        = 13;
+export const REV_SMALL_TABLE = 22;
+export const REV_LARGE_TABLE = 30;
 export const REV_BAR         = 6;
-export const REV_PER_ROOM    = 18;
+export const REV_PER_ROOM    = 24;
 export const BAR_DRAW_RATE   = 0.15;
 
 // Daily upkeep per object. Disabled in this MVP — costs will return later
@@ -33,7 +33,8 @@ export const UPKEEP_BAR         = 0;
 export const UPKEEP_PER_ROOM    = 0;
 
 // Auto-progression: one in-game day = this many real seconds at speed 1×.
-export const DAY_DURATION_SEC = 10;
+// 24s × 48 half-hour ticks = 0.5s per half-hour at 1×.
+export const DAY_DURATION_SEC = 24;
 
 // Numeric thresholds for the four progression goals that use scalar targets.
 // Goals 0/2/3/8/9 are presence checks and stay hard-coded in GameState.

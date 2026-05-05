@@ -8,6 +8,54 @@
 import Phaser from 'phaser';
 import * as GC from '../logic/GameConstants';
 
+// Which side of a wall-service's footprint borders the wall. Used to
+// render the back of the service as a wall continuation so it reads as
+// embedded into the wall instead of free-standing in front of it.
+export type WallSide = 'N' | 'S' | 'W' | 'E';
+
+// Splits a footprint rect into (wall band, service body) given which side
+// faces the wall. The band is ~35 % of the depth perpendicular to the wall.
+function splitForWall(
+  x: number, y: number, w: number, h: number, side: WallSide,
+): { band: { x: number; y: number; w: number; h: number };
+     body: { x: number; y: number; w: number; h: number };
+     // Direction the body faces (the casino floor) — used to place doors,
+     // windows, brass bands, etc., on the correct edge.
+     facing: WallSide } {
+  const bandRatio = 0.35;
+  if (side === 'N') {
+    const bh = Math.max(2, Math.round(h * bandRatio));
+    return {
+      band: { x, y, w, h: bh },
+      body: { x, y: y + bh, w, h: h - bh },
+      facing: 'S',
+    };
+  }
+  if (side === 'S') {
+    const bh = Math.max(2, Math.round(h * bandRatio));
+    return {
+      band: { x, y: y + h - bh, w, h: bh },
+      body: { x, y, w, h: h - bh },
+      facing: 'N',
+    };
+  }
+  if (side === 'W') {
+    const bw = Math.max(2, Math.round(w * bandRatio));
+    return {
+      band: { x, y, w: bw, h },
+      body: { x: x + bw, y, w: w - bw, h },
+      facing: 'E',
+    };
+  }
+  // E
+  const bw = Math.max(2, Math.round(w * bandRatio));
+  return {
+    band: { x: x + w - bw, y, w: bw, h },
+    body: { x, y, w: w - bw, h },
+    facing: 'W',
+  };
+}
+
 // ── Phaser Graphics renderer (in-grid) ───────────────────────────────────
 
 export function paintObject(
@@ -15,14 +63,15 @@ export function paintObject(
   type: GC.ObjType,
   x: number, y: number, w: number, h: number,
   alpha: number,
+  wallSide: WallSide | null = null,
 ): void {
   switch (type) {
     case GC.ObjType.SLOT_MACHINE: drawSlotG(g, x, y, w, h, alpha); break;
     case GC.ObjType.SMALL_TABLE:  drawTableG(g, x, y, w, h, alpha, false); break;
     case GC.ObjType.LARGE_TABLE:  drawTableG(g, x, y, w, h, alpha, true);  break;
-    case GC.ObjType.WC:           drawWCG     (g, x, y, w, h, alpha); break;
-    case GC.ObjType.BAR:          drawBarG    (g, x, y, w, h, alpha); break;
-    case GC.ObjType.CASHIER:      drawCashierG(g, x, y, w, h, alpha); break;
+    case GC.ObjType.WC:           drawWCG     (g, x, y, w, h, alpha, wallSide); break;
+    case GC.ObjType.BAR:          drawBarG    (g, x, y, w, h, alpha, wallSide); break;
+    case GC.ObjType.CASHIER:      drawCashierG(g, x, y, w, h, alpha, wallSide); break;
   }
 }
 
@@ -83,59 +132,164 @@ function drawTableG(g: Phaser.GameObjects.Graphics, x: number, y: number, w: num
   }
 }
 
-function drawWCG(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, a: number): void {
-  // Tile facade
+// Wall-service drawers paint a "wall continuation" band on the wall side
+// (so the service reads as built into the wall) and then a service body
+// in the floor-facing portion. wallSide may be null on the build-panel
+// ghost or on a momentarily-unmoored placement; we fall back to a default
+// orientation in that case.
+
+function drawWallBand(
+  g: Phaser.GameObjects.Graphics,
+  band: { x: number; y: number; w: number; h: number },
+  a: number,
+): void {
+  // Wall tone matches COL_WALL so the band visually merges with the wall
+  // tile behind it. A thin highlight on the floor-facing edge gives a
+  // header / lintel feel.
+  g.fillStyle(GC.COL_WALL, a);
+  g.fillRect(band.x, band.y, band.w, band.h);
+  g.fillStyle(0x35373a, a);
+  g.fillRect(band.x, band.y, band.w, 1);
+}
+
+function drawWCG(
+  g: Phaser.GameObjects.Graphics,
+  x: number, y: number, w: number, h: number, a: number,
+  side: WallSide | null,
+): void {
+  const eff: WallSide = side ?? (w >= h ? 'N' : 'W');
+  const { band, body, facing } = splitForWall(x, y, w, h, eff);
+
+  // Wall band first — ensures the back blends with the wall.
+  drawWallBand(g, band, a);
+
+  // Service body — green tile facade.
   g.fillStyle(0x4db368, a);
-  g.fillRect(x, y, w - 1, h - 1);
-  // Door inset (centered along the long axis)
-  const horiz = w >= h;
+  g.fillRect(body.x, body.y, body.w, body.h);
+
+  // Tile grout — a single divider line for a built-in look.
+  g.fillStyle(0x2a5a3a, a * 0.7);
+  if (facing === 'N' || facing === 'S') {
+    g.fillRect(body.x, body.y + body.h / 2, body.w, 1);
+  } else {
+    g.fillRect(body.x + body.w / 2, body.y, 1, body.h);
+  }
+
+  // Door cutout on the floor-facing edge of the body.
   g.fillStyle(0x1d3a26, a);
-  if (horiz) {
-    const dw = Math.max(2, Math.round(w * 0.22));
-    g.fillRect(x + (w - dw) / 2, y + 2, dw, h - 4);
+  if (facing === 'N') {
+    const dw = Math.max(2, Math.round(body.w * 0.22));
+    const dh = Math.max(2, Math.round(body.h * 0.55));
+    g.fillRect(body.x + (body.w - dw) / 2, body.y, dw, dh);
+  } else if (facing === 'S') {
+    const dw = Math.max(2, Math.round(body.w * 0.22));
+    const dh = Math.max(2, Math.round(body.h * 0.55));
+    g.fillRect(body.x + (body.w - dw) / 2, body.y + body.h - dh, dw, dh);
+  } else if (facing === 'W') {
+    const dh = Math.max(2, Math.round(body.h * 0.22));
+    const dw = Math.max(2, Math.round(body.w * 0.55));
+    g.fillRect(body.x, body.y + (body.h - dh) / 2, dw, dh);
   } else {
-    const dh = Math.max(2, Math.round(h * 0.22));
-    g.fillRect(x + 2, y + (h - dh) / 2, w - 4, dh);
+    const dh = Math.max(2, Math.round(body.h * 0.22));
+    const dw = Math.max(2, Math.round(body.w * 0.55));
+    g.fillRect(body.x + body.w - dw, body.y + (body.h - dh) / 2, dw, dh);
   }
 }
 
-function drawBarG(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, a: number): void {
-  const horiz = w >= h;
-  // Dark counter back
-  g.fillStyle(0x4a1a14, a);
-  g.fillRect(x, y, w - 1, h - 1);
-  // Brass / wood front edge band
-  g.fillStyle(0xcc8a44, a);
-  if (horiz) g.fillRect(x, y + Math.round(h * 0.6), w - 1, Math.max(2, Math.round(h * 0.18)));
-  else        g.fillRect(x + Math.round(w * 0.6), y, Math.max(2, Math.round(w * 0.18)), h - 1);
-  // Bottle silhouettes along the back
+function drawBarG(
+  g: Phaser.GameObjects.Graphics,
+  x: number, y: number, w: number, h: number, a: number,
+  side: WallSide | null,
+): void {
+  const eff: WallSide = side ?? (w >= h ? 'N' : 'W');
+  const { band, body, facing } = splitForWall(x, y, w, h, eff);
+
+  // Wall band — back-bar shelving with bottle silhouettes embedded in the wall.
+  drawWallBand(g, band, a);
   g.fillStyle(0xe8d066, a * 0.9);
+  const horiz = band.w >= band.h;
   if (horiz) {
-    const n = Math.max(2, Math.floor(w / Math.max(8, h)));
+    const n = Math.max(3, Math.floor(band.w / 12));
+    const inset = Math.max(1, Math.round(band.h * 0.25));
     for (let i = 0; i < n; i++) {
-      const bx = x + (i + 0.5) * (w / n);
-      g.fillRect(bx - 1, y + 2, 2, Math.max(2, Math.round(h * 0.4)));
+      const bx = band.x + (i + 0.5) * (band.w / n);
+      g.fillRect(bx - 1, band.y + inset, 2, Math.max(2, band.h - 2 * inset));
     }
   } else {
-    const n = Math.max(2, Math.floor(h / Math.max(8, w)));
+    const n = Math.max(3, Math.floor(band.h / 12));
+    const inset = Math.max(1, Math.round(band.w * 0.25));
     for (let i = 0; i < n; i++) {
-      const by = y + (i + 0.5) * (h / n);
-      g.fillRect(x + 2, by - 1, Math.max(2, Math.round(w * 0.4)), 2);
+      const by = band.y + (i + 0.5) * (band.h / n);
+      g.fillRect(band.x + inset, by - 1, Math.max(2, band.w - 2 * inset), 2);
     }
+  }
+
+  // Counter body — dark wood.
+  g.fillStyle(0x4a1a14, a);
+  g.fillRect(body.x, body.y, body.w, body.h);
+
+  // Brass front edge band on the floor-facing side.
+  g.fillStyle(0xcc8a44, a);
+  if (facing === 'N') {
+    const t = Math.max(2, Math.round(body.h * 0.4));
+    g.fillRect(body.x, body.y, body.w, t);
+  } else if (facing === 'S') {
+    const t = Math.max(2, Math.round(body.h * 0.4));
+    g.fillRect(body.x, body.y + body.h - t, body.w, t);
+  } else if (facing === 'W') {
+    const t = Math.max(2, Math.round(body.w * 0.4));
+    g.fillRect(body.x, body.y, t, body.h);
+  } else {
+    const t = Math.max(2, Math.round(body.w * 0.4));
+    g.fillRect(body.x + body.w - t, body.y, t, body.h);
   }
 }
 
-function drawCashierG(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, a: number): void {
-  // Booth body
+function drawCashierG(
+  g: Phaser.GameObjects.Graphics,
+  x: number, y: number, w: number, h: number, a: number,
+  side: WallSide | null,
+): void {
+  // Cashier is 1×1; we widen the band slightly so the embedded look reads.
+  const eff: WallSide = side ?? 'N';
+  const bandRatio = 0.45;
+  let band: { x: number; y: number; w: number; h: number };
+  let body: { x: number; y: number; w: number; h: number };
+  let facing: WallSide;
+  if (eff === 'N') {
+    const bh = Math.max(2, Math.round(h * bandRatio));
+    band = { x, y, w, h: bh }; body = { x, y: y + bh, w, h: h - bh }; facing = 'S';
+  } else if (eff === 'S') {
+    const bh = Math.max(2, Math.round(h * bandRatio));
+    band = { x, y: y + h - bh, w, h: bh }; body = { x, y, w, h: h - bh }; facing = 'N';
+  } else if (eff === 'W') {
+    const bw = Math.max(2, Math.round(w * bandRatio));
+    band = { x, y, w: bw, h }; body = { x: x + bw, y, w: w - bw, h }; facing = 'E';
+  } else {
+    const bw = Math.max(2, Math.round(w * bandRatio));
+    band = { x: x + w - bw, y, w: bw, h }; body = { x, y, w: w - bw, h }; facing = 'W';
+  }
+
+  drawWallBand(g, band, a);
+
+  // Booth body — dark teal.
   g.fillStyle(0x2d4d6e, a);
-  g.fillRect(x, y, w - 1, h - 1);
-  // Window
+  g.fillRect(body.x, body.y, body.w, body.h);
+
+  // Window — light glass set into the booth, biased toward the floor edge.
+  const m = Math.max(1, Math.round(Math.min(body.w, body.h) * 0.2));
   g.fillStyle(0xc8e0ff, a * 0.85);
-  const m = Math.max(1, Math.round(Math.min(w, h) * 0.18));
-  g.fillRect(x + m, y + m, w - 2 * m, h - 2 * m);
-  // Slot/grille
+  g.fillRect(body.x + m, body.y + m, Math.max(1, body.w - 2 * m), Math.max(1, body.h - 2 * m));
+
+  // Service slot facing the floor.
   g.fillStyle(0x1a2a3a, a);
-  g.fillRect(x + m + 1, y + h / 2 - 1, w - 2 * m - 2, 2);
+  if (facing === 'N' || facing === 'S') {
+    const sy = facing === 'N' ? body.y + 1 : body.y + body.h - 2;
+    g.fillRect(body.x + m, sy, Math.max(1, body.w - 2 * m), 1);
+  } else {
+    const sx = facing === 'W' ? body.x + 1 : body.x + body.w - 2;
+    g.fillRect(sx, body.y + m, 1, Math.max(1, body.h - 2 * m));
+  }
 }
 
 // ── Canvas2D thumbnail renderer (build panel) ────────────────────────────

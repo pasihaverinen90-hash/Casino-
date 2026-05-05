@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import { GridScene } from './game/GridScene';
 import { uiBus }       from './events/UIBus';
 import { gameState }   from './state/GameState';
-import { TimeController } from './state/TimeController';
+import { time, type Speed } from './state/TimeController';
 import { TopHUD }      from './ui/TopHUD';
 import { BottomBar }   from './ui/BottomBar';
 import { GoalTicker }  from './ui/GoalTicker';
@@ -39,7 +39,7 @@ new Phaser.Game({
 });
 
 // ── HTML UI components ────────────────────────────────────────────────────
-new TopHUD(uiRoot);
+const topHUD = new TopHUD(uiRoot);
 new Toast(uiRoot);
 new EndScreen(uiRoot);
 
@@ -56,33 +56,35 @@ new GoalTicker(uiRoot, () => {
 // Migrate any pre-slot save into slot 1 the first time we boot.
 Slots.migrateLegacy();
 
-const time = new TimeController(() => gameState.advanceDay());
-// Stay paused until the user picks a slot from the start screen.
+// ── TimeController wiring ────────────────────────────────────────────────
+// GameState gets the per-second drip and end-of-day rollup. TopHUD shows
+// the half-hour clock. The start screen pauses time until a slot is picked.
+time.on<Speed>('second', s => gameState.tickSecond(s));
+time.on('day_end', () => gameState.endDay());
+time.on<number>('clock', idx => topHUD.setClock(idx));
 time.setSpeed(0);
 
 let started = false;
 const startScreen = new StartScreen(uiRoot, () => {
-  // Slot has been picked and gameState is populated. Resume time.
+  // Slot has been picked and gameState is populated. Reset clock and resume.
   started = true;
+  time.resetClock();
   time.setSpeed(1);
 });
 startScreen.show();
 
-const bottomBar = new BottomBar(uiRoot, time, {
+const bottomBar = new BottomBar(uiRoot, {
   onBuild: () => {
     hotelPanel.close(); statsPanel.close(); goalsPanel.close();
     buildPanel.open();
-    time.setAutoPause(true);
   },
   onHotel: () => {
     buildPanel.close(); statsPanel.close(); goalsPanel.close();
     hotelPanel.open();
-    time.setAutoPause(true);
   },
   onStats: () => {
     buildPanel.close(); hotelPanel.close(); goalsPanel.close();
     statsPanel.open();
-    time.setAutoPause(false);
   },
   onSave: () => {
     if (gameState.save()) gameState.emit('toast_requested', '✓ Game saved');
@@ -90,13 +92,16 @@ const bottomBar = new BottomBar(uiRoot, time, {
   onMenu: () => {
     _closeAll();
     bottomBar.closeAll();
-    time.setAutoPause(true);   // pause while the confirm is up; restored on cancel
     _confirmReturnToMenu();
   },
   onCloseAll: _closeAll,
 });
 
 function _confirmReturnToMenu(): void {
+  // Pause while the modal is up; restore the player's prior speed on cancel.
+  const prevSpeed = time.speed;
+  time.setSpeed(0);
+
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay interactive';
 
@@ -130,7 +135,7 @@ function _confirmReturnToMenu(): void {
   btnCancel.textContent = 'Cancel';
   btnCancel.onclick     = () => {
     overlay.remove();
-    time.setAutoPause(false);
+    time.setSpeed(prevSpeed);
   };
   card.appendChild(btnCancel);
 
@@ -143,16 +148,14 @@ function _closeAll(): void {
   hotelPanel.close();
   statsPanel.close();
   goalsPanel.close();
-  time.setAutoPause(false);
   uiBus.emit('exit_placement');
   uiBus.emit('toggle_demolish', false);
 }
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────
-// B = Build panel toggle       H = Hotel panel toggle
-// S = Stats panel toggle       G = Goals panel toggle
-// Space = pause / resume       1 = 1× speed   2 = 2× speed
-// Escape = close everything    R = rotate placement ghost (handled in GridScene)
+// B = Build       H = Hotel       S = Stats       G = Goals
+// Space = pause   1 = 1×          2 = 2×          4 = 4×
+// Escape = close all     R = rotate ghost (handled in GridScene)
 
 document.addEventListener('keydown', e => {
   // Don't fire while typing inside an input field
@@ -202,6 +205,10 @@ document.addEventListener('keydown', e => {
 
     case '2':
       time.setSpeed(2);
+      break;
+
+    case '4':
+      time.setSpeed(4);
       break;
   }
 });

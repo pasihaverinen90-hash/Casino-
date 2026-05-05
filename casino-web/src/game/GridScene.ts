@@ -5,7 +5,9 @@ import * as GC from '../logic/GameConstants';
 import * as PV from '../logic/PlacementValidator';
 import { gameState } from '../state/GameState';
 import { uiBus }     from '../events/UIBus';
-import { paintObject } from './ObjectArt';
+import { paintObject, type WallSide } from './ObjectArt';
+import { GuestSprites } from './GuestSprites';
+import { time } from '../state/TimeController';
 
 // Fixed layout zone heights (px). CSS must match these values.
 export const HUD_H       = 56;
@@ -19,6 +21,8 @@ const TILE_DEFAULT = 24;
 
 export class GridScene extends Phaser.Scene {
   private gfx!      : Phaser.GameObjects.Graphics;
+  // Visible guest layer — presentation only, driven by aggregate state.
+  private guests!   : GuestSprites;
   // Persistent text labels for wall services (WC, BAR, $) — kept in a pool
   // so we don't churn Text objects on every redraw.
   private labelPool : Map<string, Phaser.GameObjects.Text> = new Map();
@@ -54,7 +58,8 @@ export class GridScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.gfx = this.add.graphics();
+    this.gfx    = this.add.graphics();
+    this.guests = new GuestSprites(this);
 
     // Center grid horizontally on start
     const gridW = GC.GRID_COLS * this.tileSize;
@@ -342,11 +347,14 @@ export class GridScene extends Phaser.Scene {
     for (const obj of gameState.placedObjs) {
       const isFunc = gameState.functionalIds.has(obj.id);
       const alpha  = isFunc ? 1 : 0.45;
+      const def    = GC.getDef(obj.type);
+      const wallSide = def.is_wall ? this._detectWallSide(obj) : null;
       paintObject(
         g, obj.type,
         baseX + obj.col * ts, baseY + obj.row * ts,
         obj.w * ts, obj.h * ts,
         alpha,
+        wallSide,
       );
 
       // Subtle red corner mark for non-functional objects so the dim
@@ -425,6 +433,37 @@ export class GridScene extends Phaser.Scene {
 
   private _setCursor(cursor: string): void {
     this.sys.game.canvas.style.cursor = cursor;
+  }
+
+  // Find which side of a placed wall-service borders the wall. Returns
+  // null only if the placement somehow no longer borders any wall (which
+  // PlacementValidator prevents in the first place).
+  private _detectWallSide(obj: GC.PlacedObj): WallSide | null {
+    const tiles = gameState.tiles;
+    if (this._sideAllWall(tiles, obj.col, obj.row - 1, obj.w, 1))      return 'N';
+    if (this._sideAllWall(tiles, obj.col, obj.row + obj.h, obj.w, 1))  return 'S';
+    if (this._sideAllWall(tiles, obj.col - 1, obj.row, 1, obj.h))      return 'W';
+    if (this._sideAllWall(tiles, obj.col + obj.w, obj.row, 1, obj.h))  return 'E';
+    return null;
+  }
+
+  private _sideAllWall(tiles: GC.Tile[], col: number, row: number, w: number, h: number): boolean {
+    for (let r = row; r < row + h; r++) {
+      for (let c = col; c < col + w; c++) {
+        if (c < 0 || c >= GC.GRID_COLS || r < 0 || r >= GC.GRID_ROWS) return false;
+        if (tiles[r * GC.GRID_COLS + c].tile_type !== GC.TileType.WALL) return false;
+      }
+    }
+    return true;
+  }
+
+  // Phaser per-frame hook — only used to drive the guest visual layer.
+  // Grid tiles/objects redraw on state events (cheaper, static when idle).
+  update(_: number, dtMs: number): void {
+    if (!this.guests) return;
+    const baseX = this.ox;
+    const baseY = this.oy + GRID_AREA_Y;
+    this.guests.update(dtMs, time.speed, baseX, baseY, this.tileSize);
   }
 }
 

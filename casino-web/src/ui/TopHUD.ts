@@ -1,5 +1,6 @@
-// TopHUD.ts — persistent top strip: Rating | Guests | Cash | Day
+// TopHUD.ts — persistent top strip: Rating | Guests | Cash | Day · Clock
 import { gameState } from '../state/GameState';
+import { fmtClock, time } from '../state/TimeController';
 
 export class TopHUD {
   private lblRating: HTMLElement;
@@ -21,12 +22,19 @@ export class TopHUD {
     this._refresh();
   }
 
+  // Called from main.ts on every half-hour tick from TimeController. Kept
+  // separate from the state_changed refresh so the clock updates smoothly
+  // even if the world is otherwise idle.
+  setClock(_idx: number): void {
+    this._refresh();
+  }
+
   private _refresh(): void {
     const s = gameState.getDaySnapshot();
     this.lblRating.textContent = `★ ${s.rating.toFixed(1)}`;
     this.lblGuests.textContent = `👥 ${s.totalGuests}/day`;
     this.lblCash.textContent   = `💰 ${fmtCash(s.cash)}`;
-    this.lblDay.textContent    = `Day ${s.day}`;
+    this.lblDay.textContent    = `Day ${s.day} · ${fmtClock(time.halfHourIdx)}`;
   }
 }
 
@@ -37,7 +45,8 @@ function span(text: string): HTMLElement {
 }
 
 export function fmtCash(v: number): string {
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1000) return `${Math.floor(v / 1000)},${String(v % 1000).padStart(3, '0')}`;
-  return String(v);
+  const n = Math.floor(v);
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1000) return `${Math.floor(n / 1000)},${String(n % 1000).padStart(3, '0')}`;
+  return String(n);
 }

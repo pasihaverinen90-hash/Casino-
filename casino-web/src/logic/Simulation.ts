@@ -101,23 +101,25 @@ export function calcRevenue(
   return { total, slot_rev, small_rev, large_rev, bar_rev, hotel_rev };
 }
 
-export interface DayInput {
-  slots            : number;
-  small_tables     : number;
-  large_tables     : number;
-  wc_count         : number;
-  bar_exists       : boolean;
-  cashier_count    : number;
-  room_count       : number;
-  quality_level    : number;
-  cash             : number;
-  cumulative_income: number;
-  last_guests      : number;
-  prev_crowding    : number;
-  day_number       : number;
+// Projection inputs — current functional counts plus the prior-day feedback
+// terms (last_guests, prev_crowding) used to derive crowding and rating.
+export interface ProjectInput {
+  slots         : number;
+  small_tables  : number;
+  large_tables  : number;
+  wc_count      : number;
+  bar_exists    : boolean;
+  cashier_count : number;
+  room_count    : number;
+  quality_level : number;
+  last_guests   : number;
+  prev_crowding : number;
 }
 
-export interface DayOutput {
+// Pure projection — what today's totals look like at this instant given the
+// current functional state. No cash mutation. Used by both the per-second
+// drip and the day-end rollup, so the two stay consistent.
+export interface DayProjection {
   capacity     : number;
   crowding     : number;
   rating       : number;
@@ -126,51 +128,39 @@ export interface DayOutput {
   hotel_guests : number;
   walkin       : number;
   total_guests : number;
-  net          : number;
-  new_cash     : number;
-  new_cumul    : number;
-  new_last_guests: number;
-  day_stats    : GC.DayStats;
+  revenue      : number;
+  slot_rev     : number;
+  small_rev    : number;
+  large_rev    : number;
+  bar_rev      : number;
+  hotel_rev    : number;
 }
 
-export function runDay(s: DayInput): DayOutput {
-  const capacity    = calcCapacity(s.slots, s.small_tables, s.large_tables);
-  const crowding    = calcCrowding(s.last_guests, capacity, s.prev_crowding);
-  const rating      = calcRating(s.slots, s.small_tables, s.large_tables,
-                                  s.wc_count, s.bar_exists,
-                                  s.room_count, s.quality_level, crowding,
-                                  s.cashier_count);
-  const hotel       = calcOccupancy(s.room_count, s.quality_level, rating);
-  const walkin      = calcWalkin(capacity, rating);
-  const total       = walkin + hotel.hotel_guests;
-  const rev         = calcRevenue(total, hotel.booked,
-                                   s.slots, s.small_tables, s.large_tables, s.bar_exists);
-  const upkeep      = calcUpkeep(s.slots, s.small_tables, s.large_tables,
-                                  s.wc_count, s.bar_exists, s.room_count);
-  const net         = rev.total - upkeep;
-  const new_cash    = s.cash + net;
-  const new_cumul   = s.cumulative_income + rev.total; // total gross revenue earned
-
-  const day_stats: GC.DayStats = {
-    day: s.day_number, total_guests: total, walkin,
-    hotel_guests: hotel.hotel_guests,
-    revenue: rev.total, costs: upkeep, net,
-    cumulative: new_cumul, cash: new_cash,
-    slot_rev: rev.slot_rev, small_rev: rev.small_rev,
-    large_rev: rev.large_rev, bar_rev: rev.bar_rev,
-    hotel_rev: rev.hotel_rev,
-    occupancy: hotel.rate, booked: hotel.booked,
-    capacity, crowding, rating,
-  };
-
+export function projectDay(s: ProjectInput): DayProjection {
+  const capacity = calcCapacity(s.slots, s.small_tables, s.large_tables);
+  const crowding = calcCrowding(s.last_guests, capacity, s.prev_crowding);
+  const rating   = calcRating(
+    s.slots, s.small_tables, s.large_tables,
+    s.wc_count, s.bar_exists,
+    s.room_count, s.quality_level, crowding,
+    s.cashier_count,
+  );
+  const hotel  = calcOccupancy(s.room_count, s.quality_level, rating);
+  const walkin = calcWalkin(capacity, rating);
+  const total  = walkin + hotel.hotel_guests;
+  const rev    = calcRevenue(
+    total, hotel.booked,
+    s.slots, s.small_tables, s.large_tables, s.bar_exists,
+  );
   return {
     capacity, crowding, rating,
     occupancy: hotel.rate, booked: hotel.booked,
     hotel_guests: hotel.hotel_guests,
     walkin, total_guests: total,
-    net, new_cash, new_cumul,
-    new_last_guests: total,
-    day_stats,
+    revenue: rev.total,
+    slot_rev: rev.slot_rev, small_rev: rev.small_rev,
+    large_rev: rev.large_rev, bar_rev: rev.bar_rev,
+    hotel_rev: rev.hotel_rev,
   };
 }
 

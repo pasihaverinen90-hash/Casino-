@@ -156,6 +156,14 @@ class GameState extends EventEmitter {
   walkinGuests     = 0;
   dailyRevenue     = 0;
 
+  // Per-second drip plumbing. `_projection` is the full projected day given
+  // current functional state, recomputed in `_recomputeDerived()`. The drip
+  // pulls revenue/DAY_DURATION_SEC from it each real second and accumulates
+  // `_paidToday` so the day-end stats record what was actually paid into
+  // cash (matches what the player saw on the HUD).
+  private _projection: Sim.DayProjection | null = null;
+  private _paidToday  = 0;
+
   // Hotel
   roomCount    = 0;
   qualityLevel = 1;
@@ -244,6 +252,7 @@ class GameState extends EventEmitter {
     this.occupancyRate = 0; this.bookedRooms = 0; this.hotelGuests = 0;
     this.dayNumber = 1; this.activeGoal = 0;
     this.completedGoals = Array(10).fill(false);
+    this._projection = null; this._paidToday = 0;
     this.statsRecords = [];
     this.chartDays = []; this.chartGuests = []; this.chartRevenue = [];
     this.chartRating = []; this.chartOccupancy = []; this.chartCapacity = [];
@@ -363,38 +372,67 @@ class GameState extends EventEmitter {
     return true;
   }
 
-  // ── Advance day ───────────────────────────────────────────────────────────
+  // ── Per-second cash drip ──────────────────────────────────────────────────
 
-  advanceDay(): void {
-    // Simulation only sees FUNCTIONAL counts — non-functional placements
-    // contribute zero capacity, revenue, and rating until path-connected.
-    const s: Sim.DayInput = {
-      slots: this.funcSlot, small_tables: this.funcSmall,
-      large_tables: this.funcLarge, wc_count: this.funcWc,
-      bar_exists: this.funcBarExists, cashier_count: this.funcCashier,
-      room_count: this.roomCount,
-      quality_level: this.qualityLevel, cash: this.cash,
-      cumulative_income: this.cumulativeIncome,
-      last_guests: this.lastGuests, prev_crowding: this.prevCrowding,
-      day_number: this.dayNumber,
+  // Called once per real-time second by TimeController. Drips
+  // (projected daily revenue / day length) × speed into cash and the
+  // accumulator. Cash stays a precise number; rounding only happens for
+  // display.
+  tickSecond(speed: number): void {
+    if (speed <= 0 || !this._projection) return;
+    const inc = (this._projection.revenue / GC.DAY_DURATION_SEC) * speed;
+    if (inc <= 0) return;
+    this.cash             += inc;
+    this.cumulativeIncome += inc;
+    this._paidToday       += inc;
+    this._checkGoals();
+    this.emit('state_changed');
+  }
+
+  // ── Day rollover ──────────────────────────────────────────────────────────
+
+  // Called by TimeController at each in-game day boundary. No cash
+  // mutation here — that already happened during the drip. We only
+  // bookkeep: write a stats record, update feedback terms, increment
+  // dayNumber, and reset the per-day accumulator.
+  endDay(): void {
+    // Refresh projection so the recorded stats reflect the latest state.
+    this._recomputeDerived();
+    const p = this._projection!;
+    // Scale the breakdown so it sums to what was actually paid this day.
+    const scale = p.revenue > 0 ? this._paidToday / p.revenue : 0;
+    const day_stats: GC.DayStats = {
+      day          : this.dayNumber,
+      total_guests : p.total_guests,
+      walkin       : p.walkin,
+      hotel_guests : p.hotel_guests,
+      revenue      : this._paidToday,
+      costs        : 0,
+      net          : this._paidToday,
+      cumulative   : this.cumulativeIncome,
+      cash         : this.cash,
+      slot_rev     : p.slot_rev  * scale,
+      small_rev    : p.small_rev * scale,
+      large_rev    : p.large_rev * scale,
+      bar_rev      : p.bar_rev   * scale,
+      hotel_rev    : p.hotel_rev * scale,
+      occupancy    : p.occupancy,
+      booked       : p.booked,
+      capacity     : p.capacity,
+      crowding     : p.crowding,
+      rating       : p.rating,
     };
-    const r = Sim.runDay(s);
+    this._appendStats(day_stats);
 
-    this.cash            = r.new_cash;
-    this.cumulativeIncome = r.new_cumul;
-    this.lastGuests      = r.new_last_guests;
-    this.prevCrowding    = r.crowding;
-    this.resortRating    = r.rating;
-    this.casinoCapacity  = r.capacity;
-    this.totalGuests     = r.total_guests;
-    this.walkinGuests    = r.walkin;
-    this.dailyRevenue    = r.net;
-    this.occupancyRate   = r.occupancy;
-    this.bookedRooms     = r.booked;
-    this.hotelGuests     = r.hotel_guests;
-
-    this._appendStats(r.day_stats);
+    this.lastGuests   = p.total_guests;
+    this.prevCrowding = p.crowding;
+    this.dailyRevenue = this._paidToday;
+    this._paidToday   = 0;
     this.dayNumber++;
+
+    // Re-project once more so subsequent drip uses fresh crowding/rating
+    // feedback.
+    this._recomputeDerived();
     this._checkGoals();
     this.emit('state_changed');
   }
@@ -441,17 +479,32 @@ class GameState extends EventEmitter {
 
   private _recomputeDerived(): void {
     this._updateCounts();
-    const crowding = Sim.calcCrowding(this.lastGuests, this.casinoCapacity, this.prevCrowding);
-    this.resortRating = Sim.calcRating(
-      this.funcSlot, this.funcSmall, this.funcLarge,
-      this.funcWc, this.funcBarExists,
-      this.roomCount, this.qualityLevel, crowding,
-      this.funcCashier,
-    );
-    const hotel = Sim.calcOccupancy(this.roomCount, this.qualityLevel, this.resortRating);
-    this.occupancyRate = hotel.rate;
-    this.bookedRooms   = hotel.booked;
-    this.hotelGuests   = hotel.hotel_guests;
+    // Single source of truth — projectDay does crowding, rating, occupancy,
+    // walk-in, and revenue in one shot. We then mirror its outputs into the
+    // public fields the UI reads, and stash the projection for the drip.
+    const p = Sim.projectDay({
+      slots         : this.funcSlot,
+      small_tables  : this.funcSmall,
+      large_tables  : this.funcLarge,
+      wc_count      : this.funcWc,
+      bar_exists    : this.funcBarExists,
+      cashier_count : this.funcCashier,
+      room_count    : this.roomCount,
+      quality_level : this.qualityLevel,
+      last_guests   : this.lastGuests,
+      prev_crowding : this.prevCrowding,
+    });
+    this._projection   = p;
+    this.resortRating  = p.rating;
+    this.occupancyRate = p.occupancy;
+    this.bookedRooms   = p.booked;
+    this.hotelGuests   = p.hotel_guests;
+    // totalGuests/walkinGuests reflect the live projection — UI shows
+    // a continuously-updating "guests/day" estimate, not a stale value.
+    this.totalGuests   = p.total_guests;
+    this.walkinGuests  = p.walkin;
+    this.dailyRevenue  = p.revenue;
+    this.casinoCapacity = p.capacity;
   }
 
   private _appendStats(ds: GC.DayStats): void {
