@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import { GridScene } from './game/GridScene';
 import { uiBus }       from './events/UIBus';
 import { gameState }   from './state/GameState';
-import { time, type Speed } from './state/TimeController';
+import { time }       from './state/TimeController';
 import { TopHUD }      from './ui/TopHUD';
 import { BottomBar }   from './ui/BottomBar';
 import { GoalTicker }  from './ui/GoalTicker';
@@ -57,9 +57,10 @@ new GoalTicker(uiRoot, () => {
 Slots.migrateLegacy();
 
 // ── TimeController wiring ────────────────────────────────────────────────
-// GameState gets the per-second drip and end-of-day rollup. TopHUD shows
-// the half-hour clock. The start screen pauses time until a slot is picked.
-time.on<Speed>('second', s => gameState.tickSecond(s));
+// GameState gets the hourly revenue drip and end-of-day rollup. TopHUD
+// shows the 15-minute clock. The start screen pauses time until a slot is
+// picked.
+time.on('hour', () => gameState.tickHour());
 time.on('day_end', () => gameState.endDay());
 time.on<number>('clock', idx => topHUD.setClock(idx));
 time.setSpeed(0);

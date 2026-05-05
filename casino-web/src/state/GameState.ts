@@ -156,11 +156,11 @@ class GameState extends EventEmitter {
   walkinGuests     = 0;
   dailyRevenue     = 0;
 
-  // Per-second drip plumbing. `_projection` is the full projected day given
+  // Hourly drip plumbing. `_projection` is the full projected day given
   // current functional state, recomputed in `_recomputeDerived()`. The drip
-  // pulls revenue/DAY_DURATION_SEC from it each real second and accumulates
-  // `_paidToday` so the day-end stats record what was actually paid into
-  // cash (matches what the player saw on the HUD).
+  // pays out 1/24th of the projected daily revenue at every in-game hour
+  // boundary and accumulates `_paidToday` so the day-end stats record what
+  // was actually paid into cash (matches what the player saw on the HUD).
   private _projection: Sim.DayProjection | null = null;
   private _paidToday  = 0;
 
@@ -372,15 +372,16 @@ class GameState extends EventEmitter {
     return true;
   }
 
-  // ── Per-second cash drip ──────────────────────────────────────────────────
+  // ── Hourly cash drip ──────────────────────────────────────────────────────
 
-  // Called once per real-time second by TimeController. Drips
-  // (projected daily revenue / day length) × speed into cash and the
-  // accumulator. Cash stays a precise number; rounding only happens for
-  // display.
-  tickSecond(speed: number): void {
-    if (speed <= 0 || !this._projection) return;
-    const inc = (this._projection.revenue / GC.DAY_DURATION_SEC) * speed;
+  // Called by TimeController at every in-game hour boundary. Pays out
+  // 1/24th of the current projected daily revenue. Speed scales how often
+  // hour boundaries fire, not the per-tick amount, so revenue is tied to
+  // in-game time rather than wall-clock seconds. Cash stays a precise
+  // number; rounding only happens for display.
+  tickHour(): void {
+    if (!this._projection) return;
+    const inc = this._projection.revenue / 24;
     if (inc <= 0) return;
     this.cash             += inc;
     this.cumulativeIncome += inc;

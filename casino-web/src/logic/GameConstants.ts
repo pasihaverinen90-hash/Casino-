@@ -33,8 +33,9 @@ export const UPKEEP_BAR         = 0;
 export const UPKEEP_PER_ROOM    = 0;
 
 // Auto-progression: one in-game day = this many real seconds at speed 1×.
-// 24s × 48 half-hour ticks = 0.5s per half-hour at 1×.
-export const DAY_DURATION_SEC = 24;
+// 96s × 96 quarter-hour ticks = 1s per 15-minute step at 1× = 1 in-game hour
+// every 4 real seconds.
+export const DAY_DURATION_SEC = 96;
 
 // Numeric thresholds for the four progression goals that use scalar targets.
 // Goals 0/2/3/8/9 are presence checks and stay hard-coded in GameState.

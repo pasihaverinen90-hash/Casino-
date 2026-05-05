@@ -22,9 +22,9 @@ export class TopHUD {
     this._refresh();
   }
 
-  // Called from main.ts on every half-hour tick from TimeController. Kept
-  // separate from the state_changed refresh so the clock updates smoothly
-  // even if the world is otherwise idle.
+  // Called from main.ts on every quarter-hour tick from TimeController.
+  // Kept separate from the state_changed refresh so the clock updates
+  // smoothly even if the world is otherwise idle.
   setClock(_idx: number): void {
     this._refresh();
   }
@@ -34,7 +34,7 @@ export class TopHUD {
     this.lblRating.textContent = `★ ${s.rating.toFixed(1)}`;
     this.lblGuests.textContent = `👥 ${s.totalGuests}/day`;
     this.lblCash.textContent   = `💰 ${fmtCash(s.cash)}`;
-    this.lblDay.textContent    = `Day ${s.day} · ${fmtClock(time.halfHourIdx)}`;
+    this.lblDay.textContent    = `Day ${s.day} · ${fmtClock(time.quarterHourIdx)}`;
   }
 }
 
