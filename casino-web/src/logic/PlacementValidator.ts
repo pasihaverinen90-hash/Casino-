@@ -126,11 +126,24 @@ export function isWalkable(tiles: GC.Tile[], col: number, row: number): boolean 
   return t.obj_id === '' || t.is_seat;
 }
 
+// Find which side of the footprint borders a valid wall run.
+//
+// A wall service must lie *flat* against the wall along its long axis: a
+// 3×1 WC has to face a horizontal wall over its full 3-tile length, not
+// teeter on its 1-tile short edge against a vertical wall. We enforce that
+// here by skipping any candidate side whose run length is shorter than the
+// object's longer dimension. 1×1 (cashier) keeps all four sides eligible
+// since long==short.
 export function detectWallDir(col: number, row: number, w: number, h: number, tiles: GC.Tile[]): string {
-  if (row > 0             && isValidWallRun(tiles, col, row - 1,  w, true))  return 'top';
-  if (row + h < GC.GRID_ROWS && isValidWallRun(tiles, col, row + h,  w, true))  return 'bottom';
-  if (col > 0             && isValidWallRun(tiles, col - 1, row,  h, false)) return 'left';
-  if (col + w < GC.GRID_COLS && isValidWallRun(tiles, col + w, row,  h, false)) return 'right';
+  const longSide = Math.max(w, h);
+  if (w >= longSide && row > 0
+      && isValidWallRun(tiles, col, row - 1, w, true))  return 'top';
+  if (w >= longSide && row + h < GC.GRID_ROWS
+      && isValidWallRun(tiles, col, row + h, w, true))  return 'bottom';
+  if (h >= longSide && col > 0
+      && isValidWallRun(tiles, col - 1, row, h, false)) return 'left';
+  if (h >= longSide && col + w < GC.GRID_COLS
+      && isValidWallRun(tiles, col + w, row, h, false)) return 'right';
   return '';
 }
 

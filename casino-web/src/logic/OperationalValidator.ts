@@ -73,23 +73,14 @@ export function getInteractionTiles(obj: GC.PlacedObj, tiles: GC.Tile[]): GC.Vec
     return out;
   }
 
-  // Tables — collect open-floor neighbours on the player sides only.
-  const playerSides = GC.tablePlayerSides(obj.facing);
-  const { col, row, w, h } = obj;
-  for (const side of playerSides) {
-    if (side === 'N') {
-      for (let c = col; c < col + w; c++)
-        if (isOpenFloor(tiles, c, row - 1)) out.push({ x: c, y: row - 1 });
-    } else if (side === 'S') {
-      for (let c = col; c < col + w; c++)
-        if (isOpenFloor(tiles, c, row + h)) out.push({ x: c, y: row + h });
-    } else if (side === 'W') {
-      for (let r = row; r < row + h; r++)
-        if (isOpenFloor(tiles, col - 1, r)) out.push({ x: col - 1, y: r });
-    } else {
-      for (let r = row; r < row + h; r++)
-        if (isOpenFloor(tiles, col + w, r)) out.push({ x: col + w, y: r });
-    }
+  // Tables — return the seats reserved at placement time. Reservation
+  // (obj_id + is_seat marked on each tile) guarantees these stay walkable
+  // for guests and free of competing builds, so we don't need to recompute
+  // by scanning neighbours on every call.
+  if (obj.type === GC.ObjType.SMALL_TABLE
+   || obj.type === GC.ObjType.LARGE_TABLE) {
+    return obj.seats.map(s => ({ x: s.x, y: s.y }));
   }
+
   return out;
 }

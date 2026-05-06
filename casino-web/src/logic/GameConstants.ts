@@ -194,10 +194,16 @@ export interface PlacedObjData {
 }
 
 // In-memory representation: persistent data + cached spatial geometry.
-// `tiles`, `w`, `h` are derived from (type, col, row, facing) and rebuilt
-// on load — never persisted.
+// `tiles`, `seats`, `w`, `h` are derived from (type, col, row, facing) and
+// rebuilt on load — never persisted.
+//
+//   tiles : the body footprint (slot includes the chair tile).
+//   seats : reserved use-tiles outside the body (currently tables only) —
+//           marked with obj_id+is_seat so other builds can't squat on
+//           them and so guests have a guaranteed approach.
 export interface PlacedObj extends PlacedObjData {
   tiles : Vec2[];
+  seats : Vec2[];
   w     : number;
   h     : number;
 }
@@ -261,6 +267,42 @@ export function tablePlayerSides(facing: Orientation): Orientation[] {
 // Cycle facing for the rotate (R) hotkey: N → E → S → W → N.
 export function nextFacing(f: Orientation): Orientation {
   return f === 'N' ? 'E' : f === 'E' ? 'S' : f === 'S' ? 'W' : 'N';
+}
+
+// Cursor → bounds top-left for tables. Centres the footprint roughly
+// under the cursor so rotating doesn't fling the table to one corner —
+// the cursor stays inside the table across all four facings. Slots use
+// their own machine-anchored helper (slotAnchorFromCursor); other types
+// keep cursor == bounds top-left.
+export function tableAnchorFromCursor(
+  curCol: number, curRow: number, type: ObjType, facing: Orientation,
+): Vec2 {
+  const { w, h } = dimsFor(type, facing);
+  return {
+    x: curCol - Math.floor((w - 1) / 2),
+    y: curRow - Math.floor((h - 1) / 2),
+  };
+}
+
+// Reserved seat tiles for a table at bounds top-left (col, row) with the
+// given facing. Seats are the cardinal-adjacent tiles on the 3 player
+// sides (the dealer side gets none). At placement time these are marked
+// is_seat=true with obj_id set, so future builds can't take them and the
+// table can't lose its approach.
+export function tableSeatTiles(
+  col: number, row: number, type: ObjType, facing: Orientation,
+): Vec2[] {
+  if (type !== ObjType.SMALL_TABLE && type !== ObjType.LARGE_TABLE) return [];
+  const { w, h } = dimsFor(type, facing);
+  const playerSides = tablePlayerSides(facing);
+  const out: Vec2[] = [];
+  for (const side of playerSides) {
+    if (side === 'N')      for (let c = col; c < col + w; c++) out.push({ x: c,         y: row - 1 });
+    else if (side === 'S') for (let c = col; c < col + w; c++) out.push({ x: c,         y: row + h });
+    else if (side === 'W') for (let r = row; r < row + h; r++) out.push({ x: col - 1,   y: r });
+    else                   for (let r = row; r < row + h; r++) out.push({ x: col + w,   y: r });
+  }
+  return out;
 }
 
 export interface DayStats {

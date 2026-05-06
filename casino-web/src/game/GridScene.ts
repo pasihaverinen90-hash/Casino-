@@ -282,6 +282,14 @@ export class GridScene extends Phaser.Scene {
       const tl = GC.slotAnchorFromCursor(curCol, curRow, this.placeFacing);
       return { col: tl.x, row: tl.y };
     }
+    // Tables: centre the footprint roughly under the cursor so rotating
+    // doesn't fling the table off to one corner. P3A polish — slots had
+    // their own cabinet anchor since P2.2; tables now feel similar.
+    if (this.placeType === GC.ObjType.SMALL_TABLE
+     || this.placeType === GC.ObjType.LARGE_TABLE) {
+      const tl = GC.tableAnchorFromCursor(curCol, curRow, this.placeType, this.placeFacing);
+      return { col: tl.x, row: tl.y };
+    }
     return { col: curCol, row: curRow };
   }
 

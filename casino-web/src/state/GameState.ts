@@ -295,9 +295,11 @@ class GameState extends EventEmitter {
     //     the columns of the south wall that contain the front entrance —
     //     wall-run validation uses them to keep the entrance from being
     //     walled off.
-    //   • Two symmetric pillar clusters and one central island for floor
-    //     interest. All open floor counts as walkable access space, so
-    //     attractions just need at least one open-floor neighbour to work.
+    //
+    // P3A: previously the grid also had three BLOCKED clusters as a
+    // placeholder for "reception/elevator" — they didn't drive any
+    // gameplay and just chopped up the floor. Removed. Re-introduce real
+    // floorplan structure when the proper map design lands.
     this.tiles = [];
     for (let row = 0; row < GC.GRID_ROWS; row++) {
       for (let col = 0; col < GC.GRID_COLS; col++) {
@@ -314,10 +316,6 @@ class GameState extends EventEmitter {
         this.tiles.push({ col, row, tile_type, obj_id: '', is_seat: false });
       }
     }
-    // Pillar clusters and central island.
-    this._markBlocked( 8, 8, 2, 2);
-    this._markBlocked(26, 8, 2, 2);
-    this._markBlocked(17, 11, 2, 2);
   }
 
   private _markBlocked(col: number, row: number, w: number, h: number): void {
@@ -342,7 +340,7 @@ class GameState extends EventEmitter {
     const fp  = PV.computeFootprint(col, row, w, h);
     const id  = `obj_${this._nextId++}`;
 
-    const obj: GC.PlacedObj = { id, type: objType, col, row, facing, variant, tiles: fp, w, h };
+    const obj: GC.PlacedObj = { id, type: objType, col, row, facing, variant, tiles: fp, seats: [], w, h };
     this.placedObjs.push(obj);
     for (const coord of fp) this.tiles[coord.y * GC.GRID_COLS + coord.x].obj_id = id;
     // Slots reserve their chair tile as walkable-but-occupied so guests can
@@ -350,6 +348,16 @@ class GameState extends EventEmitter {
     if (objType === GC.ObjType.SLOT_MACHINE) {
       const { seat } = GC.slotParts(col, row, facing);
       this.tiles[seat.y * GC.GRID_COLS + seat.x].is_seat = true;
+    }
+    // Tables additionally reserve their player-side seat tiles so other
+    // builds can't squat on them and so guests have a guaranteed approach.
+    if (objType === GC.ObjType.SMALL_TABLE || objType === GC.ObjType.LARGE_TABLE) {
+      obj.seats = GC.tableSeatTiles(col, row, objType, facing);
+      for (const s of obj.seats) {
+        const t = this.tiles[s.y * GC.GRID_COLS + s.x];
+        t.obj_id  = id;
+        t.is_seat = true;
+      }
     }
 
     this.cash -= def.cost;
@@ -371,6 +379,12 @@ class GameState extends EventEmitter {
 
     for (const coord of obj.tiles) {
       const t = this.tiles[coord.y * GC.GRID_COLS + coord.x];
+      t.obj_id  = '';
+      t.is_seat = false;
+    }
+    // Clear reserved seat tiles too (currently tables only).
+    for (const s of obj.seats) {
+      const t = this.tiles[s.y * GC.GRID_COLS + s.x];
       t.obj_id  = '';
       t.is_seat = false;
     }
@@ -711,7 +725,7 @@ class GameState extends EventEmitter {
         id: saved.id, type: saved.type,
         col: saved.col, row: saved.row,
         facing: saved.facing, variant: saved.variant,
-        tiles: fp, w, h,
+        tiles: fp, seats: [], w, h,
       };
       this.placedObjs.push(obj);
       for (const coord of fp)
@@ -719,6 +733,15 @@ class GameState extends EventEmitter {
       if (saved.type === GC.ObjType.SLOT_MACHINE) {
         const { seat } = GC.slotParts(saved.col, saved.row, saved.facing);
         this.tiles[seat.y * GC.GRID_COLS + seat.x].is_seat = true;
+      }
+      if (saved.type === GC.ObjType.SMALL_TABLE
+       || saved.type === GC.ObjType.LARGE_TABLE) {
+        obj.seats = GC.tableSeatTiles(saved.col, saved.row, saved.type, saved.facing);
+        for (const s of obj.seats) {
+          const t = this.tiles[s.y * GC.GRID_COLS + s.x];
+          t.obj_id  = saved.id;
+          t.is_seat = true;
+        }
       }
     }
 
