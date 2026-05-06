@@ -12,12 +12,12 @@ import * as Slots from './SaveSlots';
 // SAVE_MIGRATIONS that upgrades the previous version's payload to the new
 // shape. `normalizeSave` then fills in any newly-introduced fields with
 // safe defaults so partial / hand-edited saves still load.
-const SAVE_VERSION = '1.3.0';
+const SAVE_VERSION = '1.4.0';
 
 interface SavedObj {
   id: string; type: GC.ObjType;
   col: number; row: number;
-  rotated: boolean; variant: string;
+  facing: GC.Orientation; variant: string;
 }
 
 interface SavePayload {
@@ -58,6 +58,29 @@ const SAVE_MIGRATIONS: Record<string, (d: any) => any> = {
           .map((o: any) => o.type === 6 ? { ...o, type: 5 } : o) // CASHIER 6→5
       : [];
     return { ...d, ver: '1.3.0', objects };
+  },
+  // 1.3.0 → 1.4.0: rotated:boolean → facing:Orientation. Slots gain a 1×2
+  // footprint with a chair tile. Older slots placed at 1×1 may no longer
+  // fit (their second tile collides with neighbours); _apply re-validates
+  // each saved object on load and skips ones that fail, so the migration
+  // here just translates the field.
+  '1.3.0': (d) => {
+    const objects = Array.isArray(d.objects)
+      ? d.objects.map((o: any) => {
+          // Slot: prior 1×1 had only one orientation, default to S so the
+          // chair sits south of the cabinet (toward the lobby).
+          // Tables: rotated swapped fw/fh, so true → E (long axis horizontal).
+          // Wall services: same axis-swap convention; default N (base shape).
+          let facing: GC.Orientation;
+          if (o.type === 0)            facing = 'S';            // SLOT_MACHINE
+          else if (o.rotated)          facing = 'E';
+          else                         facing = 'N';
+          const next = { ...o, facing, variant: o.variant ?? '' };
+          delete next.rotated;
+          return next;
+        })
+      : [];
+    return { ...d, ver: '1.4.0', objects };
   },
 };
 
@@ -288,7 +311,7 @@ class GameState extends EventEmitter {
                        && row >= 19 && row <= 22;
           if (inLobby) tile_type = GC.TileType.LOBBY;
         }
-        this.tiles.push({ col, row, tile_type, obj_id: '' });
+        this.tiles.push({ col, row, tile_type, obj_id: '', is_seat: false });
       }
     }
     // Pillar clusters and central island.
@@ -306,8 +329,8 @@ class GameState extends EventEmitter {
 
   // ── Place object ──────────────────────────────────────────────────────────
 
-  tryPlace(col: number, row: number, objType: GC.ObjType, rotated: boolean, variant = ''): boolean {
-    const req = { type: objType, col, row, rotated };
+  tryPlace(col: number, row: number, objType: GC.ObjType, facing: GC.Orientation, variant = ''): boolean {
+    const req = { type: objType, col, row, facing };
     const result = PV.validate(req, this.tiles, this.cash, this.barExists);
     if (result !== GC.ValResult.VALID) {
       this.emit('placement_failed', GC.valMessage(result));
@@ -315,14 +338,19 @@ class GameState extends EventEmitter {
     }
 
     const def = GC.getDef(objType);
-    const w   = rotated ? def.fh : def.fw;
-    const h   = rotated ? def.fw : def.fh;
+    const { w, h } = GC.dimsFor(objType, facing);
     const fp  = PV.computeFootprint(col, row, w, h);
     const id  = `obj_${this._nextId++}`;
 
-    const obj: GC.PlacedObj = { id, type: objType, col, row, rotated, variant, tiles: fp, w, h };
+    const obj: GC.PlacedObj = { id, type: objType, col, row, facing, variant, tiles: fp, w, h };
     this.placedObjs.push(obj);
     for (const coord of fp) this.tiles[coord.y * GC.GRID_COLS + coord.x].obj_id = id;
+    // Slots reserve their chair tile as walkable-but-occupied so guests can
+    // stand on it while the cabinet stays solid.
+    if (objType === GC.ObjType.SLOT_MACHINE) {
+      const { seat } = GC.slotParts(col, row, facing);
+      this.tiles[seat.y * GC.GRID_COLS + seat.x].is_seat = true;
+    }
 
     this.cash -= def.cost;
     this._updateCounts();
@@ -341,7 +369,11 @@ class GameState extends EventEmitter {
     const def    = GC.getDef(obj.type);
     const refund = Math.floor(def.cost * GC.DEMOLISH_REFUND);
 
-    for (const coord of obj.tiles) this.tiles[coord.y * GC.GRID_COLS + coord.x].obj_id = '';
+    for (const coord of obj.tiles) {
+      const t = this.tiles[coord.y * GC.GRID_COLS + coord.x];
+      t.obj_id  = '';
+      t.is_seat = false;
+    }
     this.placedObjs.splice(idx, 1);
 
     this.cash += refund;
@@ -616,7 +648,7 @@ class GameState extends EventEmitter {
   private _serialize(): SavePayload {
     const objects: SavedObj[] = this.placedObjs.map(o => ({
       id: o.id, type: o.type, col: o.col, row: o.row,
-      rotated: o.rotated, variant: o.variant,
+      facing: o.facing, variant: o.variant,
     }));
     return {
       ver: SAVE_VERSION, day: this.dayNumber, objects,
@@ -665,19 +697,29 @@ class GameState extends EventEmitter {
     this.chartOccupancy = d.ch_occ;    this.chartCapacity = d.ch_cap;
 
     for (const saved of d.objects) {
-      const def = GC.getDef(saved.type);
-      const w   = saved.rotated ? def.fh : def.fw;
-      const h   = saved.rotated ? def.fw : def.fh;
+      // Re-run spatial validation. Slot footprints grew from 1×1 to 1×2 in
+      // 1.4.0, so a small fraction of legacy placements may no longer fit.
+      // Skip those rather than corrupting the world by overwriting tiles.
+      const req = {
+        type: saved.type, col: saved.col, row: saved.row, facing: saved.facing,
+      };
+      if (PV.checkSpatial(req, this.tiles) !== GC.ValResult.VALID) continue;
+
+      const { w, h } = GC.dimsFor(saved.type, saved.facing);
       const fp  = PV.computeFootprint(saved.col, saved.row, w, h);
       const obj: GC.PlacedObj = {
         id: saved.id, type: saved.type,
         col: saved.col, row: saved.row,
-        rotated: saved.rotated, variant: saved.variant,
+        facing: saved.facing, variant: saved.variant,
         tiles: fp, w, h,
       };
       this.placedObjs.push(obj);
       for (const coord of fp)
         this.tiles[coord.y * GC.GRID_COLS + coord.x].obj_id = saved.id;
+      if (saved.type === GC.ObjType.SLOT_MACHINE) {
+        const { seat } = GC.slotParts(saved.col, saved.row, saved.facing);
+        this.tiles[seat.y * GC.GRID_COLS + seat.x].is_seat = true;
+      }
     }
 
     this._recomputeDerived();

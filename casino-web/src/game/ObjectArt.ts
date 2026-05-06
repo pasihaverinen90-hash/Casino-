@@ -5,6 +5,11 @@
 //
 // Shapes are lightweight on purpose: enough to be recognisable as a slot
 // cabinet / felt table / counter, without an art pipeline.
+//
+// P2.1: floor attractions render with explicit orientation. Slot art is
+// split into a cabinet half and a chair half along the facing axis;
+// tables draw a dealer band on the facing side so player seats read on
+// the other three sides.
 import Phaser from 'phaser';
 import * as GC from '../logic/GameConstants';
 
@@ -64,59 +69,159 @@ export function paintObject(
   x: number, y: number, w: number, h: number,
   alpha: number,
   wallSide: WallSide | null = null,
+  facing: GC.Orientation = 'S',
 ): void {
   switch (type) {
-    case GC.ObjType.SLOT_MACHINE: drawSlotG(g, x, y, w, h, alpha); break;
-    case GC.ObjType.SMALL_TABLE:  drawTableG(g, x, y, w, h, alpha, false); break;
-    case GC.ObjType.LARGE_TABLE:  drawTableG(g, x, y, w, h, alpha, true);  break;
+    case GC.ObjType.SLOT_MACHINE: drawSlotG (g, x, y, w, h, alpha, facing); break;
+    case GC.ObjType.SMALL_TABLE:  drawTableG(g, x, y, w, h, alpha, false, facing); break;
+    case GC.ObjType.LARGE_TABLE:  drawTableG(g, x, y, w, h, alpha, true,  facing);  break;
     case GC.ObjType.WC:           drawWCG     (g, x, y, w, h, alpha, wallSide); break;
     case GC.ObjType.BAR:          drawBarG    (g, x, y, w, h, alpha, wallSide); break;
     case GC.ObjType.CASHIER:      drawCashierG(g, x, y, w, h, alpha, wallSide); break;
   }
 }
 
-function drawSlotG(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, a: number): void {
-  const pad = Math.max(1, Math.round(Math.min(w, h) * 0.08));
-  const baseH = Math.max(2, Math.round(h * 0.18));
+// Slot machine (1×2 footprint): cabinet on the side opposite `facing`,
+// chair on the `facing` side. The chair tile is rendered as a small seat
+// glyph so guests look like they're sitting on it rather than overlapping
+// the cabinet.
+function drawSlotG(
+  g: Phaser.GameObjects.Graphics,
+  x: number, y: number, w: number, h: number, a: number,
+  facing: GC.Orientation,
+): void {
+  // Determine which half of the rectangle is the chair tile.
+  // Vertical (h > w): facing N → chair top, S → chair bottom.
+  // Horizontal (w > h): facing W → chair left, E → chair right.
+  let chair: { x: number; y: number; w: number; h: number };
+  let cab:   { x: number; y: number; w: number; h: number };
+  if (h >= w) {
+    const half = h / 2;
+    if (facing === 'N') {
+      chair = { x, y,        w, h: half };
+      cab   = { x, y: y + half, w, h: h - half };
+    } else { // 'S' (or fallback for E/W on a vertical footprint)
+      cab   = { x, y,        w, h: half };
+      chair = { x, y: y + half, w, h: h - half };
+    }
+  } else {
+    const half = w / 2;
+    if (facing === 'W') {
+      chair = { x,        y, w: half,     h };
+      cab   = { x: x + half, y, w: w - half, h };
+    } else { // 'E'
+      cab   = { x,        y, w: half,     h };
+      chair = { x: x + half, y, w: w - half, h };
+    }
+  }
 
-  // Carpet / shadow base
+  // Carpet base across the whole footprint.
   g.fillStyle(0x1a1d22, a * 0.9);
   g.fillRect(x, y, w - 1, h - 1);
 
-  // Cabinet body (gold)
+  drawSlotCabinet(g, cab.x, cab.y, cab.w, cab.h, a);
+  drawSlotChair  (g, chair.x, chair.y, chair.w, chair.h, a, facing);
+}
+
+function drawSlotCabinet(
+  g: Phaser.GameObjects.Graphics,
+  x: number, y: number, w: number, h: number, a: number,
+): void {
+  const pad   = Math.max(1, Math.round(Math.min(w, h) * 0.10));
+  const baseH = Math.max(2, Math.round(h * 0.18));
+
+  // Cabinet body (gold).
   g.fillStyle(0xccb31a, a);
   g.fillRect(x + pad, y + pad, w - 2 * pad, h - 2 * pad - baseH);
 
-  // Screen (dark inset)
+  // Screen (dark inset).
   g.fillStyle(0x0e1115, a);
-  g.fillRect(x + pad * 2, y + pad * 2, w - 4 * pad, Math.max(2, Math.round(h * 0.36)));
+  g.fillRect(
+    x + pad * 2, y + pad * 2,
+    Math.max(1, w - 4 * pad),
+    Math.max(2, Math.round(h * 0.36)),
+  );
 
-  // Coin slot / handle area
+  // Coin slot / handle area.
   g.fillStyle(0x6a5a14, a);
-  g.fillRect(x + Math.round(w * 0.4), y + Math.round(h * 0.65), Math.max(2, Math.round(w * 0.2)), Math.max(1, Math.round(h * 0.05)));
+  g.fillRect(
+    x + Math.round(w * 0.35), y + Math.round(h * 0.62),
+    Math.max(2, Math.round(w * 0.30)),
+    Math.max(1, Math.round(h * 0.06)),
+  );
 
-  // Base
+  // Base.
   g.fillStyle(0x3a2f12, a);
   g.fillRect(x + pad, y + h - pad - baseH, w - 2 * pad, baseH);
 }
 
-function drawTableG(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, a: number, large: boolean): void {
+// Small chair glyph. The seat hugs the side opposite the cabinet so it
+// reads as "the player sits here, facing the machine".
+function drawSlotChair(
+  g: Phaser.GameObjects.Graphics,
+  x: number, y: number, w: number, h: number, a: number,
+  facing: GC.Orientation,
+): void {
+  const seatPad = Math.max(1, Math.round(Math.min(w, h) * 0.18));
+  // Seat cushion — dark wood.
+  g.fillStyle(0x553a22, a * 0.95);
+  g.fillRect(
+    x + seatPad, y + seatPad,
+    Math.max(1, w - 2 * seatPad),
+    Math.max(1, h - 2 * seatPad),
+  );
+  // Backrest along the cabinet-facing edge of the chair tile.
+  g.fillStyle(0x3a2412, a);
+  const backT = Math.max(1, Math.round(Math.min(w, h) * 0.18));
+  if (facing === 'N') {
+    // chair is on top tile; backrest is at the top edge.
+    g.fillRect(x + seatPad, y + seatPad, w - 2 * seatPad, backT);
+  } else if (facing === 'S') {
+    g.fillRect(x + seatPad, y + h - seatPad - backT, w - 2 * seatPad, backT);
+  } else if (facing === 'W') {
+    g.fillRect(x + seatPad, y + seatPad, backT, h - 2 * seatPad);
+  } else {
+    g.fillRect(x + w - seatPad - backT, y + seatPad, backT, h - 2 * seatPad);
+  }
+}
+
+function drawTableG(
+  g: Phaser.GameObjects.Graphics,
+  x: number, y: number, w: number, h: number, a: number,
+  large: boolean, facing: GC.Orientation,
+): void {
   const pad = Math.max(1, Math.round(Math.min(w, h) * 0.12));
 
-  // Carpet around table
+  // Carpet around table.
   g.fillStyle(0x1f1812, a * 0.9);
   g.fillRect(x, y, w - 1, h - 1);
 
-  // Wood rim
+  // Wood rim.
   g.fillStyle(large ? 0x4d3a1a : 0x5a4022, a);
   g.fillRect(x + pad, y + pad, w - 2 * pad, h - 2 * pad);
 
-  // Felt
+  // Felt.
   g.fillStyle(large ? 0x144a22 : 0x1d6b30, a);
   const felt = Math.max(1, Math.round(pad * 0.6));
-  g.fillRect(x + pad + felt, y + pad + felt, w - 2 * (pad + felt), h - 2 * (pad + felt));
+  g.fillRect(
+    x + pad + felt, y + pad + felt,
+    w - 2 * (pad + felt), h - 2 * (pad + felt),
+  );
 
-  // Centerpiece — wheel for large, dealer line for small
+  // Dealer band on the facing side — the cue that tells the player which
+  // 3 sides have seats. Dark wood/brass against the green felt.
+  const bandT = Math.max(2, Math.round(Math.min(w, h) * 0.16));
+  const innerX = x + pad + felt;
+  const innerY = y + pad + felt;
+  const innerW = w - 2 * (pad + felt);
+  const innerH = h - 2 * (pad + felt);
+  g.fillStyle(0x8a3a14, a);
+  if (facing === 'N')      g.fillRect(innerX, innerY,                 innerW, bandT);
+  else if (facing === 'S') g.fillRect(innerX, innerY + innerH - bandT, innerW, bandT);
+  else if (facing === 'W') g.fillRect(innerX, innerY,                 bandT,  innerH);
+  else                     g.fillRect(innerX + innerW - bandT, innerY, bandT, innerH);
+
+  // Centerpiece — wheel for large, dealer line for small.
   if (large) {
     const cx = x + w / 2;
     const cy = y + h / 2;
@@ -126,9 +231,12 @@ function drawTableG(g: Phaser.GameObjects.Graphics, x: number, y: number, w: num
     g.fillStyle(0x1a1208, a);
     g.fillCircle(cx, cy, Math.max(1, r * 0.4));
   } else {
-    const stripeH = Math.max(1, Math.round(h * 0.06));
+    const stripeH = Math.max(1, Math.round(Math.min(w, h) * 0.06));
     g.fillStyle(0x0e3a18, a);
-    g.fillRect(x + pad + felt, y + h / 2 - stripeH / 2, w - 2 * (pad + felt), stripeH);
+    g.fillRect(
+      x + pad + felt, y + h / 2 - stripeH / 2,
+      w - 2 * (pad + felt), stripeH,
+    );
   }
 }
 
@@ -321,18 +429,30 @@ function fillRect(ctx: CanvasRenderingContext2D, color: string, x: number, y: nu
   ctx.fillRect(x, y, w, h);
 }
 
+// Slot thumbnail: split vertically into cabinet (top) and chair (bottom)
+// so the new 1×2 footprint is recognisable from the build panel itself.
 function drawSlotC(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
-  const baseH = Math.max(3, Math.round(h * 0.18));
-  fillRect(ctx, '#ccb31a', x, y, w, h - baseH);
-  fillRect(ctx, '#0e1115', x + 4, y + 4, w - 8, Math.round(h * 0.4));
-  fillRect(ctx, '#6a5a14', x + Math.round(w * 0.35), y + Math.round(h * 0.6), Math.round(w * 0.3), Math.max(2, Math.round(h * 0.06)));
-  fillRect(ctx, '#3a2f12', x, y + h - baseH, w, baseH);
+  const cabH   = Math.round(h * 0.62);
+  const chairY = y + cabH;
+  const chairH = h - cabH;
+  // Cabinet
+  const baseH = Math.max(3, Math.round(cabH * 0.18));
+  fillRect(ctx, '#ccb31a', x, y, w, cabH - baseH);
+  fillRect(ctx, '#0e1115', x + 4, y + 4, Math.max(1, w - 8), Math.max(2, Math.round(cabH * 0.42)));
+  fillRect(ctx, '#6a5a14', x + Math.round(w * 0.35), y + Math.round(cabH * 0.65), Math.round(w * 0.3), Math.max(2, Math.round(cabH * 0.06)));
+  fillRect(ctx, '#3a2f12', x, y + cabH - baseH, w, baseH);
+  // Chair
+  const chairPad = Math.max(2, Math.round(Math.min(w, chairH) * 0.18));
+  fillRect(ctx, '#553a22', x + chairPad, chairY + chairPad, w - 2 * chairPad, chairH - 2 * chairPad);
+  fillRect(ctx, '#3a2412', x + chairPad, chairY + chairPad, w - 2 * chairPad, Math.max(2, Math.round(chairH * 0.25)));
 }
 
 function drawTableC(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, large: boolean): void {
   fillRect(ctx, large ? '#4d3a1a' : '#5a4022', x, y, w, h);
   const f = Math.max(2, Math.round(Math.min(w, h) * 0.14));
   fillRect(ctx, large ? '#144a22' : '#1d6b30', x + f, y + f, w - 2 * f, h - 2 * f);
+  // Dealer band along the top — communicates "this side is the dealer side".
+  fillRect(ctx, '#8a3a14', x + f, y + f, w - 2 * f, Math.max(2, Math.round(h * 0.16)));
   if (large) {
     const cx = x + w / 2, cy = y + h / 2;
     const r = Math.max(3, Math.min(w, h) * 0.18);

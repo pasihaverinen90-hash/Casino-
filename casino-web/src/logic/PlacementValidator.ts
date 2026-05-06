@@ -6,13 +6,18 @@
 // The split exists so future *operational* validation (e.g. "this attraction
 // is currently inactive because no open floor borders it") lives outside
 // placement validation: it should not block placement, just operation.
+//
+// P2.1: floor attractions now own dedicated usage geometry. Slots have a
+// 1×2 footprint where one cell is the chair (walkable for guests) and one
+// is the cabinet (solid). Tables require a full 1-tile walkable buffer ring
+// on every side. Both rules live in checkSpatial below.
 import * as GC from './GameConstants';
 
 export interface PlaceReq {
-  type    : GC.ObjType;
-  col     : number;
-  row     : number;
-  rotated : boolean;
+  type   : GC.ObjType;
+  col    : number;
+  row    : number;
+  facing : GC.Orientation;
 }
 
 // Pure economy/limit checks. Callers that only need to gate UI buttons
@@ -36,8 +41,7 @@ export function checkSpatial(
   tiles : GC.Tile[],
 ): GC.ValResult {
   const def = GC.getDef(req.type);
-  const w   = req.rotated ? def.fh : def.fw;
-  const h   = req.rotated ? def.fw : def.fh;
+  const { w, h } = GC.dimsFor(req.type, req.facing);
 
   if (req.col < 0 || req.row < 0 ||
       req.col + w > GC.GRID_COLS || req.row + h > GC.GRID_ROWS)
@@ -63,11 +67,12 @@ export function checkSpatial(
       if (!isOpenFloor(tiles, inward.x, inward.y))
         return GC.ValResult.FAIL_DOOR_BLOCKED;
     }
-  } else if (def.accessSides === 1) {
-    if (countFreeNeighbours(tiles, req.col, req.row, w, h) === 0)
+  } else if (req.type === GC.ObjType.SLOT_MACHINE) {
+    if (!seatReachable(tiles, req.col, req.row, req.facing))
       return GC.ValResult.FAIL_NO_ACCESS;
-  } else if (def.accessSides === 2) {
-    if (countAccessibleSides(tiles, req.col, req.row, w, h) < 2)
+  } else if (req.type === GC.ObjType.SMALL_TABLE
+          || req.type === GC.ObjType.LARGE_TABLE) {
+    if (!hasFullBufferRing(tiles, req.col, req.row, w, h))
       return GC.ValResult.FAIL_NO_ACCESS;
   }
 
@@ -95,17 +100,30 @@ export function computeFootprint(col: number, row: number, w: number, h: number)
 
 export function getTile(tiles: GC.Tile[], col: number, row: number): GC.Tile {
   if (col < 0 || col >= GC.GRID_COLS || row < 0 || row >= GC.GRID_ROWS)
-    return { col, row, tile_type: GC.TileType.WALL, obj_id: 'blocked' };
+    return { col, row, tile_type: GC.TileType.WALL, obj_id: 'blocked', is_seat: false };
   return tiles[row * GC.GRID_COLS + col];
 }
 
 // Open walkable floor: an unoccupied FLOOR tile, or any LOBBY tile. Lobby
 // tiles count because they are the casino's reception/walk-in surface.
+// NOTE: a slot's chair tile (is_seat) is walkable for guests but is not
+// "open" — another object can't share it, and table buffer rings must be
+// genuinely empty floor. Use isWalkable() for guest-movement checks.
 export function isOpenFloor(tiles: GC.Tile[], col: number, row: number): boolean {
   if (col < 0 || col >= GC.GRID_COLS || row < 0 || row >= GC.GRID_ROWS) return false;
   const t = tiles[row * GC.GRID_COLS + col];
   if (t.tile_type === GC.TileType.LOBBY) return true;
   return t.tile_type === GC.TileType.FLOOR && t.obj_id === '';
+}
+
+// Walkable for guests: open floor, lobby, or a slot's chair tile (which
+// is occupied by the slot but the guest is meant to stand on it).
+export function isWalkable(tiles: GC.Tile[], col: number, row: number): boolean {
+  if (col < 0 || col >= GC.GRID_COLS || row < 0 || row >= GC.GRID_ROWS) return false;
+  const t = tiles[row * GC.GRID_COLS + col];
+  if (t.tile_type === GC.TileType.LOBBY) return true;
+  if (t.tile_type !== GC.TileType.FLOOR) return false;
+  return t.obj_id === '' || t.is_seat;
 }
 
 export function detectWallDir(col: number, row: number, w: number, h: number, tiles: GC.Tile[]): string {
@@ -157,33 +175,40 @@ export function getInward(door: GC.Vec2, wallDir: string): GC.Vec2 {
   return door;
 }
 
-// Count footprint-adjacent open floor tiles. Used by 1-access objects
-// (slots) — works for any footprint, not just 1×1.
-function countFreeNeighbours(
-  tiles: GC.Tile[], col: number, row: number, w: number, h: number,
-): number {
-  let n = 0;
-  for (let c = col; c < col + w; c++) {
-    if (isOpenFloor(tiles, c, row - 1)) n++;
-    if (isOpenFloor(tiles, c, row + h)) n++;
+// Slot placement reachability: the chair tile must have at least one
+// cardinal neighbour (excluding the cabinet) that is open floor, so a
+// guest can walk in from outside the slot's footprint.
+function seatReachable(
+  tiles: GC.Tile[], col: number, row: number, facing: GC.Orientation,
+): boolean {
+  const { seat, machine } = GC.slotParts(col, row, facing);
+  const cands: GC.Vec2[] = [
+    { x: seat.x + 1, y: seat.y     },
+    { x: seat.x - 1, y: seat.y     },
+    { x: seat.x,     y: seat.y + 1 },
+    { x: seat.x,     y: seat.y - 1 },
+  ];
+  for (const c of cands) {
+    if (c.x === machine.x && c.y === machine.y) continue;
+    if (isOpenFloor(tiles, c.x, c.y)) return true;
   }
-  for (let r = row; r < row + h; r++) {
-    if (isOpenFloor(tiles, col - 1, r)) n++;
-    if (isOpenFloor(tiles, col + w, r)) n++;
-  }
-  return n;
+  return false;
 }
 
-// Count distinct sides of the footprint that have at least one open
-// floor tile against them. Used by 2-access objects (tables).
-function countAccessibleSides(
+// Table placement requires the entire cardinal-adjacent ring around the
+// footprint to be open floor, so the dealer-side path stays clear and
+// every player side has room to host seats.
+function hasFullBufferRing(
   tiles: GC.Tile[],
   col: number, row: number, w: number, h: number,
-): number {
-  let sides = 0;
-  const checkH = (r: number) => { for (let c = col; c < col + w; c++) if (isOpenFloor(tiles, c, r)) { sides++; return; } };
-  const checkV = (c: number) => { for (let r = row; r < row + h; r++) if (isOpenFloor(tiles, c, r)) { sides++; return; } };
-  checkH(row - 1); checkH(row + h);
-  checkV(col - 1); checkV(col + w);
-  return sides;
+): boolean {
+  for (let c = col; c < col + w; c++) {
+    if (!isOpenFloor(tiles, c, row - 1)) return false;
+    if (!isOpenFloor(tiles, c, row + h)) return false;
+  }
+  for (let r = row; r < row + h; r++) {
+    if (!isOpenFloor(tiles, col - 1, r)) return false;
+    if (!isOpenFloor(tiles, col + w, r)) return false;
+  }
+  return true;
 }

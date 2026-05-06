@@ -35,13 +35,14 @@ export class GridScene extends Phaser.Scene {
   private oy = 0;
 
   // Placement state
-  private placing   = false;
-  private placeType = 0;
-  private placeRot  = false;
-  private placeVar  = '';
-  private ghostCol  = -1;
-  private ghostRow  = -1;
-  private ghostOk   = false;
+  private placing     = false;
+  private placeType   = 0;
+  // 4-direction facing for the placement ghost. R cycles N→E→S→W.
+  private placeFacing : GC.Orientation = 'S';
+  private placeVar    = '';
+  private ghostCol    = -1;
+  private ghostRow    = -1;
+  private ghostOk     = false;
 
   // Demolish state
   private demolishing = false;
@@ -79,7 +80,10 @@ export class GridScene extends Phaser.Scene {
       this.placing     = true;
       this.placeType   = type;
       this.placeVar    = variant;
-      this.placeRot    = false;
+      // Default facing: S so a freshly-picked slot has its chair toward
+      // the lobby, and tables present the dealer-side band on top to the
+      // player's eye. R cycles from there.
+      this.placeFacing = 'S';
       this.demolishing = false;
       this.ghostCol    = -1;
       this.ghostRow    = -1;
@@ -117,10 +121,10 @@ export class GridScene extends Phaser.Scene {
       }
     });
 
-    // R = rotate ghost while placing
+    // R = cycle ghost facing through N → E → S → W while placing.
     this.input.keyboard?.on('keydown-R', () => {
       if (!this.placing) return;
-      this.placeRot = !this.placeRot;
+      this.placeFacing = GC.nextFacing(this.placeFacing);
       if (this.ghostCol >= 0) this._revalidateGhost();
       this._redraw();
     });
@@ -171,9 +175,9 @@ export class GridScene extends Phaser.Scene {
     this.dragStartOY = this.oy;
     this.dragged     = false;
 
-    // Right-click = rotate ghost
+    // Right-click cycles ghost facing (same as R).
     if (ptr.rightButtonDown() && this.placing) {
-      this.placeRot = !this.placeRot;
+      this.placeFacing = GC.nextFacing(this.placeFacing);
       this._updateGhost(ptr.x, ptr.y);
       this._redraw();
     }
@@ -221,7 +225,7 @@ export class GridScene extends Phaser.Scene {
     if (!coord) return;
 
     if (this.placing) {
-      const ok = gameState.tryPlace(coord.col, coord.row, this.placeType as GC.ObjType, this.placeRot, this.placeVar);
+      const ok = gameState.tryPlace(coord.col, coord.row, this.placeType as GC.ObjType, this.placeFacing, this.placeVar);
       if (ok) {
         // Ctrl-click keeps placement mode open for repeat placements.
         const ev   = ptr.event as MouseEvent | PointerEvent | undefined;
@@ -261,7 +265,7 @@ export class GridScene extends Phaser.Scene {
   private _revalidateGhost(): void {
     if (this.ghostCol < 0) return;
     const result = PV.validate(
-      { type: this.placeType as GC.ObjType, col: this.ghostCol, row: this.ghostRow, rotated: this.placeRot },
+      { type: this.placeType as GC.ObjType, col: this.ghostCol, row: this.ghostRow, facing: this.placeFacing },
       gameState.tiles, gameState.cash, gameState.barExists,
     );
     this.ghostOk = result === GC.ValResult.VALID;
@@ -355,6 +359,7 @@ export class GridScene extends Phaser.Scene {
         obj.w * ts, obj.h * ts,
         alpha,
         wallSide,
+        obj.facing,
       );
 
       // Subtle red corner mark for non-functional objects so the dim
@@ -394,15 +399,18 @@ export class GridScene extends Phaser.Scene {
     }
 
     // 3. Placement ghost — render the actual shape under a green/red tint
-    // and a colored frame, so rotation and footprint read instantly.
+    // and a colored frame, so rotation and footprint read instantly. The
+    // shape is drawn with the current facing so the cabinet/chair split
+    // and the table dealer band rotate live with R / right-click.
     if (this.placing && this.ghostCol >= 0) {
-      const def = GC.getDef(this.placeType as GC.ObjType);
-      const w   = this.placeRot ? def.fh : def.fw;
-      const h   = this.placeRot ? def.fw : def.fh;
+      const { w, h } = GC.dimsFor(this.placeType as GC.ObjType, this.placeFacing);
       const gx  = baseX + this.ghostCol * ts;
       const gy  = baseY + this.ghostRow * ts;
 
-      paintObject(g, this.placeType as GC.ObjType, gx, gy, w * ts, h * ts, 0.6);
+      paintObject(
+        g, this.placeType as GC.ObjType, gx, gy, w * ts, h * ts,
+        0.6, null, this.placeFacing,
+      );
 
       // Color overlay
       g.fillStyle(this.ghostOk ? 0x33e64d : 0xe63333, 0.28);
@@ -411,6 +419,11 @@ export class GridScene extends Phaser.Scene {
       // Outline frame
       g.lineStyle(2, this.ghostOk ? 0x33e64d : 0xe63333, 1);
       g.strokeRect(gx + 1, gy + 1, w * ts - 2, h * ts - 2);
+
+      // Seat / use markers — small dots on the tiles guests will target.
+      // Helps the player see which side of a table will host players, and
+      // confirms which slot tile is the chair.
+      this._drawGhostSeats(g, gx, gy, ts);
     }
 
     // 4. Demolish overlay
@@ -433,6 +446,41 @@ export class GridScene extends Phaser.Scene {
 
   private _setCursor(cursor: string): void {
     this.sys.game.canvas.style.cursor = cursor;
+  }
+
+  // Marks the seat / use tiles for the placement ghost. For slots that's
+  // the chair tile inside the footprint; for tables it's the open-floor
+  // tiles around the 3 player sides. Wall services don't need this — the
+  // door cutout already communicates the use side.
+  private _drawGhostSeats(
+    g: Phaser.GameObjects.Graphics, gx: number, gy: number, ts: number,
+  ): void {
+    const t = this.placeType as GC.ObjType;
+    if (t === GC.ObjType.SLOT_MACHINE) {
+      const { seat } = GC.slotParts(this.ghostCol, this.ghostRow, this.placeFacing);
+      const cx = gx + (seat.x - this.ghostCol + 0.5) * ts;
+      const cy = gy + (seat.y - this.ghostRow + 0.5) * ts;
+      g.lineStyle(2, 0xffffff, 0.7);
+      g.strokeCircle(cx, cy, Math.max(2, ts * 0.18));
+      return;
+    }
+    if (t !== GC.ObjType.SMALL_TABLE && t !== GC.ObjType.LARGE_TABLE) return;
+
+    const { w, h } = GC.dimsFor(t, this.placeFacing);
+    const playerSides = GC.tablePlayerSides(this.placeFacing);
+    g.fillStyle(0xffffff, 0.55);
+    const r = Math.max(2, ts * 0.16);
+    const dot = (col: number, row: number) => {
+      const cx = gx + (col - this.ghostCol + 0.5) * ts;
+      const cy = gy + (row - this.ghostRow + 0.5) * ts;
+      g.fillCircle(cx, cy, r);
+    };
+    for (const side of playerSides) {
+      if (side === 'N')      for (let c = 0; c < w; c++) dot(this.ghostCol + c, this.ghostRow - 1);
+      else if (side === 'S') for (let c = 0; c < w; c++) dot(this.ghostCol + c, this.ghostRow + h);
+      else if (side === 'W') for (let r2 = 0; r2 < h; r2++) dot(this.ghostCol - 1, this.ghostRow + r2);
+      else                   for (let r2 = 0; r2 < h; r2++) dot(this.ghostCol + w, this.ghostRow + r2);
+    }
   }
 
   // Find which side of a placed wall-service borders the wall. Returns

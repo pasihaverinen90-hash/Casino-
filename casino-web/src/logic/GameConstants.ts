@@ -78,6 +78,13 @@ export const enum TileType { FLOOR, WALL, LOBBY, BLOCKED }
 // Enum order is fixed — values are persisted in saves. Append new entries.
 // (Old index 5 was PATH, removed in save 1.3.0; CASHIER moved 6 → 5 via migration.)
 export const enum ObjType  { SLOT_MACHINE, SMALL_TABLE, LARGE_TABLE, WC, BAR, CASHIER }
+
+// Four-direction orientation. For floor attractions (slot, tables) this is
+// the *front* of the object — the side guests interact from. For wall
+// services it just selects between the two axis-aligned footprint shapes
+// (N/S = base, E/W = swapped); the actual wall side is detected from the
+// surrounding tiles.
+export type Orientation = 'N' | 'E' | 'S' | 'W';
 export const enum ValResult {
   VALID,
   FAIL_LIMIT, FAIL_AFFORD, FAIL_OUT_OF_BOUNDS,
@@ -106,11 +113,16 @@ export interface ObjDef {
 
 export const OBJ_DEFS: Record<ObjType, ObjDef> = {
   [ObjType.SLOT_MACHINE]: {
-    label: 'Slot Machine', cost: 750,  fw: 1, fh: 1, cap: 1,
+    // 1×2 footprint: one tile is the cabinet, one is the player's chair.
+    // The chair tile is part of the footprint (so nothing else can be built
+    // on it) but is walkable — the guest stands on it while playing.
+    label: 'Slot Machine', cost: 750,  fw: 1, fh: 2, cap: 1,
     is_wall: false, max: -1, rating: 0.02, flat: false,
     color: 0xccb31a, accessSides: 1, variants: [],
   },
   [ObjType.SMALL_TABLE]: {
+    // Tables require a full 1-tile walkable buffer ring on every side.
+    // Seats live on the 3 non-dealer sides; facing picks the dealer side.
     label: 'Small Table',  cost: 2500, fw: 2, fh: 3, cap: 4,
     is_wall: false, max: -1, rating: 0.18, flat: false,
     color: 0x3380e6, accessSides: 2, variants: ['blackjack', 'poker'],
@@ -162,6 +174,11 @@ export interface Tile {
   row       : number;
   tile_type : TileType;
   obj_id    : string;
+  // True when this tile is a slot's chair tile. It is part of an object's
+  // footprint (so collision rejects new builds on it) yet remains walkable
+  // for guests, who stand on it while using the slot. Derived state, not
+  // persisted — rebuilt from placedObjs on load.
+  is_seat   : boolean;
 }
 
 // Persistent placement data — exactly what's serialized to a save.
@@ -172,17 +189,59 @@ export interface PlacedObjData {
   type    : ObjType;
   col     : number;
   row     : number;
-  rotated : boolean;
+  facing  : Orientation;
   variant : string;
 }
 
 // In-memory representation: persistent data + cached spatial geometry.
-// `tiles`, `w`, `h` are derived from (type, col, row, rotated) and rebuilt
+// `tiles`, `w`, `h` are derived from (type, col, row, facing) and rebuilt
 // on load — never persisted.
 export interface PlacedObj extends PlacedObjData {
   tiles : Vec2[];
   w     : number;
   h     : number;
+}
+
+// ── Orientation helpers ─────────────────────────────────────────────────────
+// Centralised so placement, operational, and rendering code agree on what
+// a given facing means.
+
+// Footprint dimensions for a placement. N/S use base fw,fh; E/W swap them.
+export function dimsFor(type: ObjType, facing: Orientation): { w: number; h: number } {
+  const def = OBJ_DEFS[type];
+  const horiz = facing === 'E' || facing === 'W';
+  return horiz ? { w: def.fh, h: def.fw } : { w: def.fw, h: def.fh };
+}
+
+// Slot machine footprint split into its two cells. `seat` is the chair the
+// guest stands on; `machine` is the cabinet. Coordinates are absolute tiles.
+//   facing = direction the chair sits relative to the cabinet
+//   N: chair north of cabinet ; S: chair south
+//   E: chair east of cabinet  ; W: chair west
+export function slotParts(col: number, row: number, facing: Orientation):
+    { seat: Vec2; machine: Vec2 } {
+  switch (facing) {
+    case 'N': return { seat:    { x: col, y: row     }, machine: { x: col,     y: row + 1 } };
+    case 'S': return { machine: { x: col, y: row     }, seat:    { x: col,     y: row + 1 } };
+    case 'E': return { machine: { x: col, y: row     }, seat:    { x: col + 1, y: row     } };
+    case 'W': return { seat:    { x: col, y: row     }, machine: { x: col + 1, y: row     } };
+  }
+}
+
+// The three cardinal sides of a table where players sit. The fourth side
+// (the `facing` direction) is the dealer side and has no player seats.
+export function tablePlayerSides(facing: Orientation): Orientation[] {
+  switch (facing) {
+    case 'N': return ['E', 'S', 'W'];
+    case 'S': return ['N', 'E', 'W'];
+    case 'E': return ['N', 'S', 'W'];
+    case 'W': return ['N', 'S', 'E'];
+  }
+}
+
+// Cycle facing for the rotate (R) hotkey: N → E → S → W → N.
+export function nextFacing(f: Orientation): Orientation {
+  return f === 'N' ? 'E' : f === 'E' ? 'S' : f === 'S' ? 'W' : 'N';
 }
 
 export interface DayStats {
