@@ -265,9 +265,32 @@ body {
   border-radius: 0;
 }
 
-.stats-panel .panel-scroll,
 .goals-panel .panel-scroll {
   max-height: none;
+}
+
+/* Stats panel uses a single shared scroll region for tab content. The
+   title row and tab bar stay pinned above; only .tab-content scrolls.
+   min-height: 0 is required so this flex item respects its constraint
+   instead of growing to fit the chart stack and pushing the header
+   off-screen. */
+.stats-panel .tab-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.stats-panel .tab-pane {
+  padding: 14px 16px 24px;
+}
+
+.stats-panel .charts-wrap {
+  margin-top: 18px;
+}
+
+.stats-panel .lifetime-block {
+  padding-bottom: 4px;
 }
 
 /* ── Build panel ─────────────────────────────────────────────────────────── */

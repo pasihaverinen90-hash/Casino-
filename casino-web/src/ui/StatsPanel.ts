@@ -1,4 +1,15 @@
 // StatsPanel.ts — full-screen overlay: Today summary + History charts.
+//
+// Structure:
+//   .panel.stats-panel              (flex column, fixed height)
+//     .panel-title                  (shared title + close, pinned)
+//     .tab-bar                      (shared tab buttons, pinned)
+//     .tab-content                  (single scroll container, flex:1)
+//       .tab-pane.today             (visible / hidden)
+//       .tab-pane.history           (visible / hidden)
+//
+// The single shared scroll container is what keeps the title and tabs
+// pinned regardless of how tall the History content is.
 import { gameState } from '../state/GameState';
 import { ChartCard }  from './ChartCard';
 import { fmtCash, fmtInt, fmtPct, fmtRating } from './format';
@@ -33,10 +44,8 @@ export class StatsPanel {
   private lblYRating : HTMLElement;
 
   // Lifetime summary (History tab)
-  private lifetimeBlock : HTMLElement;
   private lblTotalEarned: HTMLElement;
   private lblBestDay    : HTMLElement;
-  private lblAvgRev     : HTMLElement;
   private lblDaysCount  : HTMLElement;
   private historyEmpty  : HTMLElement;
   private chartsWrap    : HTMLElement;
@@ -51,7 +60,7 @@ export class StatsPanel {
     this.el = document.createElement('div');
     this.el.className = 'panel stats-panel hidden interactive';
 
-    // Title row
+    // Shared title row
     const titleRow = document.createElement('div');
     titleRow.className = 'panel-title';
     this.titleEl = document.createElement('h3');
@@ -59,16 +68,22 @@ export class StatsPanel {
     const btnClose = mkClose(() => this.close());
     titleRow.append(this.titleEl, btnClose);
 
-    // Tab bar
+    // Shared tab bar
     const tabBar = document.createElement('div');
     tabBar.className = 'tab-bar';
     this.tab0 = mkTabBtn('Today',   true,  () => this._showTab(0));
     this.tab1 = mkTabBtn('History', false, () => this._showTab(1));
     tabBar.append(this.tab0, this.tab1);
 
-    // ── Today panel ────────────────────────────────────────────────────────
+    // Single scroll container that holds both tab panes. Without this
+    // wrapper (and its min-height: 0) two flex:1 siblings each with their
+    // own overflow can grow past the panel and push the header off-screen.
+    const tabContent = document.createElement('div');
+    tabContent.className = 'tab-content';
+
+    // ── Today pane ────────────────────────────────────────────────────────
     this.todayPanel = document.createElement('div');
-    this.todayPanel.className = 'panel-scroll';
+    this.todayPanel.className = 'tab-pane';
 
     this.todayPanel.appendChild(sectionHeader('RIGHT NOW'));
     this.lblRating   = this.todayPanel.appendChild(statRow());
@@ -95,18 +110,18 @@ export class StatsPanel {
       'First day in progress — results appear after Day 1 ends.';
     this.todayPanel.appendChild(this.emptyYesterday);
 
-    // ── History panel ─────────────────────────────────────────────────────
+    // ── History pane ──────────────────────────────────────────────────────
     this.historyPanel = document.createElement('div');
-    this.historyPanel.className = 'panel-scroll';
+    this.historyPanel.className = 'tab-pane';
     this.historyPanel.style.display = 'none';
 
-    this.lifetimeBlock = document.createElement('div');
-    this.lifetimeBlock.appendChild(sectionHeader('LIFETIME'));
-    this.lblTotalEarned = this.lifetimeBlock.appendChild(statRow(true));
-    this.lblBestDay     = this.lifetimeBlock.appendChild(statRow());
-    this.lblAvgRev      = this.lifetimeBlock.appendChild(statRow());
-    this.lblDaysCount   = this.lifetimeBlock.appendChild(statRow());
-    this.historyPanel.appendChild(this.lifetimeBlock);
+    const lifetimeBlock = document.createElement('div');
+    lifetimeBlock.className = 'lifetime-block';
+    lifetimeBlock.appendChild(sectionHeader('LIFETIME'));
+    this.lblTotalEarned = lifetimeBlock.appendChild(statRow(true));
+    this.lblBestDay     = lifetimeBlock.appendChild(statRow());
+    this.lblDaysCount   = lifetimeBlock.appendChild(statRow());
+    this.historyPanel.appendChild(lifetimeBlock);
 
     this.historyEmpty = document.createElement('div');
     this.historyEmpty.className = 'stats-empty';
@@ -115,6 +130,7 @@ export class StatsPanel {
     this.historyPanel.appendChild(this.historyEmpty);
 
     this.chartsWrap = document.createElement('div');
+    this.chartsWrap.className = 'charts-wrap';
     this.historyPanel.appendChild(this.chartsWrap);
     this.chartsWrap.appendChild(sectionHeader('DAILY METRICS'));
 
@@ -127,7 +143,8 @@ export class StatsPanel {
     this.chartOcc     = new ChartCard(this.chartsWrap, 'Hotel Occupancy',   '#6699e6',
                                       v => `${Math.round(v)} %`);
 
-    this.el.append(titleRow, tabBar, this.todayPanel, this.historyPanel);
+    tabContent.append(this.todayPanel, this.historyPanel);
+    this.el.append(titleRow, tabBar, tabContent);
     parent.appendChild(this.el);
 
     gameState.on('state_changed', () => {
@@ -199,7 +216,6 @@ export class StatsPanel {
     const records = gs.statsRecords;
     const hasData = records.length > 0;
 
-    // Lifetime summary
     if (hasData) {
       let total = 0;
       let best = records[0];
@@ -207,19 +223,15 @@ export class StatsPanel {
         total += r.revenue;
         if (r.revenue > best.revenue) best = r;
       }
-      const avg = total / records.length;
-      setRow(this.lblTotalEarned, 'Total earned', `${fmtCash(total)} 💰`);
-      setRow(this.lblBestDay,     'Best day',     `${fmtCash(best.revenue)} 💰  (Day ${best.day})`);
-      setRow(this.lblAvgRev,      'Avg revenue',  `${fmtCash(avg)} 💰 / day`);
+      setRow(this.lblTotalEarned, 'Total earned',  `${fmtCash(total)} 💰`);
+      setRow(this.lblBestDay,     'Best day',      `${fmtCash(best.revenue)} 💰  (Day ${best.day})`);
       setRow(this.lblDaysCount,   'Days recorded', fmtInt(records.length));
     } else {
       setRow(this.lblTotalEarned, 'Total earned',  '—');
       setRow(this.lblBestDay,     'Best day',      '—');
-      setRow(this.lblAvgRev,      'Avg revenue',   '—');
       setRow(this.lblDaysCount,   'Days recorded', '0');
     }
 
-    // Empty state vs charts
     this.historyEmpty.style.display = hasData ? 'none' : '';
     this.chartsWrap.style.display   = hasData ? '' : 'none';
 
