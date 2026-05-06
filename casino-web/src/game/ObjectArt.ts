@@ -70,15 +70,45 @@ export function paintObject(
   alpha: number,
   wallSide: WallSide | null = null,
   facing: GC.Orientation = 'S',
+  variant: string = '',
 ): void {
   switch (type) {
     case GC.ObjType.SLOT_MACHINE: drawSlotG (g, x, y, w, h, alpha, facing); break;
-    case GC.ObjType.SMALL_TABLE:  drawTableG(g, x, y, w, h, alpha, false, facing); break;
-    case GC.ObjType.LARGE_TABLE:  drawTableG(g, x, y, w, h, alpha, true,  facing);  break;
+    case GC.ObjType.SMALL_TABLE:  drawTableG(g, x, y, w, h, alpha, false, facing, variant); break;
+    case GC.ObjType.LARGE_TABLE:  drawTableG(g, x, y, w, h, alpha, true,  facing, variant);  break;
     case GC.ObjType.WC:           drawWCG     (g, x, y, w, h, alpha, wallSide); break;
     case GC.ObjType.BAR:          drawBarG    (g, x, y, w, h, alpha, wallSide); break;
     case GC.ObjType.CASHIER:      drawCashierG(g, x, y, w, h, alpha, wallSide); break;
   }
+}
+
+// Small stool glyph for table seat tiles. The cushion is a wood-toned disc;
+// a darker dot on the side opposite the table reads as the backrest, so
+// the seat visibly faces the table. Matches the slot chair palette so
+// table seats and slot chairs feel like they belong to the same casino.
+//
+// `dirX, dirY` is a unit vector from the seat tile's centre toward the
+// table's centre. Pass (0, 0) for an undirected stool.
+export function paintSeat(
+  g: Phaser.GameObjects.Graphics,
+  x: number, y: number, ts: number, alpha: number,
+  dirX: number, dirY: number,
+): void {
+  const cx = x + ts / 2;
+  const cy = y + ts / 2;
+  const r  = Math.max(1.5, ts * 0.22);
+
+  // Cushion.
+  g.fillStyle(0x5a3d22, alpha);
+  g.fillCircle(cx, cy, r);
+  // Soft top-left highlight.
+  g.fillStyle(0xffffff, alpha * 0.18);
+  g.fillCircle(cx - r * 0.3, cy - r * 0.3, Math.max(1, r * 0.4));
+  // Backrest dot on the side opposite the table.
+  const bx = cx - dirX * r * 0.6;
+  const by = cy - dirY * r * 0.6;
+  g.fillStyle(0x3a2412, alpha * 0.85);
+  g.fillCircle(bx, by, Math.max(1, r * 0.5));
 }
 
 // Slot machine (1×2 footprint): cabinet on the side opposite `facing`,
@@ -188,8 +218,20 @@ function drawSlotChair(
 function drawTableG(
   g: Phaser.GameObjects.Graphics,
   x: number, y: number, w: number, h: number, a: number,
-  large: boolean, facing: GC.Orientation,
+  large: boolean, facing: GC.Orientation, variant: string,
 ): void {
+  // Variant palette — felt and rim swap together so the four table types
+  // read at a glance even at small zooms. The first entry of each pair is
+  // the default for a missing/unknown variant.
+  //                              felt        rim
+  const blackjackPalette = { felt: 0x1d6b30, rim: 0x5a4022 };
+  const pokerPalette     = { felt: 0x144a20, rim: 0x4a2f1a };
+  const roulettePalette  = { felt: 0x144a22, rim: 0x4d3a1a };
+  const crapsPalette     = { felt: 0x6b1a1a, rim: 0x6e2818 };
+  const palette = large
+    ? (variant === 'craps' ? crapsPalette : roulettePalette)
+    : (variant === 'poker' ? pokerPalette : blackjackPalette);
+
   const pad = Math.max(1, Math.round(Math.min(w, h) * 0.12));
 
   // Carpet around table.
@@ -197,47 +239,136 @@ function drawTableG(
   g.fillRect(x, y, w - 1, h - 1);
 
   // Wood rim.
-  g.fillStyle(large ? 0x4d3a1a : 0x5a4022, a);
+  g.fillStyle(palette.rim, a);
   g.fillRect(x + pad, y + pad, w - 2 * pad, h - 2 * pad);
 
   // Felt.
-  g.fillStyle(large ? 0x144a22 : 0x1d6b30, a);
+  g.fillStyle(palette.felt, a);
   const felt = Math.max(1, Math.round(pad * 0.6));
-  g.fillRect(
-    x + pad + felt, y + pad + felt,
-    w - 2 * (pad + felt), h - 2 * (pad + felt),
-  );
-
-  // Dealer band on the facing side — the cue that tells the player which
-  // 3 sides have seats. Dark wood/brass against the green felt.
-  const bandT = Math.max(2, Math.round(Math.min(w, h) * 0.16));
   const innerX = x + pad + felt;
   const innerY = y + pad + felt;
   const innerW = w - 2 * (pad + felt);
   const innerH = h - 2 * (pad + felt);
-  g.fillStyle(0x8a3a14, a);
-  if (facing === 'N')      g.fillRect(innerX, innerY,                 innerW, bandT);
-  else if (facing === 'S') g.fillRect(innerX, innerY + innerH - bandT, innerW, bandT);
-  else if (facing === 'W') g.fillRect(innerX, innerY,                 bandT,  innerH);
-  else                     g.fillRect(innerX + innerW - bandT, innerY, bandT, innerH);
+  g.fillRect(innerX, innerY, innerW, innerH);
 
-  // Centerpiece — wheel for large, dealer line for small.
-  if (large) {
-    const cx = x + w / 2;
-    const cy = y + h / 2;
-    const r  = Math.max(2, Math.min(w, h) * 0.18);
-    g.fillStyle(0x8a3a14, a);
-    g.fillCircle(cx, cy, r);
-    g.fillStyle(0x1a1208, a);
-    g.fillCircle(cx, cy, Math.max(1, r * 0.4));
+  // Dealer band on the facing side — cue for which 3 sides have seats.
+  const bandT = Math.max(2, Math.round(Math.min(w, h) * 0.16));
+  g.fillStyle(0x8a3a14, a);
+  if (facing === 'N')      g.fillRect(innerX, innerY,                  innerW, bandT);
+  else if (facing === 'S') g.fillRect(innerX, innerY + innerH - bandT, innerW, bandT);
+  else if (facing === 'W') g.fillRect(innerX, innerY,                  bandT,  innerH);
+  else                     g.fillRect(innerX + innerW - bandT, innerY, bandT,  innerH);
+
+  // Variant-specific centerpiece. Each recipe is intentionally small so
+  // the look reads at game scale rather than relying on fine detail.
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+
+  if (large && variant === 'craps') {
+    drawCrapsCentre(g, cx, cy, innerX, innerY, innerW, innerH, a);
+  } else if (large) {
+    drawRouletteCentre(g, cx, cy, w, h, a);
+  } else if (variant === 'poker') {
+    drawPokerCentre(g, cx, cy, innerX, innerY, innerW, innerH, felt, a);
   } else {
-    const stripeH = Math.max(1, Math.round(Math.min(w, h) * 0.06));
-    g.fillStyle(0x0e3a18, a);
-    g.fillRect(
-      x + pad + felt, y + h / 2 - stripeH / 2,
-      w - 2 * (pad + felt), stripeH,
-    );
+    drawBlackjackCentre(g, innerX, innerY, innerW, innerH, felt, bandT, facing, a);
   }
+}
+
+// Roulette: prominent two-tone wheel with a brass nub — the visual
+// signature of a roulette table.
+function drawRouletteCentre(
+  g: Phaser.GameObjects.Graphics,
+  cx: number, cy: number, w: number, h: number, a: number,
+): void {
+  const r  = Math.max(2, Math.min(w, h) * 0.20);
+  g.fillStyle(0x8a3a14, a);
+  g.fillCircle(cx, cy, r);
+  g.fillStyle(0x1a1208, a);
+  g.fillCircle(cx, cy, Math.max(1, r * 0.45));
+  // Brass nub catches the eye and reads as "spinning hub".
+  g.fillStyle(0xe8d066, a * 0.85);
+  g.fillCircle(cx, cy, Math.max(1, r * 0.18));
+}
+
+// Craps: brass centre stripe along the long axis with a pair of dice
+// markers in the middle. Combined with the red felt this is unmistakably
+// a craps table even at low zoom.
+function drawCrapsCentre(
+  g: Phaser.GameObjects.Graphics,
+  cx: number, cy: number,
+  innerX: number, innerY: number, innerW: number, innerH: number,
+  a: number,
+): void {
+  const stripeT = Math.max(1, Math.round(Math.min(innerW, innerH) * 0.10));
+  g.fillStyle(0xe8d066, a * 0.75);
+  if (innerW >= innerH) {
+    g.fillRect(innerX, cy - stripeT / 2, innerW, stripeT);
+  } else {
+    g.fillRect(cx - stripeT / 2, innerY, stripeT, innerH);
+  }
+  // Two small dice as light ivory squares.
+  const d = Math.max(2, Math.round(Math.min(innerW, innerH) * 0.16));
+  g.fillStyle(0xfff5d6, a);
+  g.fillRect(cx - d - 1, cy - d / 2, d, d);
+  g.fillRect(cx + 1,     cy - d / 2, d, d);
+}
+
+// Blackjack: brass arc-style stripe just inside the dealer band, plus a
+// row of small chip-slot dots along the player edge. Reads as "dealer
+// pulls cards from here".
+function drawBlackjackCentre(
+  g: Phaser.GameObjects.Graphics,
+  innerX: number, innerY: number, innerW: number, innerH: number,
+  felt: number, bandT: number, facing: GC.Orientation, a: number,
+): void {
+  const stripeT = Math.max(1, Math.round(Math.min(innerW, innerH) * 0.06));
+  g.fillStyle(0xe8d066, a * 0.7);
+  if (facing === 'N') {
+    g.fillRect(innerX + felt, innerY + bandT + felt, innerW - 2 * felt, stripeT);
+  } else if (facing === 'S') {
+    g.fillRect(innerX + felt, innerY + innerH - bandT - felt - stripeT, innerW - 2 * felt, stripeT);
+  } else if (facing === 'W') {
+    g.fillRect(innerX + bandT + felt, innerY + felt, stripeT, innerH - 2 * felt);
+  } else {
+    g.fillRect(innerX + innerW - bandT - felt - stripeT, innerY + felt, stripeT, innerH - 2 * felt);
+  }
+  // Chip-slot dots near the opposite (player) edge — keeps the cue subtle.
+  const dotR = Math.max(1, Math.round(Math.min(innerW, innerH) * 0.05));
+  g.fillStyle(0xc8b070, a * 0.85);
+  const slots = 3;
+  for (let i = 1; i <= slots; i++) {
+    const t = i / (slots + 1);
+    if (facing === 'N')      g.fillCircle(innerX + innerW * t, innerY + innerH - dotR * 2, dotR);
+    else if (facing === 'S') g.fillCircle(innerX + innerW * t, innerY + dotR * 2,           dotR);
+    else if (facing === 'W') g.fillCircle(innerX + innerW - dotR * 2, innerY + innerH * t, dotR);
+    else                     g.fillCircle(innerX + dotR * 2,           innerY + innerH * t, dotR);
+  }
+}
+
+// Poker: deeper green felt + a central oval representing the community
+// card area, framed by four small chip dots in the corners. Distinct
+// from blackjack's brass-arc treatment.
+function drawPokerCentre(
+  g: Phaser.GameObjects.Graphics,
+  cx: number, cy: number,
+  innerX: number, innerY: number, innerW: number, innerH: number,
+  felt: number, a: number,
+): void {
+  const ovalW = Math.max(2, Math.round(innerW * 0.55));
+  const ovalH = Math.max(2, Math.round(innerH * 0.40));
+  g.fillStyle(0x0e3a18, a);
+  g.fillEllipse(cx, cy, ovalW, ovalH);
+  // Inner darker oval for depth.
+  g.fillStyle(0x092a11, a * 0.7);
+  g.fillEllipse(cx, cy, Math.max(1, ovalW - 4), Math.max(1, ovalH - 4));
+  // Chip dots in the four felt corners.
+  const dotR = Math.max(1, Math.round(Math.min(innerW, innerH) * 0.05));
+  g.fillStyle(0xc8b070, a * 0.8);
+  g.fillCircle(innerX + felt + dotR,           innerY + felt + dotR,           dotR);
+  g.fillCircle(innerX + innerW - felt - dotR,  innerY + felt + dotR,           dotR);
+  g.fillCircle(innerX + felt + dotR,           innerY + innerH - felt - dotR,  dotR);
+  g.fillCircle(innerX + innerW - felt - dotR,  innerY + innerH - felt - dotR,  dotR);
 }
 
 // Wall-service drawers paint a "wall continuation" band on the wall side

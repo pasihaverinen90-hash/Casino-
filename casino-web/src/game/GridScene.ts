@@ -5,7 +5,7 @@ import * as GC from '../logic/GameConstants';
 import * as PV from '../logic/PlacementValidator';
 import { gameState } from '../state/GameState';
 import { uiBus }     from '../events/UIBus';
-import { paintObject, type WallSide } from './ObjectArt';
+import { paintObject, paintSeat, type WallSide } from './ObjectArt';
 import { GuestSprites } from './GuestSprites';
 import { time } from '../state/TimeController';
 
@@ -382,7 +382,25 @@ export class GridScene extends Phaser.Scene {
         alpha,
         wallSide,
         obj.facing,
+        obj.variant,
       );
+
+      // Reserved seat tiles for tables — render a small stool on each so
+      // the player can see why those tiles are off-limits to other builds.
+      // Backrest points away from the table centre. Same alpha as the body
+      // so non-functional tables dim their seats too.
+      if (obj.seats.length > 0 && ts >= 10) {
+        const tCx = obj.col + obj.w / 2;
+        const tCy = obj.row + obj.h / 2;
+        for (const s of obj.seats) {
+          const dx  = tCx - (s.x + 0.5);
+          const dy  = tCy - (s.y + 0.5);
+          const len = Math.hypot(dx, dy);
+          const dxN = len > 0 ? dx / len : 0;
+          const dyN = len > 0 ? dy / len : 0;
+          paintSeat(g, baseX + s.x * ts, baseY + s.y * ts, ts, alpha, dxN, dyN);
+        }
+      }
 
       // Subtle red corner mark for non-functional objects so the dim
       // alpha isn't the only signal.
@@ -433,7 +451,7 @@ export class GridScene extends Phaser.Scene {
 
       paintObject(
         g, this.placeType as GC.ObjType, gx, gy, w * ts, h * ts,
-        0.6, null, this.placeFacing,
+        0.6, null, this.placeFacing, this.placeVar,
       );
 
       // Color overlay
@@ -493,18 +511,25 @@ export class GridScene extends Phaser.Scene {
 
     const { w, h } = GC.dimsFor(t, this.placeFacing);
     const playerSides = GC.tablePlayerSides(this.placeFacing);
-    g.fillStyle(0xffffff, 0.55);
-    const r = Math.max(2, ts * 0.16);
-    const dot = (col: number, row: number) => {
-      const cx = gx + (col - a.col + 0.5) * ts;
-      const cy = gy + (row - a.row + 0.5) * ts;
-      g.fillCircle(cx, cy, r);
+    // Same paintSeat glyph as placed tables, just with reduced alpha so it
+    // reads as "preview". Backrest points away from the table centre.
+    const tCx = a.col + w / 2;
+    const tCy = a.row + h / 2;
+    const seat = (col: number, row: number) => {
+      const px = gx + (col - a.col) * ts;
+      const py = gy + (row - a.row) * ts;
+      const dx = tCx - (col + 0.5);
+      const dy = tCy - (row + 0.5);
+      const len = Math.hypot(dx, dy);
+      const dxN = len > 0 ? dx / len : 0;
+      const dyN = len > 0 ? dy / len : 0;
+      paintSeat(g, px, py, ts, 0.6, dxN, dyN);
     };
     for (const side of playerSides) {
-      if (side === 'N')      for (let c = 0; c < w; c++) dot(a.col + c, a.row - 1);
-      else if (side === 'S') for (let c = 0; c < w; c++) dot(a.col + c, a.row + h);
-      else if (side === 'W') for (let r2 = 0; r2 < h; r2++) dot(a.col - 1, a.row + r2);
-      else                   for (let r2 = 0; r2 < h; r2++) dot(a.col + w, a.row + r2);
+      if (side === 'N')      for (let c = 0; c < w; c++) seat(a.col + c, a.row - 1);
+      else if (side === 'S') for (let c = 0; c < w; c++) seat(a.col + c, a.row + h);
+      else if (side === 'W') for (let r2 = 0; r2 < h; r2++) seat(a.col - 1, a.row + r2);
+      else                   for (let r2 = 0; r2 < h; r2++) seat(a.col + w, a.row + r2);
     }
   }
 
