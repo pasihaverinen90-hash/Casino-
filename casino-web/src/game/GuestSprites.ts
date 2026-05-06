@@ -4,19 +4,21 @@
 // scaled-down visual layer driven by aggregate state. Guests spawn at the
 // lobby, walk to a usage-weighted attraction's seat / interaction tile,
 // idle while "using" it, visit a few more attractions, then return to the
-// lobby and despawn. Movement uses simple axis stepping with wall-sliding
-// against non-walkable tiles — no pathfinding, intentional.
+// lobby and despawn.
 //
-// P2.1: targets are seat/use tiles only. For slots that's the chair tile
-// inside the footprint (walkable thanks to the is_seat flag); for tables
-// it's an open-floor tile on a player side; for wall services it's the
-// inward door tile. Dwell time per visit and visits-per-guest are scaled
-// up so the floor reads like an active casino, not a hallway.
+// P3B: movement is grid-aware. Each guest carries a tile-centre route from
+// its current tile to the target interaction tile, computed by BFS over
+// walkable tiles (see GuestRouter). Guests step orthogonally between tile
+// centres, so the floor reads like real navigation rather than a straight
+// drift toward the goal. If the path is broken mid-walk by a placement,
+// the guest reroutes; if rerouting fails, the existing stuck-recovery
+// cascade (clip → repick → exit → despawn) still applies.
 import Phaser from 'phaser';
 import * as GC from '../logic/GameConstants';
 import * as OV from '../logic/OperationalValidator';
 import * as PV from '../logic/PlacementValidator';
 import { gameState } from '../state/GameState';
+import { findRoute } from './GuestRouter';
 
 type GuestState = 'to_target' | 'idle' | 'to_exit';
 
@@ -55,6 +57,11 @@ interface Guest {
   // Walk-bob phase, advanced only while the guest is actually moving.
   // Initial value is randomised so the crowd doesn't bob in lockstep.
   phase : number;
+  // Remaining tile-centre waypoints toward the current target. Front of
+  // the array is the next waypoint to reach. Empty either right after a
+  // target change (will be filled by the next _stepGuest call) or when
+  // BFS has failed to find a path — the stuck cascade then takes over.
+  route : GC.Vec2[];
 }
 
 // Modestly fuller floor than the previous 12/0.06 setting. Caps the
@@ -74,7 +81,7 @@ const BOB_RATE_RAD       = 8.0;
 // order; each tier resets `stuck` so the next gets a clean window. The
 // outer despawn tier protects against everything else by teleporting the
 // guest onto its exit so the per-tick despawn check removes it.
-//   T1 — clip through obstacles toward the current target.
+//   T1 — clip-beeline straight to the target through obstacles.
 //   T2 — re-pick a target (current attraction may have just been demolished).
 //   T3 — give up on attractions and head for the exit.
 //   T4 — last resort: snap to the exit so we can never have a permanently
@@ -149,28 +156,28 @@ export class GuestSprites {
       return;
     }
 
-    // Recovery tiers, checked before movement so a guest that has been
-    // stuck for a while always escalates instead of looping on the same
-    // failed step. Tier 1 (clipping) is folded into _walkable below.
+    // Recovery escalation, checked before movement so a fully blocked
+    // target can't pin the guest indefinitely.
     if (g.stuck >= STUCK_DESPAWN_SEC) {
-      // Last resort: snap onto the exit so the next _stepLogic iteration
-      // despawns this guest. Prevents permanent freeze under any pathological
-      // layout, including fully enclosed pockets.
-      g.col = g.exitCol; g.row = g.exitRow;
-      g.tCol = g.exitCol; g.tRow = g.exitRow;
+      // T4: snap to exit; the per-tick despawn check then removes us.
+      g.col   = g.exitCol; g.row = g.exitRow;
+      g.tCol  = g.exitCol; g.tRow = g.exitRow;
       g.state = 'to_exit';
+      g.route = [];
       return;
     }
     if (g.state === 'to_target' && g.stuck >= STUCK_EXIT_SEC) {
+      // T3: give up on attractions, head for the exit.
       g.state   = 'to_exit';
       g.tCol    = g.exitCol;
       g.tRow    = g.exitRow;
       g.curKind = null;
+      g.route   = findRoute(gameState.tiles, g.col, g.row, g.tCol, g.tRow) ?? [];
       g.stuck   = 0;
       return;
     }
     if (g.state === 'to_target' && g.stuck >= STUCK_REPICK_SEC) {
-      // Try a different attraction first — the current target tile may
+      // T2: try a different attraction first — the current target tile may
       // have been demolished, blocked, or just had its open-floor approach
       // built over. Falling back to exit is fine if no attractions remain.
       const alt = this._pickInteractionTile();
@@ -184,65 +191,77 @@ export class GuestSprites {
         g.tRow    = g.exitRow;
         g.curKind = null;
       }
+      g.route = findRoute(gameState.tiles, g.col, g.row, g.tCol, g.tRow) ?? [];
       g.stuck = 0;
       return;
     }
 
-    const step = WALK_TILES_PER_SEC * dt;
-    const dx   = g.tCol - g.col;
-    const dy   = g.tRow - g.row;
-    const dist = Math.hypot(dx, dy);
-    if (dist <= step) {
-      // Snap to target, even if the final tile is the interaction slot.
-      // Update facing first so the head lean reflects the final approach.
-      if (dist > 1e-4) { g.dirX = dx / dist; g.dirY = dy / dist; }
-      g.col = g.tCol;
-      g.row = g.tRow;
-      g.stuck = 0;
-      this._onArrive(g);
-      return;
-    }
-
-    // Try to advance with wall-sliding so guests don't visibly cross
-    // through placed objects. Larger axis goes first so motion reads
-    // straight when unobstructed.
-    const wantCol = g.col + (dx / dist) * step;
-    const wantRow = g.row + (dy / dist) * step;
-    const xFirst  = Math.abs(dx) >= Math.abs(dy);
     const allowClip = g.stuck >= STUCK_BYPASS_SEC;
+    const step      = WALK_TILES_PER_SEC * dt;
 
-    const oldCol = g.col, oldRow = g.row;
-    if (this._walkable(wantCol, wantRow, allowClip)) {
-      g.col = wantCol; g.row = wantRow;
-    } else if (xFirst && this._walkable(wantCol, g.row, allowClip)) {
-      g.col = wantCol;
-    } else if (!xFirst && this._walkable(g.col, wantRow, allowClip)) {
-      g.row = wantRow;
-    } else if (xFirst && this._walkable(g.col, wantRow, allowClip)) {
-      g.row = wantRow;
-    } else if (!xFirst && this._walkable(wantCol, g.row, allowClip)) {
-      g.col = wantCol;
+    // Pick a destination for this step. Prefer the next route waypoint;
+    // if the route is empty, try BFS once more in case the world cleared;
+    // if BFS still fails and we're past the bypass window, beeline to the
+    // target through obstacles so a temporary block can't freeze us mid-floor.
+    let destX: number;
+    let destY: number;
+    let onRoute = g.route.length > 0;
+    if (!onRoute) {
+      g.route = findRoute(gameState.tiles, g.col, g.row, g.tCol, g.tRow) ?? [];
+      onRoute = g.route.length > 0;
+    }
+    if (onRoute) {
+      destX = g.route[0].x;
+      destY = g.route[0].y;
+    } else if (allowClip) {
+      destX = g.tCol;
+      destY = g.tRow;
+    } else {
+      g.stuck += dt;
+      return;
     }
 
-    // Track stuck on actual position delta, not on which conditional fired.
-    // The earlier "moved = true" inside the branches could lie when, e.g.,
-    // dy == 0 and the row-fallback assigned `g.row = wantRow` with
-    // wantRow == g.row — the guest hadn't actually moved but stuck reset to
-    // zero, so allowClip never engaged and the guest froze permanently.
-    const moved = g.col !== oldCol || g.row !== oldRow;
-    g.stuck = moved ? 0 : g.stuck + dt;
+    const dx   = destX - g.col;
+    const dy   = destY - g.row;
+    const dist = Math.hypot(dx, dy);
 
-    if (moved) {
-      const dCol = g.col - oldCol;
-      const dRow = g.row - oldRow;
-      const dLen = Math.hypot(dCol, dRow);
-      if (dLen > 1e-4) {
-        g.dirX = dCol / dLen;
-        g.dirY = dRow / dLen;
+    if (dist <= step) {
+      // Reach this waypoint. Snap, consume it, and let next frame pick up
+      // the following one (or trigger arrival if this was the target).
+      if (dist > 1e-4) { g.dirX = dx / dist; g.dirY = dy / dist; }
+      g.col = destX;
+      g.row = destY;
+      if (onRoute) g.route.shift();
+      g.stuck = 0;
+      if (g.route.length === 0 && this._near(g, g.tCol, g.tRow)) this._onArrive(g);
+      return;
+    }
+
+    // If the next route waypoint just became unwalkable (placed over
+    // mid-walk), reroute now. Skip in clip mode where we already accept
+    // crossing obstacles.
+    if (onRoute && !allowClip) {
+      const tCol = Math.floor(destX);
+      const tRow = Math.floor(destY);
+      if (!PV.isWalkable(gameState.tiles, tCol, tRow)) {
+        const nr = findRoute(gameState.tiles, g.col, g.row, g.tCol, g.tRow);
+        if (nr && nr.length > 0) {
+          g.route = nr;
+        } else {
+          g.stuck += dt;
+        }
+        return;
       }
-      // Advance walk-bob only while moving so idling guests sit still.
-      g.phase += dt * BOB_RATE_RAD;
     }
+
+    const ux = dx / dist;
+    const uy = dy / dist;
+    g.col += ux * step;
+    g.row += uy * step;
+    g.dirX = ux;
+    g.dirY = uy;
+    g.phase += dt * BOB_RATE_RAD;
+    g.stuck = 0;
   }
 
   // Decide what to do after an idle has finished: visit another attraction
@@ -252,20 +271,22 @@ export class GuestSprites {
     if (g.visitsLeft > 0) {
       const next = this._pickInteractionTile();
       if (next) {
-        g.tCol = next.tile.x + 0.5;
-        g.tRow = next.tile.y + 0.5;
+        g.tCol    = next.tile.x + 0.5;
+        g.tRow    = next.tile.y + 0.5;
         g.curKind = next.kind;
-        g.state = 'to_target';
+        g.state   = 'to_target';
         g.visitsLeft--;
-        g.stuck = 0;
+        g.route   = findRoute(gameState.tiles, g.col, g.row, g.tCol, g.tRow) ?? [];
+        g.stuck   = 0;
         return;
       }
     }
-    g.state = 'to_exit';
-    g.tCol  = g.exitCol;
-    g.tRow  = g.exitRow;
+    g.state   = 'to_exit';
+    g.tCol    = g.exitCol;
+    g.tRow    = g.exitRow;
     g.curKind = null;
-    g.stuck = 0;
+    g.route   = findRoute(gameState.tiles, g.col, g.row, g.tCol, g.tRow) ?? [];
+    g.stuck   = 0;
   }
 
   private _onArrive(g: Guest): void {
@@ -285,31 +306,22 @@ export class GuestSprites {
     return Math.hypot(g.col - c, g.row - r) < 0.05;
   }
 
-  // Walkable for guest movement: open floor, lobby, or a slot's chair tile
-  // (the chair is occupied by the slot, but the guest is meant to stand on
-  // it). `allowClip` lets a stuck guest punch through obstacles so a layout
-  // change can never permanently strand them.
-  private _walkable(col: number, row: number, allowClip: boolean): boolean {
-    if (allowClip) return true;
-    const tc = Math.floor(col);
-    const tr = Math.floor(row);
-    return PV.isWalkable(gameState.tiles, tc, tr);
-  }
-
   // ── Spawn ─────────────────────────────────────────────────────────────────
 
   private _spawn(): Guest | null {
     const target = this._pickInteractionTile();
     if (!target) return null;
     const exit = this._lobbySpawn();
+    const tCol = target.tile.x + 0.5;
+    const tRow = target.tile.y + 0.5;
     // Slight per-guest skin-tone variation around a warm base tone — keeps
     // heads recognisable while breaking up uniform crowds. ±0x18 per channel.
     const headJitter = (Math.floor(Math.random() * 7) - 3) * 0x080808;
     return {
       col   : exit.col,
       row   : exit.row,
-      tCol  : target.tile.x + 0.5,
-      tRow  : target.tile.y + 0.5,
+      tCol,
+      tRow,
       exitCol: exit.col,
       exitRow: exit.row,
       state : 'to_target',
@@ -326,6 +338,7 @@ export class GuestSprites {
       dirY  : -1,
       // Random initial phase so the crowd's bobs don't synchronise.
       phase : Math.random() * Math.PI * 2,
+      route : findRoute(gameState.tiles, exit.col, exit.row, tCol, tRow) ?? [],
     };
   }
 
