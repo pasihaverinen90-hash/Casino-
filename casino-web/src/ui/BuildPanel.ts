@@ -17,10 +17,8 @@ const OBJ_TYPES = [
 const THUMB_PX = 56;
 
 export class BuildPanel {
-  private el         : HTMLElement;
-  private itemGrid   : HTMLElement;
-  private btnDemolish: HTMLButtonElement;
-  private demolishing = false;
+  private el       : HTMLElement;
+  private itemGrid : HTMLElement;
 
   constructor(parent: HTMLElement) {
     this.el = document.createElement('div');
@@ -28,23 +26,20 @@ export class BuildPanel {
     this.el.style.height = '360px';
 
     // ── Title row ──────────────────────────────────────────────────────────
+    // P3B UX: demolish has moved out to the bottom bar so it can run with
+    // every panel closed. The build panel now only opens placements.
     const titleRow = document.createElement('div');
     titleRow.className = 'panel-title';
 
     const title = document.createElement('h3');
     title.textContent = 'BUILD';
 
-    this.btnDemolish = document.createElement('button');
-    this.btnDemolish.className   = 'demolish-btn';
-    this.btnDemolish.textContent = '🗑 Demolish';
-    this.btnDemolish.onclick     = () => this._toggleDemolish();
-
     const btnClose = document.createElement('button');
     btnClose.className   = 'panel-close';
     btnClose.textContent = '✕';
     btnClose.onclick     = () => this.close();
 
-    titleRow.append(title, this.btnDemolish, btnClose);
+    titleRow.append(title, btnClose);
 
     // ── Scroll area ────────────────────────────────────────────────────────
     const scroll = document.createElement('div');
@@ -61,23 +56,17 @@ export class BuildPanel {
 
     gameState.on('state_changed', () => this._refreshButtons());
 
-    // When placement is confirmed or cancelled, exit demolish mode too
-    uiBus.on('placement_confirmed',  () => this.close());
-    uiBus.on('placement_cancelled',  () => this.open());
-    uiBus.on('demolish_cancelled',  () => {
-      this.demolishing = false;
-      this.btnDemolish.classList.remove('active');
-    });
+    // Hide the panel during placement; reopen it when the user cancels.
+    uiBus.on('placement_confirmed', () => this.close());
+    uiBus.on('placement_cancelled', () => this.open());
   }
 
   open(): void {
-    this._resetDemolish();
     this._refreshButtons();
     this.el.classList.remove('hidden');
   }
 
   close(): void {
-    this._resetDemolish();
     this.el.classList.add('hidden');
   }
 
@@ -177,17 +166,6 @@ export class BuildPanel {
     this.el.parentElement!.appendChild(overlay);
   }
 
-  private _toggleDemolish(): void {
-    this.demolishing = !this.demolishing;
-    this.btnDemolish.classList.toggle('active', this.demolishing);
-    uiBus.emit('toggle_demolish', this.demolishing);
-  }
-
-  private _resetDemolish(): void {
-    this.demolishing = false;
-    this.btnDemolish.classList.remove('active');
-    uiBus.emit('toggle_demolish', false);
-  }
 }
 
 function _sizeLabel(def: GC.ObjDef): string {

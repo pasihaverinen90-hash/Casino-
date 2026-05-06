@@ -77,15 +77,29 @@ startScreen.show();
 const bottomBar = new BottomBar(uiRoot, {
   onBuild: () => {
     hotelPanel.close(); statsPanel.close(); goalsPanel.close();
+    uiBus.emit('toggle_demolish', false);
     buildPanel.open();
   },
   onHotel: () => {
     buildPanel.close(); statsPanel.close(); goalsPanel.close();
+    uiBus.emit('toggle_demolish', false);
     hotelPanel.open();
   },
   onStats: () => {
     buildPanel.close(); hotelPanel.close(); goalsPanel.close();
+    uiBus.emit('toggle_demolish', false);
     statsPanel.open();
+  },
+  onDemolish: (active: boolean) => {
+    if (active) {
+      // Demolish takes the floor — close every overlay so the player can
+      // click anywhere on the grid, and drop any in-progress placement.
+      buildPanel.close(); hotelPanel.close(); statsPanel.close(); goalsPanel.close();
+      uiBus.emit('exit_placement');
+      uiBus.emit('toggle_demolish', true);
+    } else {
+      uiBus.emit('toggle_demolish', false);
+    }
   },
   onSave: () => {
     if (gameState.save()) gameState.emit('toast_requested', '✓ Game saved');
@@ -186,6 +200,11 @@ document.addEventListener('keydown', e => {
     case 'S':
       buildPanel.close(); hotelPanel.close(); goalsPanel.close();
       bottomBar.pressButton('stats');
+      break;
+
+    case 'd':
+    case 'D':
+      bottomBar.pressDemolish();
       break;
 
     case 'g':
