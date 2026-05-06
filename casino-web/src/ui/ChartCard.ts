@@ -1,26 +1,49 @@
-// ChartCard.ts — canvas-based line chart, port of ChartCard.gd
+// ChartCard.ts — canvas-based line chart with DOM-rendered title + current
+// value. The current value used to be painted inside the canvas; moving it
+// to a real <span> means it can carry units (€, %), wrap correctly on
+// narrow screens, and be selectable.
+
+export type ChartValueFmt = (v: number) => string;
+
 export class ChartCard {
   private canvas: HTMLCanvasElement;
   private ctx   : CanvasRenderingContext2D;
+  private valueEl: HTMLSpanElement;
   readonly title: string;
   private lineColor: string;
+  private fmtValue: ChartValueFmt;
 
-  constructor(parent: HTMLElement, title: string, lineColor: string) {
+  constructor(
+    parent: HTMLElement,
+    title: string,
+    lineColor: string,
+    fmtValue: ChartValueFmt = (v) => (v < 100 ? v.toFixed(1) : String(Math.round(v))),
+  ) {
     this.title     = title;
     this.lineColor = lineColor;
+    this.fmtValue  = fmtValue;
 
     const wrapper = document.createElement('div');
     wrapper.className = 'chart-card';
+
+    const head = document.createElement('div');
+    head.className = 'chart-head';
 
     const label = document.createElement('div');
     label.className   = 'chart-label';
     label.textContent = title;
 
+    this.valueEl = document.createElement('span');
+    this.valueEl.className = 'chart-value';
+    this.valueEl.textContent = '—';
+
+    head.append(label, this.valueEl);
+
     this.canvas        = document.createElement('canvas');
     this.canvas.height = 160;
     // Width set dynamically on first draw
 
-    wrapper.append(label, this.canvas);
+    wrapper.append(head, this.canvas);
     parent.appendChild(wrapper);
 
     this.ctx = this.canvas.getContext('2d')!;
@@ -43,14 +66,11 @@ export class ChartCard {
     ctx.lineWidth = 1;
     ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
 
-    // Current value top-right
+    // Current value goes to the DOM header span, not into the canvas.
     if (values.length > 0) {
-      const cur  = values[values.length - 1];
-      const text = cur < 100 ? cur.toFixed(1) : String(Math.round(cur));
-      ctx.fillStyle = '#fff';
-      ctx.font      = '12px -apple-system, sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText(text, w - 6, 18);
+      this.valueEl.textContent = this.fmtValue(values[values.length - 1]);
+    } else {
+      this.valueEl.textContent = '—';
     }
 
     if (values.length === 0) {
@@ -61,7 +81,7 @@ export class ChartCard {
       return;
     }
 
-    const mTop    = 26;
+    const mTop    = 14;
     const mBottom = 22;
     const mSide   = 8;
     const cW      = w - mSide * 2;

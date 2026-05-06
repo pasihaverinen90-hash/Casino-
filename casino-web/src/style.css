@@ -235,6 +235,18 @@ body {
 
 .panel-close:active { background: rgba(255,255,255,0.12); }
 
+/* Larger close target on the full-screen Stats / Goals panels — easier to
+   tap on mobile than the compact 28px variant used on small popups. */
+.stats-panel .panel-close,
+.goals-panel .panel-close {
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+  color: #c8cce0;
+  border-color: #3a4060;
+  background: rgba(255,255,255,0.08);
+}
+
 .panel-scroll {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -373,16 +385,18 @@ body {
 
 .tab-btn {
   flex: 1;
-  padding: 11px;
+  padding: 15px 12px;
   background: none;
   border: none;
-  color: #5a6080;
-  font-size: 13px;
+  color: #7a8098;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   border-bottom: 2px solid transparent;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
+
+.tab-btn:active { background: rgba(255,255,255,0.04); }
 
 .tab-btn.active {
   color: #e0e4f4;
@@ -392,20 +406,38 @@ body {
 .stat-row {
   display: flex;
   justify-content: space-between;
-  padding: 5px 0;
+  align-items: baseline;
+  gap: 12px;
+  padding: 7px 0;
   border-bottom: 1px solid #131620;
-  color: #aab0cc;
-  font-size: 13px;
-  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #c0c5d8;
+  font-size: 14px;
 }
+
+.stat-row .k { color: #8a90a8; }
+.stat-row .v { color: #e0e4f4; font-variant-numeric: tabular-nums; text-align: right; }
+
+.stat-row.bold .v { font-weight: 700; color: #fff; }
+.stat-row.indent .k { padding-left: 14px; color: #6a7090; font-size: 13px; }
+.stat-row.indent .v { color: #aab0cc; font-size: 13px; }
 
 .stat-row.header {
   color: #5a6080;
-  font-size: 10px;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin-top: 10px;
-  font-family: inherit;
+  letter-spacing: 0.1em;
+  margin-top: 14px;
+  border-bottom: none;
+  padding-bottom: 2px;
+  font-weight: 700;
+}
+
+.stats-empty {
+  color: #6a7090;
+  font-size: 13px;
+  text-align: center;
+  padding: 20px 8px;
+  font-style: italic;
 }
 
 /* ── Goals panel ─────────────────────────────────────────────────────────── */
@@ -454,7 +486,15 @@ body {
 
 /* ── Chart card ──────────────────────────────────────────────────────────── */
 .chart-card {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
+}
+
+.chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
 }
 
 .chart-label {
@@ -463,7 +503,13 @@ body {
   color: #5a6080;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  margin-bottom: 6px;
+}
+
+.chart-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e0e4f4;
+  font-variant-numeric: tabular-nums;
 }
 
 .chart-card canvas {

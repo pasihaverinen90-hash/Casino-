@@ -1,6 +1,9 @@
 // TopHUD.ts — persistent top strip: Rating | Guests | Cash | Day · Clock
 import { gameState } from '../state/GameState';
 import { fmtClock, time } from '../state/TimeController';
+import { fmtCash } from './format';
+
+export { fmtCash };
 
 export class TopHUD {
   private lblRating: HTMLElement;
@@ -44,9 +47,3 @@ function span(text: string): HTMLElement {
   return s;
 }
 
-export function fmtCash(v: number): string {
-  const n = Math.floor(v);
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1000) return `${Math.floor(n / 1000)},${String(n % 1000).padStart(3, '0')}`;
-  return String(n);
-}
