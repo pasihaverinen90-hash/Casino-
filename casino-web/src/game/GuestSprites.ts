@@ -44,8 +44,17 @@ interface Guest {
   // grace window we let the guest pass through obstacles so they
   // never get permanently pinned by a layout change.
   stuck : number;
-  // Subtle per-guest tint variation so the crowd doesn't look uniform.
+  // Subtle per-guest body tint variation so the crowd doesn't look uniform.
   tint  : number;
+  // Skin tone for the head — small per-guest variation around a base.
+  headTint: number;
+  // Last movement direction (unit vector). Drives a tiny head-lean cue so
+  // walking guests visibly face where they're going.
+  dirX  : number;
+  dirY  : number;
+  // Walk-bob phase, advanced only while the guest is actually moving.
+  // Initial value is randomised so the crowd doesn't bob in lockstep.
+  phase : number;
 }
 
 // Modestly fuller floor than the previous 12/0.06 setting. Caps the
@@ -53,11 +62,27 @@ interface Guest {
 // against the aggregate guests/day.
 const MAX_VISIBLE        = 24;
 const VISIBLE_PER_GUEST  = 0.10;
-const WALK_TILES_PER_SEC = 2.5;
-// If a guest can't advance on either axis for this many in-game seconds,
-// allow non-walkable movement until they make progress again. Keeps
-// pathological layouts from freezing the crowd.
+// Calmer casual-walk pace. Previously 2.5 (≈ particle-fast). At 1× speed
+// (1 real-sec = 1 game-sec) this is one tile per real second, which reads
+// as a person strolling rather than darting around. Speed scaling via
+// dtGame in update() still cleanly multiplies this by 0/1/2/4×.
+const WALK_TILES_PER_SEC = 1.0;
+// Walk-bob frequency in radians/sec (game time). ~1.27 Hz feels like a
+// gentle stride when paired with WALK_TILES_PER_SEC.
+const BOB_RATE_RAD       = 8.0;
+// Stuck-recovery escalation. A guest in `to_target` walks the tiers in
+// order; each tier resets `stuck` so the next gets a clean window. The
+// outer despawn tier protects against everything else by teleporting the
+// guest onto its exit so the per-tick despawn check removes it.
+//   T1 — clip through obstacles toward the current target.
+//   T2 — re-pick a target (current attraction may have just been demolished).
+//   T3 — give up on attractions and head for the exit.
+//   T4 — last resort: snap to the exit so we can never have a permanently
+//        inert guest visible on the floor.
 const STUCK_BYPASS_SEC   = 1.2;
+const STUCK_REPICK_SEC   = 4.0;
+const STUCK_EXIT_SEC     = 8.0;
+const STUCK_DESPAWN_SEC  = 12.0;
 
 // Per-attraction dwell range, in game-seconds. At 1× speed 1 game-second
 // equals 1 real second, and 1 in-game hour spans 4 real seconds, so the
@@ -124,12 +149,53 @@ export class GuestSprites {
       return;
     }
 
+    // Recovery tiers, checked before movement so a guest that has been
+    // stuck for a while always escalates instead of looping on the same
+    // failed step. Tier 1 (clipping) is folded into _walkable below.
+    if (g.stuck >= STUCK_DESPAWN_SEC) {
+      // Last resort: snap onto the exit so the next _stepLogic iteration
+      // despawns this guest. Prevents permanent freeze under any pathological
+      // layout, including fully enclosed pockets.
+      g.col = g.exitCol; g.row = g.exitRow;
+      g.tCol = g.exitCol; g.tRow = g.exitRow;
+      g.state = 'to_exit';
+      return;
+    }
+    if (g.state === 'to_target' && g.stuck >= STUCK_EXIT_SEC) {
+      g.state   = 'to_exit';
+      g.tCol    = g.exitCol;
+      g.tRow    = g.exitRow;
+      g.curKind = null;
+      g.stuck   = 0;
+      return;
+    }
+    if (g.state === 'to_target' && g.stuck >= STUCK_REPICK_SEC) {
+      // Try a different attraction first — the current target tile may
+      // have been demolished, blocked, or just had its open-floor approach
+      // built over. Falling back to exit is fine if no attractions remain.
+      const alt = this._pickInteractionTile();
+      if (alt) {
+        g.tCol    = alt.tile.x + 0.5;
+        g.tRow    = alt.tile.y + 0.5;
+        g.curKind = alt.kind;
+      } else {
+        g.state   = 'to_exit';
+        g.tCol    = g.exitCol;
+        g.tRow    = g.exitRow;
+        g.curKind = null;
+      }
+      g.stuck = 0;
+      return;
+    }
+
     const step = WALK_TILES_PER_SEC * dt;
     const dx   = g.tCol - g.col;
     const dy   = g.tRow - g.row;
     const dist = Math.hypot(dx, dy);
     if (dist <= step) {
       // Snap to target, even if the final tile is the interaction slot.
+      // Update facing first so the head lean reflects the final approach.
+      if (dist > 1e-4) { g.dirX = dx / dist; g.dirY = dy / dist; }
       g.col = g.tCol;
       g.row = g.tRow;
       g.stuck = 0;
@@ -145,20 +211,38 @@ export class GuestSprites {
     const xFirst  = Math.abs(dx) >= Math.abs(dy);
     const allowClip = g.stuck >= STUCK_BYPASS_SEC;
 
-    let moved = false;
+    const oldCol = g.col, oldRow = g.row;
     if (this._walkable(wantCol, wantRow, allowClip)) {
-      g.col = wantCol; g.row = wantRow; moved = true;
+      g.col = wantCol; g.row = wantRow;
     } else if (xFirst && this._walkable(wantCol, g.row, allowClip)) {
-      g.col = wantCol; moved = true;
+      g.col = wantCol;
     } else if (!xFirst && this._walkable(g.col, wantRow, allowClip)) {
-      g.row = wantRow; moved = true;
+      g.row = wantRow;
     } else if (xFirst && this._walkable(g.col, wantRow, allowClip)) {
-      g.row = wantRow; moved = true;
+      g.row = wantRow;
     } else if (!xFirst && this._walkable(wantCol, g.row, allowClip)) {
-      g.col = wantCol; moved = true;
+      g.col = wantCol;
     }
 
+    // Track stuck on actual position delta, not on which conditional fired.
+    // The earlier "moved = true" inside the branches could lie when, e.g.,
+    // dy == 0 and the row-fallback assigned `g.row = wantRow` with
+    // wantRow == g.row — the guest hadn't actually moved but stuck reset to
+    // zero, so allowClip never engaged and the guest froze permanently.
+    const moved = g.col !== oldCol || g.row !== oldRow;
     g.stuck = moved ? 0 : g.stuck + dt;
+
+    if (moved) {
+      const dCol = g.col - oldCol;
+      const dRow = g.row - oldRow;
+      const dLen = Math.hypot(dCol, dRow);
+      if (dLen > 1e-4) {
+        g.dirX = dCol / dLen;
+        g.dirY = dRow / dLen;
+      }
+      // Advance walk-bob only while moving so idling guests sit still.
+      g.phase += dt * BOB_RATE_RAD;
+    }
   }
 
   // Decide what to do after an idle has finished: visit another attraction
@@ -218,6 +302,9 @@ export class GuestSprites {
     const target = this._pickInteractionTile();
     if (!target) return null;
     const exit = this._lobbySpawn();
+    // Slight per-guest skin-tone variation around a warm base tone — keeps
+    // heads recognisable while breaking up uniform crowds. ±0x18 per channel.
+    const headJitter = (Math.floor(Math.random() * 7) - 3) * 0x080808;
     return {
       col   : exit.col,
       row   : exit.row,
@@ -233,6 +320,12 @@ export class GuestSprites {
       visitsLeft: 2 + Math.floor(Math.random() * 3),
       stuck : 0,
       tint  : 0xffe28a + Math.floor(Math.random() * 0x40) * 0x010101,
+      headTint: 0xead0a8 + headJitter,
+      // Default facing north, away from the lobby (south of the floor).
+      dirX  : 0,
+      dirY  : -1,
+      // Random initial phase so the crowd's bobs don't synchronise.
+      phase : Math.random() * Math.PI * 2,
     };
   }
 
@@ -292,19 +385,44 @@ export class GuestSprites {
     const g = this.gfx;
     g.clear();
     if (this.guests.length === 0 || ts < 8) return;
-    const r = Math.max(2, Math.round(ts * 0.22));
+
+    // Per-tile-size proportions. All values floor at small minimums so
+    // guests stay legible at the smallest zoom levels.
+    const headR = Math.max(2, ts * 0.16);
+    const bodyW = Math.max(3, Math.round(ts * 0.36));
+    const bodyH = Math.max(3, Math.round(ts * 0.32));
+    const bobAmp = Math.max(0.5, ts * 0.06);
+    const lean   = Math.max(0.6, ts * 0.07);
+
     for (const guest of this.guests) {
       const x = baseX + guest.col * ts;
       const y = baseY + guest.row * ts;
-      // Soft shadow.
-      g.fillStyle(0x000000, 0.35);
-      g.fillCircle(x, y + Math.max(1, r * 0.45), Math.max(1, r * 0.7));
-      // Body.
+      const moving = guest.state !== 'idle';
+      const bob    = moving ? Math.sin(guest.phase) * bobAmp : 0;
+
+      // Soft elongated shadow under the feet — gives the guest weight on
+      // the floor and helps them read against the carpet/lobby tones.
+      g.fillStyle(0x000000, 0.32);
+      g.fillEllipse(x, y + bodyH * 0.45, bodyW * 1.05, Math.max(2, bodyH * 0.45));
+
+      // Torso — rounded-rect "shoulders" silhouette in the guest's tint.
+      // Bobs by a fraction of the head bob so the body weight feels grounded.
+      const torsoX = x - bodyW / 2;
+      const torsoY = y - bodyH * 0.18 + bob * 0.35;
       g.fillStyle(guest.tint, 1);
-      g.fillCircle(x, y, r);
-      // Subtle highlight.
-      g.fillStyle(0xffffff, 0.35);
-      g.fillCircle(x - r * 0.3, y - r * 0.3, Math.max(1, r * 0.35));
+      g.fillRoundedRect(torsoX, torsoY, bodyW, bodyH, Math.max(1, bodyW * 0.42));
+
+      // Head — leans toward the direction of travel so even a tiny dot
+      // sells "this person is heading that way".
+      const hx = x + guest.dirX * lean;
+      const hy = y - bodyH * 0.45 + bob;
+      g.fillStyle(guest.headTint, 1);
+      g.fillCircle(hx, hy, headR);
+
+      // Catch-light dot on the upper-left of the head — pure procedural,
+      // but it gives the head a subtle 3D feel without any asset cost.
+      g.fillStyle(0xffffff, 0.30);
+      g.fillCircle(hx - headR * 0.3, hy - headR * 0.35, Math.max(1, headR * 0.35));
     }
   }
 }

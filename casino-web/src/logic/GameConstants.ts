@@ -215,6 +215,8 @@ export function dimsFor(type: ObjType, facing: Orientation): { w: number; h: num
 
 // Slot machine footprint split into its two cells. `seat` is the chair the
 // guest stands on; `machine` is the cabinet. Coordinates are absolute tiles.
+// (col, row) is the bounds top-left — what's stored on PlacedObj — so this
+// helper is symmetric with `computeFootprint(col, row, w, h)`.
 //   facing = direction the chair sits relative to the cabinet
 //   N: chair north of cabinet ; S: chair south
 //   E: chair east of cabinet  ; W: chair west
@@ -225,6 +227,23 @@ export function slotParts(col: number, row: number, facing: Orientation):
     case 'S': return { machine: { x: col, y: row     }, seat:    { x: col,     y: row + 1 } };
     case 'E': return { machine: { x: col, y: row     }, seat:    { x: col + 1, y: row     } };
     case 'W': return { seat:    { x: col, y: row     }, machine: { x: col + 1, y: row     } };
+  }
+}
+
+// Convert a slot's cursor tile (where the player wants the *cabinet*) to
+// the bounds top-left used by storage and validation. The cabinet stays
+// fixed under the cursor across rotations; only the chair rotates around
+// it. P2.2 anchor fix.
+export function slotAnchorFromCursor(
+  cursorCol: number, cursorRow: number, facing: Orientation,
+): Vec2 {
+  switch (facing) {
+    // chair north of cabinet → bounds top-left is one tile above the cursor
+    case 'N': return { x: cursorCol,     y: cursorRow - 1 };
+    case 'S': return { x: cursorCol,     y: cursorRow     };
+    case 'E': return { x: cursorCol,     y: cursorRow     };
+    // chair west of cabinet → bounds top-left is one tile left of the cursor
+    case 'W': return { x: cursorCol - 1, y: cursorRow     };
   }
 }
 

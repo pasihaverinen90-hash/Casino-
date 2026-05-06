@@ -225,7 +225,8 @@ export class GridScene extends Phaser.Scene {
     if (!coord) return;
 
     if (this.placing) {
-      const ok = gameState.tryPlace(coord.col, coord.row, this.placeType as GC.ObjType, this.placeFacing, this.placeVar);
+      const a = this._placeAnchor(coord.col, coord.row);
+      const ok = gameState.tryPlace(a.col, a.row, this.placeType as GC.ObjType, this.placeFacing, this.placeVar);
       if (ok) {
         // Ctrl-click keeps placement mode open for repeat placements.
         const ev   = ptr.event as MouseEvent | PointerEvent | undefined;
@@ -264,11 +265,24 @@ export class GridScene extends Phaser.Scene {
 
   private _revalidateGhost(): void {
     if (this.ghostCol < 0) return;
+    const a = this._placeAnchor(this.ghostCol, this.ghostRow);
     const result = PV.validate(
-      { type: this.placeType as GC.ObjType, col: this.ghostCol, row: this.ghostRow, facing: this.placeFacing },
+      { type: this.placeType as GC.ObjType, col: a.col, row: a.row, facing: this.placeFacing },
       gameState.tiles, gameState.cash, gameState.barExists,
     );
     this.ghostOk = result === GC.ValResult.VALID;
+  }
+
+  // Convert a cursor tile to the placement bounds top-left that storage and
+  // validation expect. For slots the cursor is the cabinet tile and rotates
+  // the chair around it (P2.2). For everything else the cursor already is
+  // the bounds top-left.
+  private _placeAnchor(curCol: number, curRow: number): { col: number; row: number } {
+    if (this.placeType === GC.ObjType.SLOT_MACHINE) {
+      const tl = GC.slotAnchorFromCursor(curCol, curRow, this.placeFacing);
+      return { col: tl.x, row: tl.y };
+    }
+    return { col: curCol, row: curRow };
   }
 
   // ── Mouse-wheel zoom ───────────────────────────────────────────────────────
@@ -401,11 +415,13 @@ export class GridScene extends Phaser.Scene {
     // 3. Placement ghost — render the actual shape under a green/red tint
     // and a colored frame, so rotation and footprint read instantly. The
     // shape is drawn with the current facing so the cabinet/chair split
-    // and the table dealer band rotate live with R / right-click.
+    // and the table dealer band rotate live with R / right-click. For
+    // slots the cabinet stays under the cursor and only the chair rotates.
     if (this.placing && this.ghostCol >= 0) {
       const { w, h } = GC.dimsFor(this.placeType as GC.ObjType, this.placeFacing);
-      const gx  = baseX + this.ghostCol * ts;
-      const gy  = baseY + this.ghostRow * ts;
+      const a   = this._placeAnchor(this.ghostCol, this.ghostRow);
+      const gx  = baseX + a.col * ts;
+      const gy  = baseY + a.row * ts;
 
       paintObject(
         g, this.placeType as GC.ObjType, gx, gy, w * ts, h * ts,
@@ -456,10 +472,11 @@ export class GridScene extends Phaser.Scene {
     g: Phaser.GameObjects.Graphics, gx: number, gy: number, ts: number,
   ): void {
     const t = this.placeType as GC.ObjType;
+    const a = this._placeAnchor(this.ghostCol, this.ghostRow);
     if (t === GC.ObjType.SLOT_MACHINE) {
-      const { seat } = GC.slotParts(this.ghostCol, this.ghostRow, this.placeFacing);
-      const cx = gx + (seat.x - this.ghostCol + 0.5) * ts;
-      const cy = gy + (seat.y - this.ghostRow + 0.5) * ts;
+      const { seat } = GC.slotParts(a.col, a.row, this.placeFacing);
+      const cx = gx + (seat.x - a.col + 0.5) * ts;
+      const cy = gy + (seat.y - a.row + 0.5) * ts;
       g.lineStyle(2, 0xffffff, 0.7);
       g.strokeCircle(cx, cy, Math.max(2, ts * 0.18));
       return;
@@ -471,15 +488,15 @@ export class GridScene extends Phaser.Scene {
     g.fillStyle(0xffffff, 0.55);
     const r = Math.max(2, ts * 0.16);
     const dot = (col: number, row: number) => {
-      const cx = gx + (col - this.ghostCol + 0.5) * ts;
-      const cy = gy + (row - this.ghostRow + 0.5) * ts;
+      const cx = gx + (col - a.col + 0.5) * ts;
+      const cy = gy + (row - a.row + 0.5) * ts;
       g.fillCircle(cx, cy, r);
     };
     for (const side of playerSides) {
-      if (side === 'N')      for (let c = 0; c < w; c++) dot(this.ghostCol + c, this.ghostRow - 1);
-      else if (side === 'S') for (let c = 0; c < w; c++) dot(this.ghostCol + c, this.ghostRow + h);
-      else if (side === 'W') for (let r2 = 0; r2 < h; r2++) dot(this.ghostCol - 1, this.ghostRow + r2);
-      else                   for (let r2 = 0; r2 < h; r2++) dot(this.ghostCol + w, this.ghostRow + r2);
+      if (side === 'N')      for (let c = 0; c < w; c++) dot(a.col + c, a.row - 1);
+      else if (side === 'S') for (let c = 0; c < w; c++) dot(a.col + c, a.row + h);
+      else if (side === 'W') for (let r2 = 0; r2 < h; r2++) dot(a.col - 1, a.row + r2);
+      else                   for (let r2 = 0; r2 < h; r2++) dot(a.col + w, a.row + r2);
     }
   }
 
