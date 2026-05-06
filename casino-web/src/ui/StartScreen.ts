@@ -102,6 +102,19 @@ export class StartScreen {
     };
     actions.appendChild(btnNew);
 
+    if (!summary.empty) {
+      const btnDelete = document.createElement('button');
+      btnDelete.className   = 'slot-btn danger';
+      btnDelete.textContent = 'Delete Save';
+      btnDelete.onclick     = () => this._confirmDelete(slot, () => {
+        Slots.deleteSlot(slot);
+        // Re-render the whole list so the freed slot drops back to its
+        // empty state and its action set (no Continue / Delete) refreshes.
+        this.show();
+      });
+      actions.appendChild(btnDelete);
+    }
+
     row.appendChild(actions);
     return row;
   }
@@ -138,6 +151,42 @@ export class StartScreen {
       onConfirm();
     };
     card.appendChild(btnOverwrite);
+
+    const btnCancel = document.createElement('button');
+    btnCancel.className   = 'modal-btn';
+    btnCancel.textContent = 'Cancel';
+    btnCancel.onclick     = () => overlay.remove();
+    card.appendChild(btnCancel);
+
+    overlay.appendChild(card);
+    this.el.appendChild(overlay);
+  }
+
+  private _confirmDelete(slot: number, onConfirm: () => void): void {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay interactive';
+
+    const card = document.createElement('div');
+    card.className = 'modal-card';
+
+    const title = document.createElement('div');
+    title.className   = 'modal-title';
+    title.textContent = `Delete Slot ${slot}?`;
+    card.appendChild(title);
+
+    const body = document.createElement('div');
+    body.className   = 'modal-body';
+    body.textContent = 'Saved progress will be permanently lost.';
+    card.appendChild(body);
+
+    const btnDelete = document.createElement('button');
+    btnDelete.className   = 'modal-btn danger';
+    btnDelete.textContent = 'Delete Save';
+    btnDelete.onclick     = () => {
+      overlay.remove();
+      onConfirm();
+    };
+    card.appendChild(btnDelete);
 
     const btnCancel = document.createElement('button');
     btnCancel.className   = 'modal-btn';

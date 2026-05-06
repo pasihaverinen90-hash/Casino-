@@ -718,6 +718,14 @@ body {
 
 .slot-btn.primary:hover { opacity: 0.9; }
 
+.slot-btn.danger {
+  background: rgba(180, 50, 50, 0.18);
+  border-color: rgba(220, 70, 70, 0.45);
+  color: #ff8888;
+}
+
+.slot-btn.danger:hover { background: rgba(220, 50, 50, 0.32); }
+
 .modal-body {
   font-size: 13px;
   color: #aab0cc;
