@@ -64,11 +64,14 @@ interface Guest {
   route : GC.Vec2[];
 }
 
-// Modestly fuller floor than the previous 12/0.06 setting. Caps the
-// visible crowd to keep draw + state cost bounded; the ratio scales it
-// against the aggregate guests/day.
-const MAX_VISIBLE        = 24;
-const VISIBLE_PER_GUEST  = 0.10;
+// Visible-crowd sizing. The ratio scales the aggregate guests/day down to
+// an on-screen population; the floor felt empty at 0.10, so we use a third
+// of demand. MIN keeps the floor from looking deserted while a few
+// attractions are running, MAX caps draw + state cost at busy times.
+// Effective formula: clamp(round(totalGuests / 3), MIN, MAX).
+const MIN_VISIBLE        = 10;
+const MAX_VISIBLE        = 36;
+const VISIBLE_PER_GUEST  = 1 / 3;
 // Calmer casual-walk pace. Previously 2.5 (≈ particle-fast). At 1× speed
 // (1 real-sec = 1 game-sec) this is one tile per real second, which reads
 // as a person strolling rather than darting around. Speed scaling via
@@ -130,7 +133,8 @@ export class GuestSprites {
 
   private _stepLogic(dtGame: number): void {
     // Population target — scaled-down representation of total demand.
-    const target = Math.max(0, Math.min(MAX_VISIBLE, Math.round(gameState.totalGuests * VISIBLE_PER_GUEST)));
+    const scaled = Math.round(gameState.totalGuests * VISIBLE_PER_GUEST);
+    const target = Math.min(MAX_VISIBLE, Math.max(MIN_VISIBLE, scaled));
     while (this.guests.length < target) {
       const g = this._spawn();
       if (!g) break; // no functional attractions yet
