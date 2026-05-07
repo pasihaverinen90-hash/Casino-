@@ -156,7 +156,13 @@ function isValidWallRun(
     if (c < 0 || c >= GC.GRID_COLS || r < 0 || r >= GC.GRID_ROWS) return false;
     const t = tiles[r * GC.GRID_COLS + c];
     if (t.tile_type !== GC.TileType.WALL) return false;
-    if (c === GC.LOBBY_START_COL || c === GC.LOBBY_END_COL) return false;
+    // Reserve the two entrance columns of the south wall only — they mark
+    // the player's path into the casino and must not be capped by a wall
+    // service. The guard must NOT apply to the north or side walls; doing
+    // so blocked top-wall placement at columns 15/20.
+    if (r === GC.GRID_ROWS - 1
+        && (c === GC.LOBBY_START_COL || c === GC.LOBBY_END_COL))
+      return false;
   }
   return true;
 }
