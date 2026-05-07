@@ -44,6 +44,11 @@ interface SavePayload {
   ch_rating   : number[];
   ch_occ      : number[];
   ch_cap      : number[];
+  // Goals V2: set true once the all-goals-complete popup has been shown and
+  // its bonus paid. Distinct from `completed.every(c)` so legacy saves that
+  // already finished (pre-Goals-V2) don't replay the popup or re-pay the
+  // bonus on load — `normalizeSave` defaults this to true for those.
+  endless_unlocked: boolean;
 }
 
 // Each migration upgrades a payload one version forward. New entries are
@@ -142,6 +147,14 @@ function normalizeSave(d: any): SavePayload {
     ch_rating   : Array.isArray(d.ch_rating) ? d.ch_rating : [],
     ch_occ      : Array.isArray(d.ch_occ)    ? d.ch_occ    : [],
     ch_cap      : Array.isArray(d.ch_cap)    ? d.ch_cap    : [],
+    // Default true for legacy saves where every goal was already complete —
+    // the field didn't exist then, so without this fallback the all-goals
+    // popup would replay on load and the bonus would be paid retroactively.
+    endless_unlocked: typeof d.endless_unlocked === 'boolean'
+      ? d.endless_unlocked
+      : (Array.isArray(d.completed)
+          && d.completed.length >= 10
+          && d.completed.every((c: any) => c === true)),
   };
 }
 
@@ -221,12 +234,20 @@ class GameState extends EventEmitter {
 
   // Progression
   dayNumber      = 1;
+  // Index of the first incomplete goal (or 10 once every goal is complete).
+  // Always derived from `completedGoals` after Goals V2 — kept as a public
+  // field because GoalTicker reads it to show the next-up goal. Goals can
+  // now complete in any order, so this is no longer a "current" pointer.
   activeGoal     = 0;
   completedGoals : boolean[] = [];
   // Day-of-completion for each goal. null = goal not yet completed, OR the
   // goal was already completed in a pre-1.5.0 save (legacy). The Stats
   // panel renders "Completed" rather than a day number for null entries.
   goalCompletedDays : (number | null)[] = [];
+  // True once every goal is complete and the all-goals-complete popup has
+  // been shown (and its one-shot bonus paid). Persists via save so the
+  // popup never replays on load. Player can keep playing forever after.
+  endlessUnlocked = false;
 
   // Stats history
   statsRecords  : GC.DayStats[] = [];
@@ -303,6 +324,7 @@ class GameState extends EventEmitter {
     this.dayNumber = 1; this.activeGoal = 0;
     this.completedGoals = Array(10).fill(false);
     this.goalCompletedDays = Array(10).fill(null);
+    this.endlessUnlocked = false;
     this._projection = null; this._paidToday = 0; this._hoursThisDay = 0;
     this.statsRecords = [];
     this.chartDays = []; this.chartGuests = []; this.chartRevenue = [];
@@ -596,20 +618,38 @@ class GameState extends EventEmitter {
 
   // ── Goal checking ─────────────────────────────────────────────────────────
 
+  // Goals V2: evaluate every incomplete goal independently. A goal completes
+  // as soon as its criteria are met regardless of which other goals are done.
+  // Already-completed goals are skipped so events never replay on load.
   private _checkGoals(): void {
-    if (this.activeGoal >= 10) return;
-    if (!this._isGoalMet(this.activeGoal)) return;
-    const idx    = this.activeGoal;
-    this.completedGoals[idx] = true;
-    if (this.goalCompletedDays[idx] == null) {
-      this.goalCompletedDays[idx] = this.dayNumber;
+    const newlyCompleted: number[] = [];
+    for (let idx = 0; idx < 10; idx++) {
+      if (this.completedGoals[idx]) continue;
+      if (!this._isGoalMet(idx)) continue;
+      this.completedGoals[idx] = true;
+      if (this.goalCompletedDays[idx] == null) {
+        this.goalCompletedDays[idx] = this.dayNumber;
+      }
+      this.cash += GC.GOAL_REWARDS[idx];
+      newlyCompleted.push(idx);
     }
-    this.activeGoal++;
-    const reward = GC.GOAL_REWARDS[idx];
-    this.cash += reward;
-    this.emit('goal_completed', { index: idx, reward });
-    if (this.activeGoal >= 10) this.emit('game_complete');
-    else this._checkGoals(); // cascade
+    // activeGoal = first still-incomplete index, or 10 if all done. Kept in
+    // sync so GoalTicker and the GoalsPanel marker stay accurate.
+    let firstIncomplete = 10;
+    for (let i = 0; i < 10; i++) {
+      if (!this.completedGoals[i]) { firstIncomplete = i; break; }
+    }
+    this.activeGoal = firstIncomplete;
+
+    for (const idx of newlyCompleted) {
+      this.emit('goal_completed', { index: idx, reward: GC.GOAL_REWARDS[idx] });
+    }
+
+    if (firstIncomplete >= 10 && !this.endlessUnlocked) {
+      this.endlessUnlocked = true;
+      this.cash += GC.ENDLESS_BONUS;
+      this.emit('endless_unlocked', { reward: GC.ENDLESS_BONUS });
+    }
   }
 
   private _isGoalMet(idx: number): boolean {
@@ -695,6 +735,7 @@ class GameState extends EventEmitter {
       ch_days: this.chartDays, ch_guests: this.chartGuests,
       ch_rev: this.chartRevenue, ch_rating: this.chartRating,
       ch_occ: this.chartOccupancy, ch_cap: this.chartCapacity,
+      endless_unlocked: this.endlessUnlocked,
     };
   }
 
@@ -719,6 +760,7 @@ class GameState extends EventEmitter {
     this.activeGoal       = d.active_goal;
     this.completedGoals   = d.completed;
     this.goalCompletedDays = d.completed_days;
+    this.endlessUnlocked  = d.endless_unlocked;
     this.statsRecords     = d.stats;
     // Costs are gone in this MVP. Rewrite historical records so the
     // displayed Net always equals Revenue, regardless of when the

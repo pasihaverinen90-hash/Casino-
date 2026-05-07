@@ -1,5 +1,4 @@
 // Toast.ts — brief pop-up notification, auto-hides after 2.5 s.
-import * as GC from '../logic/GameConstants';
 import { gameState } from '../state/GameState';
 
 export class Toast {
@@ -12,9 +11,8 @@ export class Toast {
     parent.appendChild(this.el);
 
     gameState.on<string>('toast_requested', msg => this.show(msg));
-    gameState.on<{ index: number; reward: number }>('goal_completed', ({ index, reward }) => {
-      this.show(`✓ ${GC.GOAL_LABELS[index]} complete! +${reward} 💰`);
-    });
+    // Goal completion is handled by GoalCompletePopup — no toast here, the
+    // modal popup is the canonical "goal done" feedback.
     gameState.on<string>('placement_failed', reason => this.show(reason));
   }
 

@@ -1,11 +1,13 @@
-// GoalTicker.ts — thin strip showing the active goal; tap to open Goals panel.
+// GoalTicker.ts — thin strip showing the next-up goal; tap to open Goals panel.
+// Goals V2: goals can complete in any order, so `activeGoal` is the *first
+// incomplete* goal (or 10 once everything is done). Completion feedback
+// lives in GoalCompletePopup; the ticker just reflects current state.
 import * as GC from '../logic/GameConstants';
 import { gameState } from '../state/GameState';
 import { uiBus }     from '../events/UIBus';
 
 export class GoalTicker {
   private el: HTMLElement;
-  private _flashTimer: ReturnType<typeof setTimeout> | null = null;
   private _placing = false;
   private _placingLabel = '';
 
@@ -16,9 +18,6 @@ export class GoalTicker {
     parent.appendChild(this.el);
 
     gameState.on('state_changed', () => this._refresh());
-    gameState.on<{ index: number; reward: number }>('goal_completed', ({ index, reward }) => {
-      this._flash(`✓  ${GC.GOAL_LABELS[index]} complete! +${reward} 💰`);
-    });
 
     uiBus.on<{ type: number; variant: string }>('start_placement', ({ type, variant }) => {
       const def = GC.getDef(type as GC.ObjType);
@@ -37,22 +36,15 @@ export class GoalTicker {
   }
 
   private _refresh(): void {
-    if (this._flashTimer) return; // don't overwrite a flash
     if (this._placing) {
       this.el.textContent = this._placingLabel;
       return;
     }
     const idx = gameState.activeGoal;
     if (idx >= 10) {
-      this.el.textContent = '✓  All goals complete — view summary';
+      this.el.textContent = '✓  All goals complete — Endless Mode';
       return;
     }
     this.el.textContent = `▶  ${GC.GOAL_LABELS[idx]} — ${GC.GOAL_DESCS[idx]}`;
-  }
-
-  private _flash(msg: string): void {
-    if (this._flashTimer) clearTimeout(this._flashTimer);
-    this.el.textContent = msg;
-    this._flashTimer = setTimeout(() => { this._flashTimer = null; this._refresh(); }, 2500);
   }
 }

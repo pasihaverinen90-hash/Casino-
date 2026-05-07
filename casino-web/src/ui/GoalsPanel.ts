@@ -26,8 +26,12 @@ export class GoalsPanel {
     this.el.append(titleRow, scroll);
     parent.appendChild(this.el);
 
-    gameState.on('state_changed',  () => { if (!this.el.classList.contains('hidden')) this._refresh(); });
-    gameState.on('goal_completed', () => { if (!this.el.classList.contains('hidden')) this._refresh(); });
+    const refreshIfOpen = () => {
+      if (!this.el.classList.contains('hidden')) this._refresh();
+    };
+    gameState.on('state_changed',     refreshIfOpen);
+    gameState.on('goal_completed',    refreshIfOpen);
+    gameState.on('endless_unlocked',  refreshIfOpen);
   }
 
   open(): void { this._refresh(); this.el.classList.remove('hidden'); }
@@ -41,15 +45,14 @@ export class GoalsPanel {
       const row = document.createElement('div');
       row.className = 'goal-row';
 
-      // Status icon
+      // Status icon. Goals V2: any-order — every incomplete goal shows the
+      // "in progress" marker, no greyed-out future goals.
       const icon = document.createElement('div');
       icon.className = 'goal-icon';
       if (gs.completedGoals[i]) {
         icon.textContent = '✓'; icon.style.color = '#4dcc80';
-      } else if (i === gs.activeGoal) {
-        icon.textContent = '▶'; icon.style.color = '#ffcc44';
       } else {
-        icon.textContent = '○'; icon.style.color = '#555';
+        icon.textContent = '▶'; icon.style.color = '#ffcc44';
       }
 
       // Info column
@@ -59,7 +62,6 @@ export class GoalsPanel {
       const name = document.createElement('div');
       name.className   = 'goal-name';
       name.textContent = GC.GOAL_LABELS[i];
-      if (i > gs.activeGoal && !gs.completedGoals[i]) name.style.color = '#555';
 
       const desc = document.createElement('div');
       desc.className   = 'goal-desc';
@@ -67,8 +69,9 @@ export class GoalsPanel {
 
       info.append(name, desc);
 
-      // Progress bar for active goal
-      if (i === gs.activeGoal) {
+      // Progress bar — shown for every incomplete goal so the player can see
+      // how close each one is at a glance.
+      if (!gs.completedGoals[i]) {
         const pct = gs.getGoalProgress(i);
         const barWrap = document.createElement('div');
         barWrap.className = 'goal-progress';

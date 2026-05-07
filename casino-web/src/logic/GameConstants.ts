@@ -55,6 +55,9 @@ export const GOAL_TARGETS = {
 } as const;
 
 export const GOAL_REWARDS = [500, 800, 600, 1200, 1000, 1500, 1000, 2000, 1500, 3000];
+// One-shot bonus when every goal is complete and the player enters endless
+// mode. Awarded exactly once per save; persisted via the endless_unlocked flag.
+export const ENDLESS_BONUS = 25_000;
 export const GOAL_LABELS  = [
   'First Machines', 'First Crowd', 'Basic Amenity', 'Real Gaming',
   'Rising Star',    'First Profit', 'Hotel Open',   'Busy Floor',

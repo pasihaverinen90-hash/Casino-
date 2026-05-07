@@ -12,7 +12,7 @@ import { HotelPanel }  from './ui/HotelPanel';
 import { StatsPanel }  from './ui/StatsPanel';
 import { GoalsPanel }  from './ui/GoalsPanel';
 import { Toast }       from './ui/Toast';
-import { EndScreen }   from './ui/EndScreen';
+import { GoalCompletePopup } from './ui/GoalCompletePopup';
 import { StartScreen } from './ui/StartScreen';
 import * as Slots      from './state/SaveSlots';
 
@@ -41,7 +41,7 @@ new Phaser.Game({
 // ── HTML UI components ────────────────────────────────────────────────────
 const topHUD = new TopHUD(uiRoot);
 new Toast(uiRoot);
-new EndScreen(uiRoot);
+new GoalCompletePopup(uiRoot);
 
 const goalsPanel = new GoalsPanel(uiRoot);
 const statsPanel = new StatsPanel(uiRoot);
