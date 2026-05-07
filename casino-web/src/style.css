@@ -303,12 +303,48 @@ body {
   padding-bottom: 4px;
 }
 
-/* Defensive: charts inside the stats panel must always lay out in normal
-   flow at their intrinsic 160px height. No tricks — explicit, no overlap. */
+/* History chart cards. Each metric is its own framed card so the four
+   charts don't visually merge into one continuous strip. Bordered,
+   rounded, padded; the title row is clearly above the canvas with a
+   thin divider between them. position/height locks defend against
+   any later rule putting the canvas on top of the header. */
 .stats-panel .chart-card {
   position: relative;
   display: block;
-  margin-bottom: 16px;
+  background: #181c27;
+  border: 1px solid #262c3c;
+  border-radius: 12px;
+  padding: 12px 12px 10px;
+  margin-bottom: 14px;
+}
+
+.stats-panel .chart-card:last-child {
+  margin-bottom: 0;
+}
+
+.stats-panel .chart-card .chart-head {
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #232838;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stats-panel .chart-card .chart-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #d0d5e8;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.stats-panel .chart-card .chart-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
 }
 
 .stats-panel .chart-card canvas {
@@ -317,6 +353,16 @@ body {
   height: 160px;
   max-height: 160px;
   position: static;
+  border-radius: 8px;
+}
+
+/* DAILY METRICS section header — make it stand out as a clear divider
+   above the chart list, not blend into the first card. */
+.stats-panel .charts-wrap > .stat-row.header {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #8a90a8;
+  font-size: 12px;
 }
 
 /* ── Build panel ─────────────────────────────────────────────────────────── */
