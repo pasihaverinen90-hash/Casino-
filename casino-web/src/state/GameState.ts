@@ -12,7 +12,7 @@ import * as Slots from './SaveSlots';
 // SAVE_MIGRATIONS that upgrades the previous version's payload to the new
 // shape. `normalizeSave` then fills in any newly-introduced fields with
 // safe defaults so partial / hand-edited saves still load.
-const SAVE_VERSION = '1.4.0';
+const SAVE_VERSION = '1.5.0';
 
 interface SavedObj {
   id: string; type: GC.ObjType;
@@ -33,6 +33,10 @@ interface SavePayload {
   next_id     : number;
   active_goal : number;
   completed   : boolean[];
+  // 1.5.0+: per-goal day-of-completion. Length matches `completed`. Entry
+  // is null for an incomplete goal; null is also legitimate for a goal
+  // that was already completed in a pre-1.5.0 save (the day was lost).
+  completed_days: (number | null)[];
   stats       : GC.DayStats[];
   ch_days     : number[];
   ch_guests   : number[];
@@ -82,7 +86,23 @@ const SAVE_MIGRATIONS: Record<string, (d: any) => any> = {
       : [];
     return { ...d, ver: '1.4.0', objects };
   },
+  // 1.4.0 → 1.5.0: introduced per-goal completion days. Legacy saves never
+  // recorded this, so the array is filled with null. The Stats panel
+  // renders "Completed" instead of a day number for null entries.
+  '1.4.0': (d) => ({ ...d, ver: '1.5.0', completed_days: Array(10).fill(null) }),
 };
+
+// Ensures completed_days is exactly length 10. Older / hand-edited saves
+// could be short or contain non-numbers; coerce to (number | null) so the
+// runtime invariant (.length === 10) holds.
+function padCompletedDays(arr: any[]): (number | null)[] {
+  const out: (number | null)[] = Array(10).fill(null);
+  for (let i = 0; i < 10; i++) {
+    const v = arr[i];
+    if (typeof v === 'number' && Number.isFinite(v)) out[i] = v;
+  }
+  return out;
+}
 
 function migrateSave(d: any): any | null {
   if (d == null || typeof d !== 'object' || typeof d.ver !== 'string') return null;
@@ -112,6 +132,9 @@ function normalizeSave(d: any): SavePayload {
     next_id     : d.next_id ?? 0,
     active_goal : d.active_goal ?? 0,
     completed   : Array.isArray(d.completed) ? d.completed : Array(10).fill(false),
+    completed_days: Array.isArray(d.completed_days)
+                      ? padCompletedDays(d.completed_days)
+                      : Array(10).fill(null),
     stats       : Array.isArray(d.stats)     ? d.stats     : [],
     ch_days     : Array.isArray(d.ch_days)   ? d.ch_days   : [],
     ch_guests   : Array.isArray(d.ch_guests) ? d.ch_guests : [],
@@ -202,6 +225,10 @@ class GameState extends EventEmitter {
   dayNumber      = 1;
   activeGoal     = 0;
   completedGoals : boolean[] = [];
+  // Day-of-completion for each goal. null = goal not yet completed, OR the
+  // goal was already completed in a pre-1.5.0 save (legacy). The Stats
+  // panel renders "Completed" rather than a day number for null entries.
+  goalCompletedDays : (number | null)[] = [];
 
   // Stats history
   statsRecords  : GC.DayStats[] = [];
@@ -279,6 +306,7 @@ class GameState extends EventEmitter {
     this.occupancyRate = 0; this.bookedRooms = 0; this.hotelGuests = 0;
     this.dayNumber = 1; this.activeGoal = 0;
     this.completedGoals = Array(10).fill(false);
+    this.goalCompletedDays = Array(10).fill(null);
     this._projection = null; this._paidToday = 0; this._hoursThisDay = 0;
     this.statsRecords = [];
     this.chartDays = []; this.chartGuests = []; this.chartRevenue = [];
@@ -587,6 +615,9 @@ class GameState extends EventEmitter {
     if (!this._isGoalMet(this.activeGoal)) return;
     const idx    = this.activeGoal;
     this.completedGoals[idx] = true;
+    if (this.goalCompletedDays[idx] == null) {
+      this.goalCompletedDays[idx] = this.dayNumber;
+    }
     this.activeGoal++;
     const reward = GC.GOAL_REWARDS[idx];
     this.cash += reward;
@@ -671,6 +702,7 @@ class GameState extends EventEmitter {
       last_guests: this.lastGuests, prev_crowding: this.prevCrowding,
       next_id: this._nextId,
       active_goal: this.activeGoal, completed: this.completedGoals,
+      completed_days: this.goalCompletedDays,
       stats: this.statsRecords,
       ch_days: this.chartDays, ch_guests: this.chartGuests,
       ch_rev: this.chartRevenue, ch_rating: this.chartRating,
@@ -698,6 +730,7 @@ class GameState extends EventEmitter {
     this._nextId          = d.next_id;
     this.activeGoal       = d.active_goal;
     this.completedGoals   = d.completed;
+    this.goalCompletedDays = d.completed_days;
     this.statsRecords     = d.stats;
     // Costs are gone in this MVP. Rewrite historical records so the
     // displayed Net always equals Revenue, regardless of when the

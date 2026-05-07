@@ -1,4 +1,4 @@
-// StatsPanel.ts — full-screen overlay: Today summary + History charts.
+// StatsPanel.ts — full-screen overlay: Today summary + History (text report).
 //
 // Structure:
 //   .panel.stats-panel              (flex column, fixed height)
@@ -8,10 +8,11 @@
 //       .tab-pane.today             (visible / hidden)
 //       .tab-pane.history           (visible / hidden)
 //
-// The single shared scroll container is what keeps the title and tabs
-// pinned regardless of how tall the History content is.
+// History was a chart panel through 1.4.x; for the MVP it has been
+// replaced with a clearer text-based Lifetime Report (summary, revenue
+// breakdown by source, goals list).
+import * as GC from '../logic/GameConstants';
 import { gameState } from '../state/GameState';
-import { ChartCard }  from './ChartCard';
 import { fmtCash, fmtInt, fmtPct, fmtRating } from './format';
 
 export class StatsPanel {
@@ -43,18 +44,24 @@ export class StatsPanel {
   private lblYGuests : HTMLElement;
   private lblYRating : HTMLElement;
 
-  // Lifetime summary (History tab)
-  private lblTotalEarned: HTMLElement;
-  private lblBestDay    : HTMLElement;
-  private lblDaysCount  : HTMLElement;
-  private historyEmpty  : HTMLElement;
-  private chartsWrap    : HTMLElement;
+  // History — Lifetime Summary
+  private lblLifeTotal     : HTMLElement;
+  private lblLifeDays      : HTMLElement;
+  private lblLifeGuestSum  : HTMLElement;
+  private lblLifeBestDay   : HTMLElement;
+  private lblLifeBestGuests: HTMLElement;
+  private lblLifeBestRating: HTMLElement;
 
-  // Charts
-  private chartRevenue : ChartCard;
-  private chartGuests  : ChartCard;
-  private chartRating  : ChartCard;
-  private chartOcc     : ChartCard;
+  // History — Revenue Breakdown
+  private lblBrkSlots : HTMLElement;
+  private lblBrkSmall : HTMLElement;
+  private lblBrkLarge : HTMLElement;
+  private lblBrkBar   : HTMLElement;
+  private lblBrkHotel : HTMLElement;
+
+  // History — Goals
+  private goalsList: HTMLElement;
+  private goalRows : HTMLElement[] = [];
 
   constructor(parent: HTMLElement) {
     this.el = document.createElement('div');
@@ -75,9 +82,8 @@ export class StatsPanel {
     this.tab1 = mkTabBtn('History', false, () => this._showTab(1));
     tabBar.append(this.tab0, this.tab1);
 
-    // Single scroll container that holds both tab panes. Without this
-    // wrapper (and its min-height: 0) two flex:1 siblings each with their
-    // own overflow can grow past the panel and push the header off-screen.
+    // Single scroll container so the title and tab bar stay pinned even
+    // when History content is taller than the viewport.
     const tabContent = document.createElement('div');
     tabContent.className = 'tab-content';
 
@@ -115,33 +121,31 @@ export class StatsPanel {
     this.historyPanel.className = 'tab-pane';
     this.historyPanel.style.display = 'none';
 
-    const lifetimeBlock = document.createElement('div');
-    lifetimeBlock.className = 'lifetime-block';
-    lifetimeBlock.appendChild(sectionHeader('LIFETIME'));
-    this.lblTotalEarned = lifetimeBlock.appendChild(statRow(true));
-    this.lblBestDay     = lifetimeBlock.appendChild(statRow());
-    this.lblDaysCount   = lifetimeBlock.appendChild(statRow());
-    this.historyPanel.appendChild(lifetimeBlock);
+    this.historyPanel.appendChild(sectionHeader('LIFETIME SUMMARY'));
+    this.lblLifeTotal      = this.historyPanel.appendChild(statRow(true));
+    this.lblLifeDays       = this.historyPanel.appendChild(statRow());
+    this.lblLifeGuestSum   = this.historyPanel.appendChild(statRow());
+    this.lblLifeBestDay    = this.historyPanel.appendChild(statRow());
+    this.lblLifeBestGuests = this.historyPanel.appendChild(statRow());
+    this.lblLifeBestRating = this.historyPanel.appendChild(statRow());
 
-    this.historyEmpty = document.createElement('div');
-    this.historyEmpty.className = 'stats-empty';
-    this.historyEmpty.textContent =
-      'Daily charts appear after your first day ends.';
-    this.historyPanel.appendChild(this.historyEmpty);
+    this.historyPanel.appendChild(sectionHeader('REVENUE BREAKDOWN'));
+    this.lblBrkSlots = this.historyPanel.appendChild(statRow());
+    this.lblBrkSmall = this.historyPanel.appendChild(statRow());
+    this.lblBrkLarge = this.historyPanel.appendChild(statRow());
+    this.lblBrkBar   = this.historyPanel.appendChild(statRow());
+    this.lblBrkHotel = this.historyPanel.appendChild(statRow());
 
-    this.chartsWrap = document.createElement('div');
-    this.chartsWrap.className = 'charts-wrap';
-    this.historyPanel.appendChild(this.chartsWrap);
-    this.chartsWrap.appendChild(sectionHeader('DAILY METRICS'));
-
-    this.chartRevenue = new ChartCard(this.chartsWrap, 'Revenue / Day',     '#e6b31a',
-                                      v => `${fmtCash(v)} 💰`);
-    this.chartGuests  = new ChartCard(this.chartsWrap, 'Guests / Day',      '#4dcc80',
-                                      fmtInt);
-    this.chartRating  = new ChartCard(this.chartsWrap, 'Resort Rating',     '#e66633',
-                                      fmtRating);
-    this.chartOcc     = new ChartCard(this.chartsWrap, 'Hotel Occupancy',   '#6699e6',
-                                      v => `${Math.round(v)} %`);
+    this.historyPanel.appendChild(sectionHeader('GOALS'));
+    this.goalsList = document.createElement('div');
+    this.goalsList.className = 'goals-list';
+    this.historyPanel.appendChild(this.goalsList);
+    for (let i = 0; i < 10; i++) {
+      const row = document.createElement('div');
+      row.className = 'goal-summary';
+      this.goalsList.appendChild(row);
+      this.goalRows.push(row);
+    }
 
     tabContent.append(this.todayPanel, this.historyPanel);
     this.el.append(titleRow, tabBar, tabContent);
@@ -166,13 +170,12 @@ export class StatsPanel {
     this.tab1.classList.toggle('active', idx === 1);
     this.todayPanel.style.display   = idx === 0 ? '' : 'none';
     this.historyPanel.style.display = idx === 1 ? '' : 'none';
-    if (idx === 1) this._refreshCharts();
   }
 
   private _refresh(): void {
     this._refreshTitle();
     this._refreshToday();
-    if (this.currentTab === 1) this._refreshCharts();
+    this._refreshHistory();
   }
 
   private _refreshTitle(): void {
@@ -211,36 +214,75 @@ export class StatsPanel {
     setRow(this.lblYRating, 'Rating',      `★ ${fmtRating(last.rating)}`);
   }
 
-  private _refreshCharts(): void {
-    const gs = gameState;
-    const records = gs.statsRecords;
+  private _refreshHistory(): void {
+    const records = gameState.statsRecords;
     const hasData = records.length > 0;
 
-    if (hasData) {
-      let total = 0;
-      let best = records[0];
-      for (const r of records) {
-        total += r.revenue;
-        if (r.revenue > best.revenue) best = r;
-      }
-      setRow(this.lblTotalEarned, 'Total earned',  `${fmtCash(total)} 💰`);
-      setRow(this.lblBestDay,     'Best day',      `${fmtCash(best.revenue)} 💰  (Day ${best.day})`);
-      setRow(this.lblDaysCount,   'Days recorded', fmtInt(records.length));
-    } else {
-      setRow(this.lblTotalEarned, 'Total earned',  '—');
-      setRow(this.lblBestDay,     'Best day',      '—');
-      setRow(this.lblDaysCount,   'Days recorded', '0');
+    // ── Lifetime Summary ─────────────────────────────────────────────────
+    let total = 0, totalGuests = 0;
+    let best = records[0], bestGuests = records[0], bestRating = records[0];
+    for (const r of records) {
+      total       += r.revenue;
+      totalGuests += r.total_guests;
+      if (r.revenue      > best.revenue)            best        = r;
+      if (r.total_guests > bestGuests.total_guests) bestGuests  = r;
+      if (r.rating       > bestRating.rating)       bestRating  = r;
     }
 
-    this.historyEmpty.style.display = hasData ? 'none' : '';
-    this.chartsWrap.style.display   = hasData ? '' : 'none';
+    setRow(this.lblLifeTotal,    'Total earned',   hasData ? `${fmtCash(total)} 💰` : '—');
+    setRow(this.lblLifeDays,     'Days recorded',  hasData ? fmtInt(records.length) : '0');
+    setRow(this.lblLifeGuestSum, 'Total guests served', hasData ? fmtInt(totalGuests) : '—');
+    setRow(this.lblLifeBestDay,
+           'Best day revenue',
+           hasData ? `${fmtCash(best.revenue)} 💰  (Day ${best.day})` : '—');
+    setRow(this.lblLifeBestGuests,
+           'Highest guests / day',
+           hasData ? `${fmtInt(bestGuests.total_guests)}  (Day ${bestGuests.day})` : '—');
+    setRow(this.lblLifeBestRating,
+           'Highest rating',
+           hasData ? `★ ${fmtRating(bestRating.rating)}  (Day ${bestRating.day})` : '—');
 
-    if (!hasData) return;
+    // ── Revenue Breakdown ────────────────────────────────────────────────
+    let sumSlot = 0, sumSmall = 0, sumLarge = 0, sumBar = 0, sumHotel = 0;
+    for (const r of records) {
+      sumSlot  += r.slot_rev;
+      sumSmall += r.small_rev;
+      sumLarge += r.large_rev;
+      sumBar   += r.bar_rev;
+      sumHotel += r.hotel_rev;
+    }
+    setRow(this.lblBrkSlots, 'Slots',        hasData ? `${fmtCash(sumSlot)} 💰`  : '—');
+    setRow(this.lblBrkSmall, 'Small tables', hasData ? `${fmtCash(sumSmall)} 💰` : '—');
+    setRow(this.lblBrkLarge, 'Large tables', hasData ? `${fmtCash(sumLarge)} 💰` : '—');
+    setRow(this.lblBrkBar,   'Bar',          hasData ? `${fmtCash(sumBar)} 💰`   : '—');
+    setRow(this.lblBrkHotel, 'Hotel rooms',  hasData ? `${fmtCash(sumHotel)} 💰` : '—');
 
-    this.chartRevenue.draw(gs.chartRevenue,                 gs.chartDays);
-    this.chartGuests.draw(gs.chartGuests,                   gs.chartDays);
-    this.chartRating.draw(gs.chartRating,                   gs.chartDays);
-    this.chartOcc.draw(gs.chartOccupancy.map(v => v * 100), gs.chartDays);
+    // ── Goals ────────────────────────────────────────────────────────────
+    for (let i = 0; i < 10; i++) {
+      const row     = this.goalRows[i];
+      const done    = gameState.completedGoals[i] === true;
+      const day     = gameState.goalCompletedDays[i];
+      const reward  = GC.GOAL_REWARDS[i];
+      const desc    = GC.GOAL_DESCS[i];
+      row.classList.toggle('done', done);
+      row.classList.toggle('open', !done);
+
+      const status = done
+        ? (day != null ? `Day ${day}` : 'Completed')
+        : 'Not completed';
+
+      row.innerHTML = '';
+      const icon = document.createElement('span');
+      icon.className = 'goal-summary-icon';
+      icon.textContent = done ? '✓' : '○';
+      const name = document.createElement('span');
+      name.className = 'goal-summary-name';
+      name.textContent = `${i + 1}. ${desc}`;
+      const meta = document.createElement('span');
+      meta.className = 'goal-summary-meta';
+      meta.textContent = `${status} — +${fmtCash(reward)} 💰`;
+      row.append(icon, name, meta);
+    }
   }
 }
 
