@@ -361,30 +361,116 @@ body {
   color: #fff;
 }
 
-.build-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 9px;
+/* ── Build sidebar ──────────────────────────────────────────────────── */
+/* Left-side overlay that stays open during placement. Sits below the top
+   HUD and above both the goal ticker (40px) and the bottom bar (80px) so
+   neither gets covered. */
+.build-sidebar {
+  position: absolute;
+  top: 56px;
+  left: 0;
+  bottom: 120px;
+  width: min(320px, 88vw);
+  background: rgba(13, 16, 26, 0.97);
+  border-right: 1px solid #2a3050;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity   0.22s ease;
+  opacity: 1;
+}
+
+.build-sidebar.hidden {
+  transform: translateX(-105%);
+  opacity: 0;
+  pointer-events: none !important;
+}
+
+.build-sidebar-title {
+  display: flex;
+  align-items: center;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid #1e2230;
+  flex-shrink: 0;
+}
+
+.build-sidebar-title h3 {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #e0e4f4;
+}
+
+.build-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #1e2230;
+  flex-shrink: 0;
+  background: rgba(10, 12, 20, 0.6);
+}
+
+.build-tab {
+  flex: 1 1 calc(50% - 4px);
+  min-width: 0;
+  min-height: 36px;
+  padding: 8px 10px;
+  background: rgba(28, 33, 52, 0.9);
+  border: 1px solid #2a3050;
+  color: #aab0cc;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 7px;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.build-tab:hover:not(.active) {
+  background: rgba(45, 58, 96, 0.9);
+  color: #d0d5e8;
+}
+
+.build-tab.active {
+  background: rgba(255, 200, 40, 0.18);
+  border-color: #ffcc28;
+  color: #ffdd55;
+}
+
+.build-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .build-item-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
   background: rgba(30, 38, 60, 0.9);
   border: 1px solid #2a3458;
   color: #c8cce0;
-  padding: 10px 8px 12px;
   border-radius: 10px;
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  line-height: 1.4;
-  transition: background 0.15s, border-color 0.15s;
+  text-align: left;
+  line-height: 1.3;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 
-.build-item-btn:hover:not(:disabled) {
+.build-item-btn:hover:not(:disabled):not(.selected) {
   background: rgba(50, 60, 90, 0.9);
   border-color: #4a60a0;
 }
@@ -394,17 +480,41 @@ body {
   cursor: not-allowed;
 }
 
+.build-item-btn.selected {
+  background: rgba(255, 200, 40, 0.18);
+  border-color: #ffcc28;
+  color: #ffdd55;
+}
+
 .build-thumb {
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   background: rgba(8, 10, 16, 0.6);
   border-radius: 6px;
   image-rendering: pixelated;
+  flex-shrink: 0;
 }
 
 .build-meta {
-  white-space: pre-line;
-  display: block;
+  flex: 1;
+  min-width: 0;
+}
+
+.build-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #d8dcf0;
+}
+
+.build-item-btn.selected .build-name {
+  color: #ffdd55;
+}
+
+.build-sub {
+  font-size: 12px;
+  color: #8a90a8;
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Hotel panel ─────────────────────────────────────────────────────────── */

@@ -46,7 +46,10 @@ new EndScreen(uiRoot);
 const goalsPanel = new GoalsPanel(uiRoot);
 const statsPanel = new StatsPanel(uiRoot);
 const hotelPanel = new HotelPanel(uiRoot);
-const buildPanel = new BuildPanel(uiRoot);
+// Build sidebar's X button routes through BottomBar.closeAll so the Build
+// button highlight is cleared and `_closeAll` runs (which emits
+// exit_placement and hides any other panels).
+const buildPanel = new BuildPanel(uiRoot, () => bottomBar.closeAll(_closeAll));
 
 new GoalTicker(uiRoot, () => {
   _closeAll();
@@ -234,7 +237,8 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Grid → sync BottomBar state ───────────────────────────────────────────
-// When placement is confirmed the user has left placement mode; reset bar.
-uiBus.on('placement_confirmed', () => {
-  bottomBar.closeAll(_closeAll);
-});
+// The Build sidebar is sticky during placement: after a successful place
+// we leave the sidebar open and the Build button highlighted so the player
+// can pick another item without re-opening the menu. GridScene clears its
+// own placement state — BuildPanel listens to `placement_confirmed` to
+// drop its selection highlight.

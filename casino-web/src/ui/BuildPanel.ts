@@ -1,35 +1,48 @@
-// BuildPanel.ts — slide-up build menu.
+// BuildPanel.ts — left-side Build sidebar with grouped categories.
+//
+// Stays open during placement so the player can pick a different item or
+// close out without re-opening the menu. Selection highlight tracks the
+// active placement; placement events from GridScene clear it.
 import * as GC from '../logic/GameConstants';
 import { gameState }  from '../state/GameState';
 import { uiBus }      from '../events/UIBus';
 import { paintThumb } from '../game/ObjectArt';
 
-// Order is purely UI presentation: attractions first, then services.
-const OBJ_TYPES = [
-  GC.ObjType.SLOT_MACHINE,
-  GC.ObjType.SMALL_TABLE,
-  GC.ObjType.LARGE_TABLE,
-  GC.ObjType.CASHIER,
-  GC.ObjType.WC,
-  GC.ObjType.BAR,
+interface BuildItem     { type: GC.ObjType; }
+interface BuildCategory { id: string; label: string; items: BuildItem[]; }
+
+// Local UI grouping. Adding a future category (Entertainment, Hotel, …) is
+// just a new entry here. Object definitions stay untouched.
+const BUILD_CATEGORIES: BuildCategory[] = [
+  { id: 'slots',    label: 'Slots',
+    items: [{ type: GC.ObjType.SLOT_MACHINE }] },
+  { id: 'tables',   label: 'Tables',
+    items: [{ type: GC.ObjType.SMALL_TABLE }, { type: GC.ObjType.LARGE_TABLE }] },
+  { id: 'services', label: 'Services',
+    items: [{ type: GC.ObjType.WC }, { type: GC.ObjType.CASHIER }] },
+  { id: 'food',     label: 'Food & Drink',
+    items: [{ type: GC.ObjType.BAR }] },
 ];
 
-const THUMB_PX = 56;
+const THUMB_PX = 48;
 
 export class BuildPanel {
-  private el       : HTMLElement;
-  private itemGrid : HTMLElement;
+  private el            : HTMLElement;
+  private tabsEl        : HTMLElement;
+  private listEl        : HTMLElement;
+  private overlayHost   : HTMLElement;
+  private activeCat     : string         = BUILD_CATEGORIES[0].id;
+  private selectedType  : GC.ObjType | null = null;
 
-  constructor(parent: HTMLElement) {
-    this.el = document.createElement('div');
-    this.el.className = 'panel hidden interactive';
-    this.el.style.height = '360px';
+  constructor(parent: HTMLElement, onCloseClick: () => void) {
+    this.overlayHost = parent;
 
-    // ── Title row ──────────────────────────────────────────────────────────
-    // P3B UX: demolish has moved out to the bottom bar so it can run with
-    // every panel closed. The build panel now only opens placements.
+    this.el = document.createElement('aside');
+    this.el.className = 'build-sidebar hidden interactive';
+
+    // ── Title ──────────────────────────────────────────────────────────
     const titleRow = document.createElement('div');
-    titleRow.className = 'panel-title';
+    titleRow.className = 'build-sidebar-title';
 
     const title = document.createElement('h3');
     title.textContent = 'BUILD';
@@ -37,88 +50,141 @@ export class BuildPanel {
     const btnClose = document.createElement('button');
     btnClose.className   = 'panel-close';
     btnClose.textContent = '✕';
-    btnClose.onclick     = () => this.close();
+    // The X button closes the sidebar AND exits placement. Routing through
+    // BottomBar keeps the Build button highlight in sync with reality.
+    btnClose.onclick     = () => onCloseClick();
 
     titleRow.append(title, btnClose);
 
-    // ── Scroll area ────────────────────────────────────────────────────────
-    const scroll = document.createElement('div');
-    scroll.className = 'panel-scroll';
+    // ── Category tabs ──────────────────────────────────────────────────
+    this.tabsEl = document.createElement('div');
+    this.tabsEl.className = 'build-tabs';
 
-    this.itemGrid = document.createElement('div');
-    this.itemGrid.className = 'build-grid';
-    scroll.appendChild(this.itemGrid);
+    // ── Item list ──────────────────────────────────────────────────────
+    this.listEl = document.createElement('div');
+    this.listEl.className = 'build-list';
 
-    this.el.append(titleRow, scroll);
+    this.el.append(titleRow, this.tabsEl, this.listEl);
     parent.appendChild(this.el);
 
-    this._buildButtons();
+    this._buildTabs();
+    this._renderList();
 
-    gameState.on('state_changed', () => this._refreshButtons());
+    gameState.on('state_changed', () => this._refreshAffordability());
 
-    // Hide the panel during placement; reopen it when the user cancels.
-    uiBus.on('placement_confirmed', () => this.close());
-    uiBus.on('placement_cancelled', () => this.open());
+    // Selection highlight only applies while a placement is in progress.
+    // Clear it whenever GridScene exits placement for any reason.
+    uiBus.on('placement_confirmed', () => this._setSelected(null));
+    uiBus.on('placement_cancelled', () => this._setSelected(null));
+    uiBus.on('exit_placement',      () => this._setSelected(null));
   }
 
   open(): void {
-    this._refreshButtons();
     this.el.classList.remove('hidden');
+    this._refreshAffordability();
   }
 
   close(): void {
     this.el.classList.add('hidden');
+    this._setSelected(null);
   }
 
   // ── Private ───────────────────────────────────────────────────────────────
 
-  private _buildButtons(): void {
-    this.itemGrid.innerHTML = '';
-    for (const t of OBJ_TYPES) {
-      const def = GC.getDef(t);
-      const b   = document.createElement('button');
-      b.className            = 'build-item-btn';
-      b.dataset['type']      = String(t);
-      b.onclick              = () => this._onItemClick(t, def);
-
-      // Thumbnail canvas
-      const canvas = document.createElement('canvas');
-      canvas.className = 'build-thumb';
-      canvas.width  = THUMB_PX;
-      canvas.height = THUMB_PX;
-      const ctx = canvas.getContext('2d');
-      if (ctx) paintThumb(ctx, t, THUMB_PX, THUMB_PX);
-      b.appendChild(canvas);
-
-      // Label + cost lines (text node held in a <span> we'll update on refresh)
-      const meta = document.createElement('span');
-      meta.className = 'build-meta';
-      b.appendChild(meta);
-
-      this.itemGrid.appendChild(b);
+  private _buildTabs(): void {
+    this.tabsEl.innerHTML = '';
+    for (const cat of BUILD_CATEGORIES) {
+      const t = document.createElement('button');
+      t.className       = 'build-tab';
+      t.textContent     = cat.label;
+      t.dataset['id']   = cat.id;
+      t.onclick = () => {
+        if (this.activeCat === cat.id) return;
+        this.activeCat = cat.id;
+        this._renderList();
+        this._refreshTabHighlight();
+      };
+      this.tabsEl.appendChild(t);
     }
-    this._refreshButtons();
+    this._refreshTabHighlight();
   }
 
-  private _refreshButtons(): void {
+  private _refreshTabHighlight(): void {
+    for (const t of Array.from(this.tabsEl.children) as HTMLElement[]) {
+      t.classList.toggle('active', t.dataset['id'] === this.activeCat);
+    }
+  }
+
+  private _renderList(): void {
+    this.listEl.innerHTML = '';
+    const cat = BUILD_CATEGORIES.find(c => c.id === this.activeCat);
+    if (!cat) return;
+    for (const item of cat.items) {
+      this.listEl.appendChild(this._buildCard(item.type));
+    }
+    this._refreshAffordability();
+    this._refreshSelectionHighlight();
+  }
+
+  private _buildCard(t: GC.ObjType): HTMLButtonElement {
+    const def = GC.getDef(t);
+
+    const b = document.createElement('button');
+    b.className       = 'build-item-btn';
+    b.dataset['type'] = String(t);
+    b.onclick         = () => this._onItemClick(t, def);
+
+    const canvas = document.createElement('canvas');
+    canvas.className = 'build-thumb';
+    canvas.width  = THUMB_PX;
+    canvas.height = THUMB_PX;
+    const ctx = canvas.getContext('2d');
+    if (ctx) paintThumb(ctx, t, THUMB_PX, THUMB_PX);
+
+    const meta = document.createElement('div');
+    meta.className = 'build-meta';
+
+    const nameLine = document.createElement('div');
+    nameLine.className = 'build-name';
+    nameLine.textContent = def.label;
+
+    const subLine = document.createElement('div');
+    subLine.className = 'build-sub';
+
+    meta.append(nameLine, subLine);
+    b.append(canvas, meta);
+    return b;
+  }
+
+  private _refreshAffordability(): void {
     const gs = gameState;
-    for (const b of Array.from(this.itemGrid.children) as HTMLButtonElement[]) {
-      const t   = Number(b.dataset['type']) as GC.ObjType;
+    for (const card of Array.from(this.listEl.children) as HTMLButtonElement[]) {
+      const t   = Number(card.dataset['type']) as GC.ObjType;
       const def = GC.getDef(t);
       const unaffordable = gs.cash < def.cost;
       const atLimit      = t === GC.ObjType.BAR && gs.barExists;
+      card.disabled = unaffordable || atLimit;
 
-      b.disabled = unaffordable || atLimit;
-
-      const meta = b.querySelector('.build-meta') as HTMLElement | null;
-      if (meta) {
-        if (atLimit) {
-          meta.textContent = `${def.label}\nAlready built`;
-        } else {
-          meta.textContent = `${def.label}\n${_sizeLabel(def)}\n${def.cost} 💰`;
-        }
+      const sub = card.querySelector('.build-sub') as HTMLElement | null;
+      if (sub) {
+        sub.textContent = atLimit
+          ? 'Already built'
+          : `${_sizeLabel(def)} · ${def.cost} 💰`;
       }
     }
+  }
+
+  private _refreshSelectionHighlight(): void {
+    for (const card of Array.from(this.listEl.children) as HTMLButtonElement[]) {
+      const t = Number(card.dataset['type']) as GC.ObjType;
+      card.classList.toggle('selected', this.selectedType === t);
+    }
+  }
+
+  private _setSelected(t: GC.ObjType | null): void {
+    if (this.selectedType === t) return;
+    this.selectedType = t;
+    this._refreshSelectionHighlight();
   }
 
   private _onItemClick(t: GC.ObjType, def: GC.ObjDef): void {
@@ -126,8 +192,7 @@ export class BuildPanel {
       this._showVariantPicker(t, def.variants);
     } else {
       uiBus.emit('start_placement', { type: t, variant: '' });
-      // Panel stays open so user can see demolish; grid mode is active
-      this.el.classList.add('hidden'); // hide panel while placing
+      this._setSelected(t);
     }
   }
 
@@ -150,7 +215,7 @@ export class BuildPanel {
       b.onclick = () => {
         overlay.remove();
         uiBus.emit('start_placement', { type: t, variant: v });
-        this.el.classList.add('hidden');
+        this._setSelected(t);
       };
       card.appendChild(b);
     }
@@ -163,9 +228,8 @@ export class BuildPanel {
     card.appendChild(cancel);
 
     overlay.appendChild(card);
-    this.el.parentElement!.appendChild(overlay);
+    this.overlayHost.appendChild(overlay);
   }
-
 }
 
 function _sizeLabel(def: GC.ObjDef): string {
