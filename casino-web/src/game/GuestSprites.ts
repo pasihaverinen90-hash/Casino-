@@ -94,19 +94,15 @@ const STUCK_REPICK_SEC   = 4.0;
 const STUCK_EXIT_SEC     = 8.0;
 const STUCK_DESPAWN_SEC  = 12.0;
 
-// Per-attraction dwell range, in game-seconds. At 1× speed 1 game-second
-// equals 1 real second, and 1 in-game hour spans 4 real seconds, so the
-// numbers below map roughly to:
+// Per-attraction dwell range, in game-seconds, sourced from ObjDef.dwellRange
+// (Phase A2). At 1× speed 1 game-second equals 1 real second, and 1 in-game
+// hour spans 4 real seconds, so existing values map roughly to:
 //   slot       1–2 in-game hours
 //   small      1.5–3 in-game hours
 //   large      2–4 in-game hours
 //   cashier    0.5–1 in-game hours
-const DWELL_RANGES: Partial<Record<GC.ObjType, [number, number]>> = {
-  [GC.ObjType.SLOT_MACHINE]: [4,  8],
-  [GC.ObjType.SMALL_TABLE]:  [6, 12],
-  [GC.ObjType.LARGE_TABLE]:  [8, 16],
-  [GC.ObjType.CASHIER]:      [2,  4],
-};
+// Fallback used only when the dwell `kind` is null (e.g. mid-`to_exit`
+// transitions where no attraction is associated).
 const DWELL_FALLBACK: [number, number] = [3, 6];
 
 export class GuestSprites {
@@ -302,7 +298,7 @@ export class GuestSprites {
   }
 
   private _dwellFor(kind: GC.ObjType | null): number {
-    const range = (kind != null && DWELL_RANGES[kind]) || DWELL_FALLBACK;
+    const range = kind != null ? GC.getDef(kind).dwellRange : DWELL_FALLBACK;
     return range[0] + Math.random() * (range[1] - range[0]);
   }
 
@@ -357,43 +353,43 @@ export class GuestSprites {
   // Usage-weighted attraction picker → an interaction tile (seat / use
   // position) for the chosen attraction. Returns the tile and the kind so
   // the caller can pick a type-appropriate dwell duration.
-  //   slot     weight = funcSlot  × 1
-  //   small    weight = funcSmall × 4   (matches table capacity weight)
-  //   large    weight = funcLarge × 6   (matches large-table capacity weight)
-  //   cashier  weight = funcCashier × 2 (smaller but regular share)
+  //
+  // Each functional object contributes its own ObjDef.targetWeight; the
+  // sum-by-type matches the legacy per-type weights:
+  //   slot     1×count, small  4×count,
+  //   large    6×count, cashier 2×count
+  // Non-attraction objects (WC, BAR — targetWeight 0) are skipped, matching
+  // legacy behaviour where they were never in the picker's pool.
   private _pickInteractionTile(): { tile: GC.Vec2; kind: GC.ObjType } | null {
-    const wSlot    = gameState.funcSlot;
-    const wSmall   = gameState.funcSmall   * 4;
-    const wLarge   = gameState.funcLarge   * 6;
-    const wCashier = gameState.funcCashier * 2;
-    const total = wSlot + wSmall + wLarge + wCashier;
+    interface Candidate { obj: GC.PlacedObj; weight: number; tiles: GC.Vec2[]; }
+    const candidates: Candidate[] = [];
+    let total = 0;
+    for (const obj of gameState.placedObjs) {
+      if (!gameState.functionalIds.has(obj.id)) continue;
+      const weight = GC.getDef(obj.type).targetWeight;
+      if (weight <= 0) continue;
+      // Skip objects whose interaction tiles have momentarily disappeared
+      // (e.g. adjacency just changed). Pre-checking here avoids a
+      // weighted-pick that lands on an unusable target.
+      const tiles = OV.getInteractionTiles(obj, gameState.tiles);
+      if (tiles.length === 0) continue;
+      candidates.push({ obj, weight, tiles });
+      total += weight;
+    }
     if (total <= 0) return null;
+
     let r = Math.random() * total;
-    let kind: GC.ObjType;
-    if      ((r -= wSlot)    < 0) kind = GC.ObjType.SLOT_MACHINE;
-    else if ((r -= wSmall)   < 0) kind = GC.ObjType.SMALL_TABLE;
-    else if ((r -= wLarge)   < 0) kind = GC.ObjType.LARGE_TABLE;
-    else                          kind = GC.ObjType.CASHIER;
-
-    const candidates = gameState.placedObjs.filter(
-      o => o.type === kind && gameState.functionalIds.has(o.id),
-    );
-    if (candidates.length === 0) return null;
-
-    // Try candidates in random order until one yields at least one
-    // interaction tile. Functional objects almost always have one; the
-    // loop only matters in edge cases where adjacency just changed.
-    for (let i = candidates.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    for (const c of candidates) {
+      r -= c.weight;
+      if (r < 0) {
+        const tile = c.tiles[Math.floor(Math.random() * c.tiles.length)];
+        return { tile, kind: c.obj.type };
+      }
     }
-    for (const obj of candidates) {
-      const slots = OV.getInteractionTiles(obj, gameState.tiles);
-      if (slots.length === 0) continue;
-      const slot = slots[Math.floor(Math.random() * slots.length)];
-      return { tile: slot, kind };
-    }
-    return null;
+    // Floating-point rounding fallback — pick the last candidate.
+    const last = candidates[candidates.length - 1];
+    const tile = last.tiles[Math.floor(Math.random() * last.tiles.length)];
+    return { tile, kind: last.obj.type };
   }
 
   // ── Draw ──────────────────────────────────────────────────────────────────

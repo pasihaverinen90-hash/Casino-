@@ -3,26 +3,46 @@
 // Stays open during placement so the player can pick a different item or
 // close out without re-opening the menu. Selection highlight tracks the
 // active placement; placement events from GridScene clear it.
+//
+// Category membership is derived from ObjDef.category (Phase A2): adding a
+// future object with category: 'food' will automatically slot it into the
+// Food & Drink tab once its type is appended to BUILD_ITEM_TYPES below.
 import * as GC from '../logic/GameConstants';
 import { gameState }  from '../state/GameState';
 import { uiBus }      from '../events/UIBus';
 import { paintThumb } from '../game/ObjectArt';
 
 interface BuildItem     { type: GC.ObjType; }
-interface BuildCategory { id: string; label: string; items: BuildItem[]; }
+interface BuildCategory { id: GC.BuildCategoryId; label: string; items: BuildItem[]; }
 
-// Local UI grouping. Adding a future category (Entertainment, Hotel, …) is
-// just a new entry here. Object definitions stay untouched.
-const BUILD_CATEGORIES: BuildCategory[] = [
-  { id: 'slots',    label: 'Slots',
-    items: [{ type: GC.ObjType.SLOT_MACHINE }] },
-  { id: 'tables',   label: 'Tables',
-    items: [{ type: GC.ObjType.SMALL_TABLE }, { type: GC.ObjType.LARGE_TABLE }] },
-  { id: 'services', label: 'Services',
-    items: [{ type: GC.ObjType.WC }, { type: GC.ObjType.CASHIER }] },
-  { id: 'food',     label: 'Food & Drink',
-    items: [{ type: GC.ObjType.BAR }] },
+// Visible category tabs, in display order. Labels stay here because they
+// are UI strings, not object metadata.
+const BUILD_CATEGORY_LABELS: Array<{ id: GC.BuildCategoryId; label: string }> = [
+  { id: 'slots',    label: 'Slots' },
+  { id: 'tables',   label: 'Tables' },
+  { id: 'services', label: 'Services' },
+  { id: 'food',     label: 'Food & Drink' },
 ];
+
+// Buildable object types in their preferred display order. Grouping by
+// ObjDef.category produces the per-tab item lists below; this order is
+// preserved within each tab.
+const BUILD_ITEM_TYPES: GC.ObjType[] = [
+  GC.ObjType.SLOT_MACHINE,
+  GC.ObjType.SMALL_TABLE,
+  GC.ObjType.LARGE_TABLE,
+  GC.ObjType.WC,
+  GC.ObjType.CASHIER,
+  GC.ObjType.BAR,
+];
+
+const BUILD_CATEGORIES: BuildCategory[] = BUILD_CATEGORY_LABELS.map(({ id, label }) => ({
+  id,
+  label,
+  items: BUILD_ITEM_TYPES
+    .filter(t => GC.getDef(t).category === id)
+    .map(type => ({ type })),
+}));
 
 const THUMB_PX = 48;
 
