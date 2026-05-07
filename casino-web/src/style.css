@@ -269,16 +269,26 @@ body {
   max-height: none;
 }
 
-/* Stats panel uses a single shared scroll region for tab content. The
-   title row and tab bar stay pinned above; only .tab-content scrolls.
-   min-height: 0 is required so this flex item respects its constraint
-   instead of growing to fit the chart stack and pushing the header
-   off-screen. */
-.stats-panel .tab-content {
-  flex: 1;
-  min-height: 0;
+/* Stats panel: fixed-size flex column with three children — pinned title,
+   pinned tab bar, and a single scroll region. overflow:hidden on the panel
+   itself prevents anything (e.g. a chart canvas) from escaping the panel
+   bounds and rendering on top of the header. Direct-child selectors lock
+   the layout so nothing inside a tab pane can override these. */
+.stats-panel {
+  overflow: hidden;
+}
+
+.stats-panel > .panel-title,
+.stats-panel > .tab-bar {
+  flex: 0 0 auto;
+}
+
+.stats-panel > .tab-content {
+  flex: 1 1 auto;
+  min-height: 0;          /* required for inner overflow to scroll */
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  position: relative;
 }
 
 .stats-panel .tab-pane {
@@ -291,6 +301,22 @@ body {
 
 .stats-panel .lifetime-block {
   padding-bottom: 4px;
+}
+
+/* Defensive: charts inside the stats panel must always lay out in normal
+   flow at their intrinsic 160px height. No tricks — explicit, no overlap. */
+.stats-panel .chart-card {
+  position: relative;
+  display: block;
+  margin-bottom: 16px;
+}
+
+.stats-panel .chart-card canvas {
+  display: block;
+  width: 100%;
+  height: 160px;
+  max-height: 160px;
+  position: static;
 }
 
 /* ── Build panel ─────────────────────────────────────────────────────────── */
