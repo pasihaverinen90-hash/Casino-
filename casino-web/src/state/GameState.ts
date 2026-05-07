@@ -185,6 +185,7 @@ class GameState extends EventEmitter {
   wcCount          = 0;
   barExists        = false;
   cashierCount     = 0;
+  atmCount         = 0;
   // Functional counts — only objects whose open-floor adjacency passes.
   // Fed into Simulation so non-functional objects contribute nothing.
   funcSlot         = 0;
@@ -193,6 +194,7 @@ class GameState extends EventEmitter {
   funcWc           = 0;
   funcBarExists    = false;
   funcCashier      = 0;
+  funcAtm          = 0;
   // Set of placed object ids that are currently functional. Recomputed
   // whenever placement, demolish, or load changes the world.
   functionalIds    : Set<string> = new Set();
@@ -296,9 +298,10 @@ class GameState extends EventEmitter {
     this.lastGuests = 0; this.prevCrowding = 0;
     this.slotCount = 0; this.smallTableCount = 0; this.largeTableCount = 0;
     this.wcCount = 0; this.barExists = false;
-    this.cashierCount = 0;
+    this.cashierCount = 0; this.atmCount = 0;
     this.funcSlot = 0; this.funcSmall = 0; this.funcLarge = 0;
     this.funcWc = 0; this.funcBarExists = false; this.funcCashier = 0;
+    this.funcAtm = 0;
     this.functionalIds = new Set();
     this.casinoCapacity = 0; this.resortRating = 1.75;
     this.totalGuests = 0; this.walkinGuests = 0; this.dailyRevenue = 0;
@@ -503,6 +506,7 @@ class GameState extends EventEmitter {
       small_rev    : p.small_rev * scale,
       large_rev    : p.large_rev * scale,
       bar_rev      : p.bar_rev   * scale,
+      atm_rev      : p.atm_rev   * scale,
       hotel_rev    : p.hotel_rev * scale,
       occupancy    : p.occupancy,
       booked       : p.booked,
@@ -532,9 +536,10 @@ class GameState extends EventEmitter {
     // Reset both physical and functional counts.
     this.slotCount = 0; this.smallTableCount = 0; this.largeTableCount = 0;
     this.wcCount = 0; this.barExists = false;
-    this.cashierCount = 0;
+    this.cashierCount = 0; this.atmCount = 0;
     this.funcSlot = 0; this.funcSmall = 0; this.funcLarge = 0;
     this.funcWc = 0; this.funcBarExists = false; this.funcCashier = 0;
+    this.funcAtm = 0;
 
     this.functionalIds = OV.computeFunctionalIds(this.placedObjs, this.tiles);
 
@@ -559,6 +564,9 @@ class GameState extends EventEmitter {
         case GC.ObjType.CASHIER:
           this.cashierCount++; if (isFunc) this.funcCashier++;
           break;
+        case GC.ObjType.ATM:
+          this.atmCount++; if (isFunc) this.funcAtm++;
+          break;
       }
     }
     // Capacity reflects functional attractions only — matches what the sim
@@ -578,6 +586,7 @@ class GameState extends EventEmitter {
       wc_count      : this.funcWc,
       bar_exists    : this.funcBarExists,
       cashier_count : this.funcCashier,
+      atm_count     : this.funcAtm,
       room_count    : this.roomCount,
       quality_level : this.qualityLevel,
       last_guests   : this.lastGuests,
@@ -735,9 +744,13 @@ class GameState extends EventEmitter {
     // Costs are gone in this MVP. Rewrite historical records so the
     // displayed Net always equals Revenue, regardless of when the
     // save was created.
+    // Defensive defaults for fields added after a record was written —
+    // pre-ATM records lack atm_rev. We default it to 0 rather than
+    // bumping SAVE_VERSION since no schema migration is required.
     for (const r of this.statsRecords) {
       r.costs = 0;
       r.net   = r.revenue;
+      if (typeof r.atm_rev !== 'number') r.atm_rev = 0;
     }
     this.chartDays      = d.ch_days;   this.chartGuests   = d.ch_guests;
     this.chartRevenue   = d.ch_rev;    this.chartRating   = d.ch_rating;

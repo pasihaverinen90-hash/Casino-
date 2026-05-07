@@ -178,6 +178,7 @@ export function getDoorTiles(req: PlaceReq, w: number, h: number): GC.Vec2[] {
         ? [{ x: col + 3, y: row }, { x: col + 4, y: row }]
         : [{ x: col, y: row + 3 }, { x: col, y: row + 4 }];
     case GC.ObjType.CASHIER:
+    case GC.ObjType.ATM:
       // 1×1 — the only footprint tile is also the door tile.
       return [{ x: col, y: row }];
   }

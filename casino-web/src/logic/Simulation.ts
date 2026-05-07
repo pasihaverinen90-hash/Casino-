@@ -20,6 +20,7 @@ export function calcRating(
   roomCount: number, qualityLevel: number,
   crowdingPenalty: number,
   cashierCount: number = 0,
+  atmCount: number = 0,
 ): number {
   const raw = GC.RATING_BASE
     + 0.01 * slots
@@ -30,6 +31,7 @@ export function calcRating(
     + 0.03 * roomCount
     + 0.18 * qualityLevel
     + 0.18 * cashierCount
+    + 0.10 * atmCount
     - crowdingPenalty;
   return clamp(raw, GC.RATING_MIN, GC.RATING_MAX);
 }
@@ -67,9 +69,10 @@ export function calcRevenue(
   totalGuests: number, bookedRooms: number,
   slots: number, smallTables: number, largeTables: number,
   barExists: boolean,
+  atmCount: number = 0,
 ): {
   total: number; slot_rev: number; small_rev: number;
-  large_rev: number; bar_rev: number; hotel_rev: number;
+  large_rev: number; bar_rev: number; atm_rev: number; hotel_rev: number;
 } {
   const slotCap  = slots;
   const tableCap = 4 * smallTables + 6 * largeTables;
@@ -90,15 +93,20 @@ export function calcRevenue(
   }
 
   const barGuests = barExists ? Math.round(totalGuests * GC.BAR_DRAW_RATE) : 0;
+  // ATM draw scales with count but is capped at total guests so a casino
+  // with many ATMs can't exceed the realistic visit ceiling.
+  const atmShare  = Math.min(1, atmCount * GC.ATM_DRAW_PER_UNIT);
+  const atmGuests = atmCount > 0 ? Math.round(totalGuests * atmShare) : 0;
 
   const slot_rev  = slotGuests  * GC.REV_SLOT;
   const small_rev = smallGuests * GC.REV_SMALL_TABLE;
   const large_rev = largeGuests * GC.REV_LARGE_TABLE;
   const bar_rev   = barGuests   * GC.REV_BAR;
+  const atm_rev   = atmGuests   * GC.REV_ATM;
   const hotel_rev = bookedRooms * GC.REV_PER_ROOM;
-  const total     = slot_rev + small_rev + large_rev + bar_rev + hotel_rev;
+  const total     = slot_rev + small_rev + large_rev + bar_rev + atm_rev + hotel_rev;
 
-  return { total, slot_rev, small_rev, large_rev, bar_rev, hotel_rev };
+  return { total, slot_rev, small_rev, large_rev, bar_rev, atm_rev, hotel_rev };
 }
 
 // Projection inputs — current functional counts plus the prior-day feedback
@@ -110,6 +118,7 @@ export interface ProjectInput {
   wc_count      : number;
   bar_exists    : boolean;
   cashier_count : number;
+  atm_count     : number;
   room_count    : number;
   quality_level : number;
   last_guests   : number;
@@ -133,6 +142,7 @@ export interface DayProjection {
   small_rev    : number;
   large_rev    : number;
   bar_rev      : number;
+  atm_rev      : number;
   hotel_rev    : number;
 }
 
@@ -143,7 +153,7 @@ export function projectDay(s: ProjectInput): DayProjection {
     s.slots, s.small_tables, s.large_tables,
     s.wc_count, s.bar_exists,
     s.room_count, s.quality_level, crowding,
-    s.cashier_count,
+    s.cashier_count, s.atm_count,
   );
   const hotel  = calcOccupancy(s.room_count, s.quality_level, rating);
   const walkin = calcWalkin(capacity, rating);
@@ -151,6 +161,7 @@ export function projectDay(s: ProjectInput): DayProjection {
   const rev    = calcRevenue(
     total, hotel.booked,
     s.slots, s.small_tables, s.large_tables, s.bar_exists,
+    s.atm_count,
   );
   return {
     capacity, crowding, rating,
@@ -160,6 +171,7 @@ export function projectDay(s: ProjectInput): DayProjection {
     revenue: rev.total,
     slot_rev: rev.slot_rev, small_rev: rev.small_rev,
     large_rev: rev.large_rev, bar_rev: rev.bar_rev,
+    atm_rev: rev.atm_rev,
     hotel_rev: rev.hotel_rev,
   };
 }

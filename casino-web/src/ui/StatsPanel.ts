@@ -40,6 +40,7 @@ export class StatsPanel {
   private lblYSlots  : HTMLElement;
   private lblYTables : HTMLElement;
   private lblYBar    : HTMLElement;
+  private lblYAtm    : HTMLElement;
   private lblYHotel  : HTMLElement;
   private lblYGuests : HTMLElement;
   private lblYRating : HTMLElement;
@@ -57,6 +58,7 @@ export class StatsPanel {
   private lblBrkSmall : HTMLElement;
   private lblBrkLarge : HTMLElement;
   private lblBrkBar   : HTMLElement;
+  private lblBrkAtm   : HTMLElement;
   private lblBrkHotel : HTMLElement;
 
   // History — Goals
@@ -106,6 +108,7 @@ export class StatsPanel {
     this.lblYSlots   = this.yesterdayBlock.appendChild(statRow(false, true));
     this.lblYTables  = this.yesterdayBlock.appendChild(statRow(false, true));
     this.lblYBar     = this.yesterdayBlock.appendChild(statRow(false, true));
+    this.lblYAtm     = this.yesterdayBlock.appendChild(statRow(false, true));
     this.lblYHotel   = this.yesterdayBlock.appendChild(statRow(false, true));
     this.lblYGuests  = this.yesterdayBlock.appendChild(statRow());
     this.lblYRating  = this.yesterdayBlock.appendChild(statRow());
@@ -134,6 +137,7 @@ export class StatsPanel {
     this.lblBrkSmall = this.historyPanel.appendChild(statRow());
     this.lblBrkLarge = this.historyPanel.appendChild(statRow());
     this.lblBrkBar   = this.historyPanel.appendChild(statRow());
+    this.lblBrkAtm   = this.historyPanel.appendChild(statRow());
     this.lblBrkHotel = this.historyPanel.appendChild(statRow());
 
     this.historyPanel.appendChild(sectionHeader('GOALS'));
@@ -209,6 +213,7 @@ export class StatsPanel {
     setRow(this.lblYSlots,  'Slots',       `${fmtCash(last.slot_rev)} 💰`);
     setRow(this.lblYTables, 'Tables',      `${fmtCash(last.small_rev + last.large_rev)} 💰`);
     setRow(this.lblYBar,    'Bar',         `${fmtCash(last.bar_rev)} 💰`);
+    setRow(this.lblYAtm,    'ATM',         `${fmtCash(last.atm_rev ?? 0)} 💰`);
     setRow(this.lblYHotel,  'Hotel rooms', `${fmtCash(last.hotel_rev)} 💰`);
     setRow(this.lblYGuests, 'Guests',      fmtInt(last.total_guests));
     setRow(this.lblYRating, 'Rating',      `★ ${fmtRating(last.rating)}`);
@@ -243,18 +248,20 @@ export class StatsPanel {
            hasData ? `★ ${fmtRating(bestRating.rating)}  (Day ${bestRating.day})` : '—');
 
     // ── Revenue Breakdown ────────────────────────────────────────────────
-    let sumSlot = 0, sumSmall = 0, sumLarge = 0, sumBar = 0, sumHotel = 0;
+    let sumSlot = 0, sumSmall = 0, sumLarge = 0, sumBar = 0, sumAtm = 0, sumHotel = 0;
     for (const r of records) {
       sumSlot  += r.slot_rev;
       sumSmall += r.small_rev;
       sumLarge += r.large_rev;
       sumBar   += r.bar_rev;
+      sumAtm   += r.atm_rev ?? 0;
       sumHotel += r.hotel_rev;
     }
     setRow(this.lblBrkSlots, 'Slots',        hasData ? `${fmtCash(sumSlot)} 💰`  : '—');
     setRow(this.lblBrkSmall, 'Small tables', hasData ? `${fmtCash(sumSmall)} 💰` : '—');
     setRow(this.lblBrkLarge, 'Large tables', hasData ? `${fmtCash(sumLarge)} 💰` : '—');
     setRow(this.lblBrkBar,   'Bar',          hasData ? `${fmtCash(sumBar)} 💰`   : '—');
+    setRow(this.lblBrkAtm,   'ATM',          hasData ? `${fmtCash(sumAtm)} 💰`   : '—');
     setRow(this.lblBrkHotel, 'Hotel rooms',  hasData ? `${fmtCash(sumHotel)} 💰` : '—');
 
     // ── Goals ────────────────────────────────────────────────────────────

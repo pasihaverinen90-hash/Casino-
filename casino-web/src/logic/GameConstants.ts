@@ -20,8 +20,13 @@ export const REV_SLOT        = 13;
 export const REV_SMALL_TABLE = 22;
 export const REV_LARGE_TABLE = 30;
 export const REV_BAR         = 6;
+export const REV_ATM         = 5;
 export const REV_PER_ROOM    = 24;
 export const BAR_DRAW_RATE   = 0.15;
+// Per-ATM share of guests who pull cash on a given day. Capped at 1.0
+// total in calcRevenue so a casino with many ATMs can't generate more
+// ATM visits than there are guests.
+export const ATM_DRAW_PER_UNIT = 0.10;
 
 // Daily upkeep per object. Disabled in this MVP — costs will return later
 // once real staff/operations systems exist.
@@ -77,7 +82,9 @@ export const COL_BLOCKED = 0x262d40;
 export const enum TileType { FLOOR, WALL, LOBBY, BLOCKED }
 // Enum order is fixed — values are persisted in saves. Append new entries.
 // (Old index 5 was PATH, removed in save 1.3.0; CASHIER moved 6 → 5 via migration.)
-export const enum ObjType  { SLOT_MACHINE, SMALL_TABLE, LARGE_TABLE, WC, BAR, CASHIER }
+// ATM appended at index 6 — old saves never contained that value, so no
+// migration is required.
+export const enum ObjType  { SLOT_MACHINE, SMALL_TABLE, LARGE_TABLE, WC, BAR, CASHIER, ATM }
 
 // Four-direction orientation. For floor attractions (slot, tables) this is
 // the *front* of the object — the side guests interact from. For wall
@@ -183,6 +190,16 @@ export const OBJ_DEFS: Record<ObjType, ObjDef> = {
     is_wall: true,  max: -1, rating: 0.18, flat: true,
     color: 0x4d99cc, accessSides: 0, variants: [],
     category: 'services', ratingPer: 0.18, revPerVisit: 0,
+    dwellRange: [2, 4], targetWeight: 2, accessRule: 'wall',
+  },
+  [ObjType.ATM]: {
+    // 1×1 wall service like Cashier, but cheaper and revenue-bearing.
+    // Each functional ATM draws ATM_DRAW_PER_UNIT × totalGuests visits
+    // (capped at total guests) and earns REV_ATM per visit.
+    label: 'ATM',          cost: 1000, fw: 1, fh: 1, cap: 0,
+    is_wall: true,  max: -1, rating: 0.10, flat: true,
+    color: 0x2d6e4d, accessSides: 0, variants: [],
+    category: 'services', ratingPer: 0.10, revPerVisit: REV_ATM,
     dwellRange: [2, 4], targetWeight: 2, accessRule: 'wall',
   },
 };
@@ -357,6 +374,10 @@ export interface DayStats {
   small_rev    : number;
   large_rev    : number;
   bar_rev      : number;
+  // Added with the ATM build object. Pre-1.6 records that lack this field
+  // are normalised to 0 in GameState._apply, so SAVE_VERSION did not need
+  // to bump.
+  atm_rev      : number;
   hotel_rev    : number;
   occupancy    : number;
   booked       : number;

@@ -79,6 +79,7 @@ export function paintObject(
     case GC.ObjType.WC:           drawWCG     (g, x, y, w, h, alpha, wallSide); break;
     case GC.ObjType.BAR:          drawBarG    (g, x, y, w, h, alpha, wallSide); break;
     case GC.ObjType.CASHIER:      drawCashierG(g, x, y, w, h, alpha, wallSide); break;
+    case GC.ObjType.ATM:          drawAtmG    (g, x, y, w, h, alpha, wallSide); break;
   }
 }
 
@@ -531,6 +532,83 @@ function drawCashierG(
   }
 }
 
+// ATM — 1×1 wall machine. Visually distinct from Cashier (which reads as
+// a glassed booth): ATM has a dark slate body, a small green-glow screen
+// with a brass card slot below it. Same band-as-wall trick as Cashier so
+// the back of the unit blends into the wall behind it.
+function drawAtmG(
+  g: Phaser.GameObjects.Graphics,
+  x: number, y: number, w: number, h: number, a: number,
+  side: WallSide | null,
+): void {
+  const eff: WallSide = side ?? 'N';
+  const bandRatio = 0.45;
+  let band: { x: number; y: number; w: number; h: number };
+  let body: { x: number; y: number; w: number; h: number };
+  let facing: WallSide;
+  if (eff === 'N') {
+    const bh = Math.max(2, Math.round(h * bandRatio));
+    band = { x, y, w, h: bh }; body = { x, y: y + bh, w, h: h - bh }; facing = 'S';
+  } else if (eff === 'S') {
+    const bh = Math.max(2, Math.round(h * bandRatio));
+    band = { x, y: y + h - bh, w, h: bh }; body = { x, y, w, h: h - bh }; facing = 'N';
+  } else if (eff === 'W') {
+    const bw = Math.max(2, Math.round(w * bandRatio));
+    band = { x, y, w: bw, h }; body = { x: x + bw, y, w: w - bw, h }; facing = 'E';
+  } else {
+    const bw = Math.max(2, Math.round(w * bandRatio));
+    band = { x: x + w - bw, y, w: bw, h }; body = { x, y, w: w - bw, h }; facing = 'W';
+  }
+
+  drawWallBand(g, band, a);
+
+  // Machine body — dark slate.
+  g.fillStyle(0x222a36, a);
+  g.fillRect(body.x, body.y, body.w, body.h);
+
+  // Screen — green-glow inset on the floor side. Sized small so the
+  // brass card slot below it still reads.
+  const m  = Math.max(1, Math.round(Math.min(body.w, body.h) * 0.18));
+  const sw = Math.max(1, body.w - 2 * m);
+  const sh = Math.max(1, Math.round(body.h * 0.42));
+  let sx = body.x + m;
+  let sy = body.y + m;
+  if (facing === 'S') sy = body.y + m;            // top of body, away from floor
+  else if (facing === 'N') sy = body.y + body.h - sh - m;
+  else if (facing === 'W') {
+    sx = body.x + body.w - sh - m;                // screen on the wall-side strip
+    sy = body.y + m;
+  } else if (facing === 'E') {
+    sx = body.x + m;
+    sy = body.y + m;
+  }
+  g.fillStyle(0x0f3a24, a);
+  g.fillRect(sx, sy, sw, sh);
+  // Inner brighter rectangle for "screen lit" feel.
+  g.fillStyle(0x4dcc88, a * 0.85);
+  const ix = sx + Math.max(1, Math.round(sw * 0.15));
+  const iy = sy + Math.max(1, Math.round(sh * 0.20));
+  const iw = Math.max(1, Math.round(sw * 0.70));
+  const ih = Math.max(1, Math.round(sh * 0.30));
+  g.fillRect(ix, iy, iw, ih);
+
+  // Card slot — slim brass strip on the floor-facing edge.
+  g.fillStyle(0xcc8a44, a);
+  if (facing === 'N') {
+    const t = Math.max(1, Math.round(body.h * 0.10));
+    g.fillRect(body.x + m, body.y + 1, body.w - 2 * m, t);
+  } else if (facing === 'S') {
+    const t = Math.max(1, Math.round(body.h * 0.10));
+    g.fillRect(body.x + m, body.y + body.h - 1 - t, body.w - 2 * m, t);
+  } else if (facing === 'W') {
+    const t = Math.max(1, Math.round(body.w * 0.10));
+    g.fillRect(body.x + 1, body.y + m, t, body.h - 2 * m);
+  } else {
+    const t = Math.max(1, Math.round(body.w * 0.10));
+    g.fillRect(body.x + body.w - 1 - t, body.y + m, t, body.h - 2 * m);
+  }
+}
+
 // ── Canvas2D thumbnail renderer (build panel) ────────────────────────────
 
 export function paintThumb(
@@ -552,6 +630,7 @@ export function paintThumb(
     case GC.ObjType.WC:           drawWCC     (ctx, x, y, w, h); break;
     case GC.ObjType.BAR:          drawBarC    (ctx, x, y, w, h); break;
     case GC.ObjType.CASHIER:      drawCashierC(ctx, x, y, w, h); break;
+    case GC.ObjType.ATM:          drawAtmC    (ctx, x, y, w, h); break;
   }
 }
 
@@ -623,4 +702,29 @@ function drawCashierC(ctx: CanvasRenderingContext2D, x: number, y: number, w: nu
   ctx.font = `bold ${Math.round(h * 0.5)}px monospace`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('$', x + w / 2, y + h / 2 + 1);
+}
+
+// ATM thumbnail — slate body, green screen, brass slot. Echoes the in-grid
+// art so the build-panel choice reads the same on the floor.
+function drawAtmC(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+  fillRect(ctx, '#222a36', x, y, w, h);
+  // Screen
+  const m = Math.max(3, Math.round(Math.min(w, h) * 0.18));
+  fillRect(ctx, '#0f3a24', x + m, y + m, w - 2 * m, Math.round(h * 0.42));
+  fillRect(ctx, '#4dcc88',
+    x + m + Math.round((w - 2 * m) * 0.15),
+    y + m + Math.round(h * 0.42 * 0.20),
+    Math.round((w - 2 * m) * 0.70),
+    Math.round(h * 0.42 * 0.30));
+  // Card slot
+  fillRect(ctx, '#cc8a44',
+    x + m, y + Math.round(h * 0.66),
+    w - 2 * m, Math.max(2, Math.round(h * 0.10)));
+  // Keypad hint — three small dark rows below the slot.
+  ctx.fillStyle = '#0e1115';
+  const kx = x + m;
+  const kw = w - 2 * m;
+  const ky = y + Math.round(h * 0.80);
+  const kh = Math.max(1, Math.round(h * 0.06));
+  ctx.fillRect(kx, ky, kw, kh);
 }

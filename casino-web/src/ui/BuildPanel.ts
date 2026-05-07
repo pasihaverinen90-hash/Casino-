@@ -33,6 +33,7 @@ const BUILD_ITEM_TYPES: GC.ObjType[] = [
   GC.ObjType.LARGE_TABLE,
   GC.ObjType.WC,
   GC.ObjType.CASHIER,
+  GC.ObjType.ATM,
   GC.ObjType.BAR,
 ];
 

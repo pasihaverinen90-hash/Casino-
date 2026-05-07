@@ -570,6 +570,7 @@ function _wallLabel(type: GC.ObjType): string {
     case GC.ObjType.WC:      return 'WC';
     case GC.ObjType.BAR:     return 'BAR';
     case GC.ObjType.CASHIER: return '$';
+    case GC.ObjType.ATM:     return 'ATM';
   }
   return '';
 }
