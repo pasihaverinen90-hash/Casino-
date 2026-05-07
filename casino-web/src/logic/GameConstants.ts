@@ -206,6 +206,29 @@ export const OBJ_DEFS: Record<ObjType, ObjDef> = {
 
 export function getDef(type: ObjType): ObjDef { return OBJ_DEFS[type]; }
 
+// All ObjType values, in declaration order. Append here whenever a new
+// ObjType is added so generic `Record<ObjType, T>` allocations cover the
+// new type. Saves persist the numeric enum value, so this list also doubles
+// as documentation of the on-disk type id space.
+export const ALL_OBJ_TYPES: ObjType[] = [
+  ObjType.SLOT_MACHINE,
+  ObjType.SMALL_TABLE,
+  ObjType.LARGE_TABLE,
+  ObjType.WC,
+  ObjType.BAR,
+  ObjType.CASHIER,
+  ObjType.ATM,
+];
+
+// Build a fresh `Record<ObjType, T>` populated with `value`. Use to
+// allocate per-type counters / accumulators without listing every key
+// by hand. Returns a new object on every call — no shared state.
+export function makeObjTypeRecord<T>(value: T): Record<ObjType, T> {
+  const out = {} as Record<ObjType, T>;
+  for (const t of ALL_OBJ_TYPES) out[t] = value;
+  return out;
+}
+
 export function valMessage(result: ValResult): string {
   switch (result) {
     case ValResult.FAIL_LIMIT:         return 'Only one bar can be built.';

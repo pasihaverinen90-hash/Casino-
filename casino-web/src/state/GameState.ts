@@ -178,23 +178,19 @@ class GameState extends EventEmitter {
   lastGuests       = 0;
   prevCrowding     = 0.0;
   // Physical counts — count of placed objects regardless of operational
-  // status. Used by goals, BuildPanel "Already built", and placement gating.
-  slotCount        = 0;
-  smallTableCount  = 0;
-  largeTableCount  = 0;
-  wcCount          = 0;
-  barExists        = false;
-  cashierCount     = 0;
-  atmCount         = 0;
+  // status. Used by goals, BuildPanel "Already built", placement gating,
+  // and the Simulation input. Recomputed by `_updateCounts` from
+  // `placedObjs` so adding a new ObjType requires no field churn here.
+  counts     : Record<GC.ObjType, number> = GC.makeObjTypeRecord(0);
   // Functional counts — only objects whose open-floor adjacency passes.
   // Fed into Simulation so non-functional objects contribute nothing.
-  funcSlot         = 0;
-  funcSmall        = 0;
-  funcLarge        = 0;
-  funcWc           = 0;
+  funcCounts : Record<GC.ObjType, number> = GC.makeObjTypeRecord(0);
+  // Bar shorthands derived from counts/funcCounts. Kept as public fields
+  // because external callers (GridScene PV.validate, BuildPanel limit
+  // check, DaySnapshot) are simpler against a boolean than against
+  // `counts[ObjType.BAR] > 0`. Re-derived in `_updateCounts`.
+  barExists        = false;
   funcBarExists    = false;
-  funcCashier      = 0;
-  funcAtm          = 0;
   // Set of placed object ids that are currently functional. Recomputed
   // whenever placement, demolish, or load changes the world.
   functionalIds    : Set<string> = new Set();
@@ -296,12 +292,9 @@ class GameState extends EventEmitter {
     this.tiles = []; this.placedObjs = []; this._nextId = 0;
     this.cash = GC.STARTING_CASH; this.cumulativeIncome = 0;
     this.lastGuests = 0; this.prevCrowding = 0;
-    this.slotCount = 0; this.smallTableCount = 0; this.largeTableCount = 0;
-    this.wcCount = 0; this.barExists = false;
-    this.cashierCount = 0; this.atmCount = 0;
-    this.funcSlot = 0; this.funcSmall = 0; this.funcLarge = 0;
-    this.funcWc = 0; this.funcBarExists = false; this.funcCashier = 0;
-    this.funcAtm = 0;
+    this.counts = GC.makeObjTypeRecord(0);
+    this.funcCounts = GC.makeObjTypeRecord(0);
+    this.barExists = false; this.funcBarExists = false;
     this.functionalIds = new Set();
     this.casinoCapacity = 0; this.resortRating = 1.75;
     this.totalGuests = 0; this.walkinGuests = 0; this.dailyRevenue = 0;
@@ -534,44 +527,28 @@ class GameState extends EventEmitter {
 
   private _updateCounts(): void {
     // Reset both physical and functional counts.
-    this.slotCount = 0; this.smallTableCount = 0; this.largeTableCount = 0;
-    this.wcCount = 0; this.barExists = false;
-    this.cashierCount = 0; this.atmCount = 0;
-    this.funcSlot = 0; this.funcSmall = 0; this.funcLarge = 0;
-    this.funcWc = 0; this.funcBarExists = false; this.funcCashier = 0;
-    this.funcAtm = 0;
+    this.counts = GC.makeObjTypeRecord(0);
+    this.funcCounts = GC.makeObjTypeRecord(0);
 
     this.functionalIds = OV.computeFunctionalIds(this.placedObjs, this.tiles);
 
     for (const obj of this.placedObjs) {
-      const isFunc = this.functionalIds.has(obj.id);
-      switch (obj.type) {
-        case GC.ObjType.SLOT_MACHINE:
-          this.slotCount++; if (isFunc) this.funcSlot++;
-          break;
-        case GC.ObjType.SMALL_TABLE:
-          this.smallTableCount++; if (isFunc) this.funcSmall++;
-          break;
-        case GC.ObjType.LARGE_TABLE:
-          this.largeTableCount++; if (isFunc) this.funcLarge++;
-          break;
-        case GC.ObjType.WC:
-          this.wcCount++; if (isFunc) this.funcWc++;
-          break;
-        case GC.ObjType.BAR:
-          this.barExists = true; if (isFunc) this.funcBarExists = true;
-          break;
-        case GC.ObjType.CASHIER:
-          this.cashierCount++; if (isFunc) this.funcCashier++;
-          break;
-        case GC.ObjType.ATM:
-          this.atmCount++; if (isFunc) this.funcAtm++;
-          break;
-      }
+      this.counts[obj.type]++;
+      if (this.functionalIds.has(obj.id)) this.funcCounts[obj.type]++;
     }
+
+    // Bar shorthands — kept as public booleans for external callers
+    // (placement validator, BuildPanel limit check, DaySnapshot).
+    this.barExists     = this.counts[GC.ObjType.BAR] > 0;
+    this.funcBarExists = this.funcCounts[GC.ObjType.BAR] > 0;
+
     // Capacity reflects functional attractions only — matches what the sim
     // sees and what's shown in the UI.
-    this.casinoCapacity = Sim.calcCapacity(this.funcSlot, this.funcSmall, this.funcLarge);
+    this.casinoCapacity = Sim.calcCapacity(
+      this.funcCounts[GC.ObjType.SLOT_MACHINE],
+      this.funcCounts[GC.ObjType.SMALL_TABLE],
+      this.funcCounts[GC.ObjType.LARGE_TABLE],
+    );
   }
 
   private _recomputeDerived(): void {
@@ -580,13 +557,13 @@ class GameState extends EventEmitter {
     // walk-in, and revenue in one shot. We then mirror its outputs into the
     // public fields the UI reads, and stash the projection for the drip.
     const p = Sim.projectDay({
-      slots         : this.funcSlot,
-      small_tables  : this.funcSmall,
-      large_tables  : this.funcLarge,
-      wc_count      : this.funcWc,
+      slots         : this.funcCounts[GC.ObjType.SLOT_MACHINE],
+      small_tables  : this.funcCounts[GC.ObjType.SMALL_TABLE],
+      large_tables  : this.funcCounts[GC.ObjType.LARGE_TABLE],
+      wc_count      : this.funcCounts[GC.ObjType.WC],
       bar_exists    : this.funcBarExists,
-      cashier_count : this.funcCashier,
-      atm_count     : this.funcAtm,
+      cashier_count : this.funcCounts[GC.ObjType.CASHIER],
+      atm_count     : this.funcCounts[GC.ObjType.ATM],
       room_count    : this.roomCount,
       quality_level : this.qualityLevel,
       last_guests   : this.lastGuests,
@@ -637,16 +614,17 @@ class GameState extends EventEmitter {
 
   private _isGoalMet(idx: number): boolean {
     const T = GC.GOAL_TARGETS;
+    const c = this.counts;
     switch (idx) {
-      case 0: return this.slotCount        >= T.slots;
-      case 1: return this.totalGuests      >= T.guests_first;
-      case 2: return this.wcCount          >= 1;
-      case 3: return this.smallTableCount  >= 1;
-      case 4: return this.resortRating     >= T.rating;
-      case 5: return this.cumulativeIncome >= T.income;
-      case 6: return this.roomCount        >= T.rooms;
-      case 7: return this.totalGuests      >= T.guests_busy;
-      case 8: return this.qualityLevel     >= T.quality;
+      case 0: return c[GC.ObjType.SLOT_MACHINE] >= T.slots;
+      case 1: return this.totalGuests           >= T.guests_first;
+      case 2: return c[GC.ObjType.WC]           >= 1;
+      case 3: return c[GC.ObjType.SMALL_TABLE]  >= 1;
+      case 4: return this.resortRating          >= T.rating;
+      case 5: return this.cumulativeIncome      >= T.income;
+      case 6: return this.roomCount             >= T.rooms;
+      case 7: return this.totalGuests           >= T.guests_busy;
+      case 8: return this.qualityLevel          >= T.quality;
       case 9: return this.barExists;
     }
     return false;
@@ -654,16 +632,17 @@ class GameState extends EventEmitter {
 
   getGoalProgress(idx: number): number {
     const T = GC.GOAL_TARGETS;
+    const c = this.counts;
     switch (idx) {
-      case 0: return Math.min(1, this.slotCount        / T.slots);
-      case 1: return Math.min(1, this.totalGuests      / T.guests_first);
-      case 2: return this.wcCount          >= 1 ? 1 : 0;
-      case 3: return this.smallTableCount  >= 1 ? 1 : 0;
-      case 4: return Math.min(1, this.resortRating     / T.rating);
-      case 5: return Math.min(1, this.cumulativeIncome / T.income);
-      case 6: return Math.min(1, this.roomCount        / T.rooms);
-      case 7: return Math.min(1, this.totalGuests      / T.guests_busy);
-      case 8: return this.qualityLevel     >= T.quality ? 1 : 0;
+      case 0: return Math.min(1, c[GC.ObjType.SLOT_MACHINE] / T.slots);
+      case 1: return Math.min(1, this.totalGuests           / T.guests_first);
+      case 2: return c[GC.ObjType.WC]          >= 1 ? 1 : 0;
+      case 3: return c[GC.ObjType.SMALL_TABLE] >= 1 ? 1 : 0;
+      case 4: return Math.min(1, this.resortRating          / T.rating);
+      case 5: return Math.min(1, this.cumulativeIncome      / T.income);
+      case 6: return Math.min(1, this.roomCount             / T.rooms);
+      case 7: return Math.min(1, this.totalGuests           / T.guests_busy);
+      case 8: return this.qualityLevel         >= T.quality ? 1 : 0;
       case 9: return this.barExists ? 1 : 0;
     }
     return 0;
