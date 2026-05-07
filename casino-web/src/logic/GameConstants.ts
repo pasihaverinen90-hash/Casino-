@@ -96,6 +96,22 @@ export const enum ValResult {
 //   0 = no requirement (wall objects use door-inward checks instead)
 //   1 = at least one open neighbour (slot machines)
 //   2 = at least two open sides (tables — guests need to approach)
+//
+// Phase A1 metadata (additive — not yet consumed by Simulation/GameState/
+// GuestSprites/BuildPanel). Centralises per-type values that today live as
+// hard-codes scattered across logic + game + ui modules so future content
+// (ATM, Buffet, …) and guest types can be data-driven.
+//   category    — build-panel grouping
+//   ratingPer   — per-instance rating contribution (matches Simulation.calcRating
+//                 coefficients; bar's flat 0.35 stays in Simulation for now,
+//                 so bar's ratingPer is 0)
+//   revPerVisit — money per guest who uses this attraction (mirrors REV_*)
+//   dwellRange  — game-seconds [min, max] a guest spends at this attraction
+//   targetWeight— relative likelihood a visiting guest picks this attraction
+//   accessRule  — placement/operation access geometry kind
+export type BuildCategoryId = 'slots' | 'tables' | 'services' | 'food';
+export type AccessRule      = 'slot' | 'table' | 'wall' | 'free';
+
 export interface ObjDef {
   label       : string;
   cost        : number;
@@ -109,6 +125,13 @@ export interface ObjDef {
   color       : number;
   accessSides : 0 | 1 | 2;
   variants    : string[]; // empty = no variant picker
+  // Phase A1 metadata (see block comment above).
+  category    : BuildCategoryId;
+  ratingPer   : number;
+  revPerVisit : number;
+  dwellRange  : [number, number];
+  targetWeight: number;
+  accessRule  : AccessRule;
 }
 
 export const OBJ_DEFS: Record<ObjType, ObjDef> = {
@@ -119,6 +142,8 @@ export const OBJ_DEFS: Record<ObjType, ObjDef> = {
     label: 'Slot Machine', cost: 750,  fw: 1, fh: 2, cap: 1,
     is_wall: false, max: -1, rating: 0.02, flat: false,
     color: 0xccb31a, accessSides: 1, variants: [],
+    category: 'slots', ratingPer: 0.01, revPerVisit: REV_SLOT,
+    dwellRange: [4, 8], targetWeight: 1, accessRule: 'slot',
   },
   [ObjType.SMALL_TABLE]: {
     // Tables require a full 1-tile walkable buffer ring on every side.
@@ -126,26 +151,39 @@ export const OBJ_DEFS: Record<ObjType, ObjDef> = {
     label: 'Small Table',  cost: 2500, fw: 2, fh: 3, cap: 4,
     is_wall: false, max: -1, rating: 0.18, flat: false,
     color: 0x3380e6, accessSides: 2, variants: ['blackjack', 'poker'],
+    category: 'tables', ratingPer: 0.14, revPerVisit: REV_SMALL_TABLE,
+    dwellRange: [6, 12], targetWeight: 4, accessRule: 'table',
   },
   [ObjType.LARGE_TABLE]: {
     label: 'Large Table',  cost: 4500, fw: 2, fh: 4, cap: 6,
     is_wall: false, max: -1, rating: 0.25, flat: false,
     color: 0x1a4dcc, accessSides: 2, variants: ['roulette', 'craps'],
+    category: 'tables', ratingPer: 0.25, revPerVisit: REV_LARGE_TABLE,
+    dwellRange: [8, 16], targetWeight: 6, accessRule: 'table',
   },
   [ObjType.WC]: {
     label: 'WC',           cost: 1200, fw: 3, fh: 1, cap: 0,
     is_wall: true,  max: -1, rating: 0.20, flat: false,
     color: 0x4db368, accessSides: 0, variants: [],
+    category: 'services', ratingPer: 0.20, revPerVisit: 0,
+    dwellRange: [3, 6], targetWeight: 0, accessRule: 'wall',
   },
   [ObjType.BAR]: {
+    // Bar's rating contribution is currently a flat +0.35 in Simulation
+    // (not per-instance), so ratingPer stays 0 here for Phase A1. Phase A3
+    // will fold the flat term into a generalised pass.
     label: 'Bar',          cost: 6500, fw: 8, fh: 1, cap: 0,
     is_wall: true,  max: 1,  rating: 0.35, flat: true,
     color: 0xcc4d33, accessSides: 0, variants: [],
+    category: 'food', ratingPer: 0, revPerVisit: REV_BAR,
+    dwellRange: [3, 6], targetWeight: 0, accessRule: 'wall',
   },
   [ObjType.CASHIER]: {
     label: 'Cashier',      cost: 1500, fw: 1, fh: 1, cap: 0,
     is_wall: true,  max: -1, rating: 0.18, flat: true,
     color: 0x4d99cc, accessSides: 0, variants: [],
+    category: 'services', ratingPer: 0.18, revPerVisit: 0,
+    dwellRange: [2, 4], targetWeight: 2, accessRule: 'wall',
   },
 };
 
