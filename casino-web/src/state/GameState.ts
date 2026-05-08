@@ -375,7 +375,7 @@ class GameState extends EventEmitter {
 
   tryPlace(col: number, row: number, objType: GC.ObjType, facing: GC.Orientation, variant = ''): boolean {
     const req = { type: objType, col, row, facing };
-    const result = PV.validate(req, this.tiles, this.cash, this.barExists);
+    const result = PV.validate(req, this.tiles, this.cash, this.barExists, this.isUnlocked(objType));
     if (result !== GC.ValResult.VALID) {
       this.emit('placement_failed', GC.valMessage(result));
       return false;
@@ -686,6 +686,20 @@ class GameState extends EventEmitter {
       case 9: return this.barExists ? 1 : 0;
     }
     return 0;
+  }
+
+  // ── Unlocks (Phase U1) ────────────────────────────────────────────────────
+
+  // Whether `t` is currently buildable. Derived from STARTING_UNLOCKS plus
+  // any completed goal whose GOAL_UNLOCKS entry names this type — both
+  // already round-trip through saves (one is static code, the other is the
+  // existing completedGoals[] array), so unlocks need no save schema change.
+  isUnlocked(t: GC.ObjType): boolean {
+    if (GC.STARTING_UNLOCKS.includes(t)) return true;
+    for (let i = 0; i < GC.GOAL_UNLOCKS.length; i++) {
+      if (this.completedGoals[i] && GC.GOAL_UNLOCKS[i] === t) return true;
+    }
+    return false;
   }
 
   // ── UI snapshot ───────────────────────────────────────────────────────────

@@ -92,6 +92,10 @@ export class BuildPanel {
     this._renderList();
 
     gameState.on('state_changed', () => this._refreshAffordability());
+    // state_changed already fires after goal completion so this is technically
+    // redundant, but listening explicitly makes the unlock → re-render link
+    // obvious if someone later changes the cascade.
+    gameState.on('goal_completed', () => this._refreshAffordability());
 
     // Selection highlight only applies while a placement is in progress.
     // Clear it whenever GridScene exits placement for any reason.
@@ -182,15 +186,30 @@ export class BuildPanel {
     for (const card of Array.from(this.listEl.children) as HTMLButtonElement[]) {
       const t   = Number(card.dataset['type']) as GC.ObjType;
       const def = GC.getDef(t);
+      const locked       = !gs.isUnlocked(t);
       const unaffordable = gs.cash < def.cost;
       const atLimit      = t === GC.ObjType.BAR && gs.barExists;
-      card.disabled = unaffordable || atLimit;
+
+      // Locked cards stay clickable so the click handler can show a toast
+      // explaining the unlock condition. Native disabled would swallow the
+      // click. Unlocked cards keep the existing disabled-for-cost behavior.
+      card.disabled       = !locked && (unaffordable || atLimit);
+      card.classList.toggle('locked', locked);
+      card.style.opacity  = locked ? '0.55' : '';
+      card.style.cursor   = locked ? 'help' : '';
 
       const sub = card.querySelector('.build-sub') as HTMLElement | null;
       if (sub) {
-        sub.textContent = atLimit
-          ? 'Already built'
-          : `${_sizeLabel(def)} · ${def.cost} 💰`;
+        if (locked) {
+          const i = GC.GOAL_UNLOCKS.indexOf(t);
+          sub.textContent = i >= 0
+            ? `🔒 Unlock: Goal ${i + 1} — ${GC.GOAL_LABELS[i]}`
+            : '🔒 Locked';
+        } else if (atLimit) {
+          sub.textContent = 'Already built';
+        } else {
+          sub.textContent = `${_sizeLabel(def)} · ${def.cost} 💰`;
+        }
       }
     }
   }
@@ -209,6 +228,14 @@ export class BuildPanel {
   }
 
   private _onItemClick(t: GC.ObjType, def: GC.ObjDef): void {
+    if (!gameState.isUnlocked(t)) {
+      const i = GC.GOAL_UNLOCKS.indexOf(t);
+      const msg = i >= 0
+        ? `Locked. Unlock: Goal ${i + 1} — ${GC.GOAL_LABELS[i]}.`
+        : 'This object is locked.';
+      gameState.emit('toast_requested', msg);
+      return;
+    }
     if (def.variants.length > 0) {
       this._showVariantPicker(t, def.variants);
     } else {

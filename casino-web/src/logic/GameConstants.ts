@@ -58,6 +58,37 @@ export const GOAL_REWARDS = [500, 800, 600, 1200, 1000, 1500, 1000, 2000, 1500, 
 // One-shot bonus when every goal is complete and the player enters endless
 // mode. Awarded exactly once per save; persisted via the endless_unlocked flag.
 export const ENDLESS_BONUS = 25_000;
+
+// Progression / Unlocks V1 — Phase U1.
+// Object types that are buildable from the moment a new game starts. Anything
+// outside this set is locked until a goal whose GOAL_UNLOCKS entry names it
+// is completed.
+//
+// Unlock state is *derived* (not persisted) — see GameState.isUnlocked. Both
+// inputs already round-trip through saves: STARTING_UNLOCKS is static code
+// and `completedGoals` is part of the existing save payload, so adding
+// unlocks did NOT require a SAVE_VERSION bump.
+//
+// We deliberately lock at object level (not at variant level) — variants
+// have no mechanical difference in V1, so locking poker-but-not-blackjack
+// would be UI noise without gameplay value.
+export const STARTING_UNLOCKS: readonly ObjType[] = [
+  ObjType.SLOT_MACHINE,
+  ObjType.WC,
+  ObjType.CASHIER,
+];
+
+// Per-goal unlock reward. Length aligns with the 10-goal completedGoals[]
+// array; null = goal grants no unlock (cash reward only). Order matches
+// GOAL_LABELS / GOAL_REWARDS so a single goal index drives label, cash,
+// AND unlock — keeping balance tweaks to one place.
+export const GOAL_UNLOCKS: readonly (ObjType | null)[] = [
+  ObjType.SMALL_TABLE, // Goal 0 — First Machines
+  ObjType.BAR,         // Goal 1 — First Crowd
+  ObjType.ATM,         // Goal 2 — Basic Amenity
+  ObjType.LARGE_TABLE, // Goal 3 — Real Gaming
+  null, null, null, null, null, null,
+];
 export const GOAL_LABELS  = [
   'First Machines', 'First Crowd', 'Basic Amenity', 'Real Gaming',
   'Rising Star',    'First Profit', 'Hotel Open',   'Busy Floor',
@@ -100,6 +131,7 @@ export const enum ValResult {
   FAIL_LIMIT, FAIL_AFFORD, FAIL_OUT_OF_BOUNDS,
   FAIL_WRONG_ZONE, FAIL_COLLISION,
   FAIL_WALL_INVALID, FAIL_DOOR_BLOCKED, FAIL_NO_ACCESS,
+  FAIL_LOCKED,
 }
 
 // accessSides: how many open floor sides a placement requires.
@@ -242,6 +274,7 @@ export function valMessage(result: ValResult): string {
     case ValResult.FAIL_WALL_INVALID:  return 'Must be placed against a wall.';
     case ValResult.FAIL_DOOR_BLOCKED:  return 'The entrance must not be blocked.';
     case ValResult.FAIL_NO_ACCESS:     return 'Needs at least one open approach.';
+    case ValResult.FAIL_LOCKED:        return 'This object is locked.';
   }
   return '';
 }

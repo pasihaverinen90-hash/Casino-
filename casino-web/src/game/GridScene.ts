@@ -269,6 +269,7 @@ export class GridScene extends Phaser.Scene {
     const result = PV.validate(
       { type: this.placeType as GC.ObjType, col: a.col, row: a.row, facing: this.placeFacing },
       gameState.tiles, gameState.cash, gameState.barExists,
+      gameState.isUnlocked(this.placeType as GC.ObjType),
     );
     this.ghostOk = result === GC.ValResult.VALID;
   }

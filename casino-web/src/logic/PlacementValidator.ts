@@ -22,11 +22,18 @@ export interface PlaceReq {
 
 // Pure economy/limit checks. Callers that only need to gate UI buttons
 // (e.g. "is this affordable right now?") can use this directly.
+//
+// `unlocked` is computed by the caller (e.g. via gameState.isUnlocked) and
+// passed in so this module stays pure — no GameState import. Locked is
+// checked first because it's the cheapest fast-fail and supersedes any
+// affordability/limit messaging.
 export function checkResources(
   type      : GC.ObjType,
   cash      : number,
   barExists : boolean,
+  unlocked  : boolean,
 ): GC.ValResult {
+  if (!unlocked)                  return GC.ValResult.FAIL_LOCKED;
   const def = GC.getDef(type);
   if (def.max === 1 && barExists) return GC.ValResult.FAIL_LIMIT;
   if (cash < def.cost)            return GC.ValResult.FAIL_AFFORD;
@@ -84,8 +91,9 @@ export function validate(
   tiles    : GC.Tile[],
   cash     : number,
   barExists: boolean,
+  unlocked : boolean,
 ): GC.ValResult {
-  const r = checkResources(req.type, cash, barExists);
+  const r = checkResources(req.type, cash, barExists, unlocked);
   if (r !== GC.ValResult.VALID) return r;
   return checkSpatial(req, tiles);
 }
