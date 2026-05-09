@@ -15,6 +15,10 @@ interface PopupItem {
   body  : string;
   reward: number;
   cta   : string;
+  // Phase U2: human-readable label of the object this goal unlocks (e.g.
+  // "Small Table"). Undefined for goals with no unlock and for the
+  // endless-mode popup, which don't render an "Unlocked: …" line.
+  unlockLabel?: string;
 }
 
 export class GoalCompletePopup {
@@ -30,11 +34,17 @@ export class GoalCompletePopup {
     this.parent = parent;
 
     gameState.on<{ index: number; reward: number }>('goal_completed', ({ index, reward }) => {
+      // Phase U2: surface the unlocked object's display label when this
+      // goal grants one. GOAL_UNLOCKS is the single source of truth for
+      // what each goal unlocks; OBJ_DEFS provides the player-facing label.
+      const unlockType  = GC.GOAL_UNLOCKS[index];
+      const unlockLabel = unlockType != null ? GC.getDef(unlockType).label : undefined;
       this._enqueue({
         title : `Goal Complete: ${GC.GOAL_LABELS[index]}`,
         body  : GC.GOAL_DESCS[index],
         reward,
         cta   : 'Continue',
+        unlockLabel,
       });
     });
 
@@ -93,6 +103,18 @@ export class GoalCompletePopup {
     reward.style.fontWeight = '600';
     reward.textContent = `Reward: +${item.reward.toLocaleString()} 💰`;
     card.appendChild(reward);
+
+    // Optional unlock line — amber/gold to read distinctly from the green
+    // cash reward without needing a new CSS class. Inline styles mirror the
+    // reward line above and keep this change scoped to one file.
+    if (item.unlockLabel) {
+      const unlock = document.createElement('div');
+      unlock.className   = 'modal-body';
+      unlock.style.color = '#e6b31a';
+      unlock.style.fontWeight = '700';
+      unlock.textContent = `Unlocked: ${item.unlockLabel}`;
+      card.appendChild(unlock);
+    }
 
     const btn = document.createElement('button');
     btn.className   = 'modal-btn';
