@@ -21,6 +21,8 @@ export function calcRating(
   crowdingPenalty: number,
   cashierCount: number = 0,
   atmCount: number = 0,
+  buffetCount: number = 0,
+  sportsbookCount: number = 0,
 ): number {
   const raw = GC.RATING_BASE
     + 0.01 * slots
@@ -32,6 +34,8 @@ export function calcRating(
     + 0.18 * qualityLevel
     + 0.18 * cashierCount
     + 0.10 * atmCount
+    + 0.22 * buffetCount
+    + 0.18 * sportsbookCount
     - crowdingPenalty;
   return clamp(raw, GC.RATING_MIN, GC.RATING_MAX);
 }
@@ -70,9 +74,12 @@ export function calcRevenue(
   slots: number, smallTables: number, largeTables: number,
   barExists: boolean,
   atmCount: number = 0,
+  buffetCount: number = 0,
+  sportsbookCount: number = 0,
 ): {
   total: number; slot_rev: number; small_rev: number;
-  large_rev: number; bar_rev: number; atm_rev: number; hotel_rev: number;
+  large_rev: number; bar_rev: number; atm_rev: number;
+  buffet_rev: number; sportsbook_rev: number; hotel_rev: number;
 } {
   const slotCap  = slots;
   const tableCap = 4 * smallTables + 6 * largeTables;
@@ -97,53 +104,70 @@ export function calcRevenue(
   // with many ATMs can't exceed the realistic visit ceiling.
   const atmShare  = Math.min(1, atmCount * GC.ATM_DRAW_PER_UNIT);
   const atmGuests = atmCount > 0 ? Math.round(totalGuests * atmShare) : 0;
+  // Buffet/Sportsbook follow the same capped per-unit share pattern.
+  const buffetShare      = Math.min(1, buffetCount      * GC.BUFFET_DRAW_RATE);
+  const buffetGuests     = buffetCount > 0
+    ? Math.round(totalGuests * buffetShare) : 0;
+  const sportsbookShare  = Math.min(1, sportsbookCount  * GC.SPORTSBOOK_DRAW_RATE);
+  const sportsbookGuests = sportsbookCount > 0
+    ? Math.round(totalGuests * sportsbookShare) : 0;
 
-  const slot_rev  = slotGuests  * GC.REV_SLOT;
-  const small_rev = smallGuests * GC.REV_SMALL_TABLE;
-  const large_rev = largeGuests * GC.REV_LARGE_TABLE;
-  const bar_rev   = barGuests   * GC.REV_BAR;
-  const atm_rev   = atmGuests   * GC.REV_ATM;
-  const hotel_rev = bookedRooms * GC.REV_PER_ROOM;
-  const total     = slot_rev + small_rev + large_rev + bar_rev + atm_rev + hotel_rev;
+  const slot_rev       = slotGuests       * GC.REV_SLOT;
+  const small_rev      = smallGuests      * GC.REV_SMALL_TABLE;
+  const large_rev      = largeGuests      * GC.REV_LARGE_TABLE;
+  const bar_rev        = barGuests        * GC.REV_BAR;
+  const atm_rev        = atmGuests        * GC.REV_ATM;
+  const buffet_rev     = buffetGuests     * GC.REV_BUFFET;
+  const sportsbook_rev = sportsbookGuests * GC.REV_SPORTSBOOK;
+  const hotel_rev      = bookedRooms      * GC.REV_PER_ROOM;
+  const total = slot_rev + small_rev + large_rev + bar_rev
+              + atm_rev + buffet_rev + sportsbook_rev + hotel_rev;
 
-  return { total, slot_rev, small_rev, large_rev, bar_rev, atm_rev, hotel_rev };
+  return {
+    total, slot_rev, small_rev, large_rev, bar_rev,
+    atm_rev, buffet_rev, sportsbook_rev, hotel_rev,
+  };
 }
 
 // Projection inputs — current functional counts plus the prior-day feedback
 // terms (last_guests, prev_crowding) used to derive crowding and rating.
 export interface ProjectInput {
-  slots         : number;
-  small_tables  : number;
-  large_tables  : number;
-  wc_count      : number;
-  bar_exists    : boolean;
-  cashier_count : number;
-  atm_count     : number;
-  room_count    : number;
-  quality_level : number;
-  last_guests   : number;
-  prev_crowding : number;
+  slots            : number;
+  small_tables     : number;
+  large_tables     : number;
+  wc_count         : number;
+  bar_exists       : boolean;
+  cashier_count    : number;
+  atm_count        : number;
+  buffet_count     : number;
+  sportsbook_count : number;
+  room_count       : number;
+  quality_level    : number;
+  last_guests      : number;
+  prev_crowding    : number;
 }
 
 // Pure projection — what today's totals look like at this instant given the
 // current functional state. No cash mutation. Used by both the per-second
 // drip and the day-end rollup, so the two stay consistent.
 export interface DayProjection {
-  capacity     : number;
-  crowding     : number;
-  rating       : number;
-  occupancy    : number;
-  booked       : number;
-  hotel_guests : number;
-  walkin       : number;
-  total_guests : number;
-  revenue      : number;
-  slot_rev     : number;
-  small_rev    : number;
-  large_rev    : number;
-  bar_rev      : number;
-  atm_rev      : number;
-  hotel_rev    : number;
+  capacity       : number;
+  crowding       : number;
+  rating         : number;
+  occupancy      : number;
+  booked         : number;
+  hotel_guests   : number;
+  walkin         : number;
+  total_guests   : number;
+  revenue        : number;
+  slot_rev       : number;
+  small_rev      : number;
+  large_rev      : number;
+  bar_rev        : number;
+  atm_rev        : number;
+  buffet_rev     : number;
+  sportsbook_rev : number;
+  hotel_rev      : number;
 }
 
 export function projectDay(s: ProjectInput): DayProjection {
@@ -154,6 +178,7 @@ export function projectDay(s: ProjectInput): DayProjection {
     s.wc_count, s.bar_exists,
     s.room_count, s.quality_level, crowding,
     s.cashier_count, s.atm_count,
+    s.buffet_count, s.sportsbook_count,
   );
   const hotel  = calcOccupancy(s.room_count, s.quality_level, rating);
   const walkin = calcWalkin(capacity, rating);
@@ -161,7 +186,7 @@ export function projectDay(s: ProjectInput): DayProjection {
   const rev    = calcRevenue(
     total, hotel.booked,
     s.slots, s.small_tables, s.large_tables, s.bar_exists,
-    s.atm_count,
+    s.atm_count, s.buffet_count, s.sportsbook_count,
   );
   return {
     capacity, crowding, rating,
@@ -172,6 +197,8 @@ export function projectDay(s: ProjectInput): DayProjection {
     slot_rev: rev.slot_rev, small_rev: rev.small_rev,
     large_rev: rev.large_rev, bar_rev: rev.bar_rev,
     atm_rev: rev.atm_rev,
+    buffet_rev: rev.buffet_rev,
+    sportsbook_rev: rev.sportsbook_rev,
     hotel_rev: rev.hotel_rev,
   };
 }

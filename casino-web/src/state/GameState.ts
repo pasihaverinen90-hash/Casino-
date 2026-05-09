@@ -517,12 +517,14 @@ class GameState extends EventEmitter {
       net          : this._paidToday,
       cumulative   : this.cumulativeIncome,
       cash         : this.cash,
-      slot_rev     : p.slot_rev  * scale,
-      small_rev    : p.small_rev * scale,
-      large_rev    : p.large_rev * scale,
-      bar_rev      : p.bar_rev   * scale,
-      atm_rev      : p.atm_rev   * scale,
-      hotel_rev    : p.hotel_rev * scale,
+      slot_rev       : p.slot_rev       * scale,
+      small_rev      : p.small_rev      * scale,
+      large_rev      : p.large_rev      * scale,
+      bar_rev        : p.bar_rev        * scale,
+      atm_rev        : p.atm_rev        * scale,
+      buffet_rev     : p.buffet_rev     * scale,
+      sportsbook_rev : p.sportsbook_rev * scale,
+      hotel_rev      : p.hotel_rev      * scale,
       occupancy    : p.occupancy,
       booked       : p.booked,
       capacity     : p.capacity,
@@ -579,17 +581,19 @@ class GameState extends EventEmitter {
     // walk-in, and revenue in one shot. We then mirror its outputs into the
     // public fields the UI reads, and stash the projection for the drip.
     const p = Sim.projectDay({
-      slots         : this.funcCounts[GC.ObjType.SLOT_MACHINE],
-      small_tables  : this.funcCounts[GC.ObjType.SMALL_TABLE],
-      large_tables  : this.funcCounts[GC.ObjType.LARGE_TABLE],
-      wc_count      : this.funcCounts[GC.ObjType.WC],
-      bar_exists    : this.funcBarExists,
-      cashier_count : this.funcCounts[GC.ObjType.CASHIER],
-      atm_count     : this.funcCounts[GC.ObjType.ATM],
-      room_count    : this.roomCount,
-      quality_level : this.qualityLevel,
-      last_guests   : this.lastGuests,
-      prev_crowding : this.prevCrowding,
+      slots            : this.funcCounts[GC.ObjType.SLOT_MACHINE],
+      small_tables     : this.funcCounts[GC.ObjType.SMALL_TABLE],
+      large_tables     : this.funcCounts[GC.ObjType.LARGE_TABLE],
+      wc_count         : this.funcCounts[GC.ObjType.WC],
+      bar_exists       : this.funcBarExists,
+      cashier_count    : this.funcCounts[GC.ObjType.CASHIER],
+      atm_count        : this.funcCounts[GC.ObjType.ATM],
+      buffet_count     : this.funcCounts[GC.ObjType.BUFFET],
+      sportsbook_count : this.funcCounts[GC.ObjType.SPORTSBOOK],
+      room_count       : this.roomCount,
+      quality_level    : this.qualityLevel,
+      last_guests      : this.lastGuests,
+      prev_crowding    : this.prevCrowding,
     });
     this._projection   = p;
     this.resortRating  = p.rating;
@@ -801,6 +805,8 @@ class GameState extends EventEmitter {
       r.costs = 0;
       r.net   = r.revenue;
       if (typeof r.atm_rev !== 'number') r.atm_rev = 0;
+      if (typeof r.buffet_rev     !== 'number') r.buffet_rev     = 0;
+      if (typeof r.sportsbook_rev !== 'number') r.sportsbook_rev = 0;
     }
     this.chartDays      = d.ch_days;   this.chartGuests   = d.ch_guests;
     this.chartRevenue   = d.ch_rev;    this.chartRating   = d.ch_rating;

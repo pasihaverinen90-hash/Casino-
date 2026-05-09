@@ -185,6 +185,14 @@ export function getDoorTiles(req: PlaceReq, w: number, h: number): GC.Vec2[] {
       return horiz
         ? [{ x: col + 3, y: row }, { x: col + 4, y: row }]
         : [{ x: col, y: row + 3 }, { x: col, y: row + 4 }];
+    case GC.ObjType.BUFFET:
+    case GC.ObjType.SPORTSBOOK:
+      // 4×1 — two interior door tiles at offsets +1 and +2 along the
+      // long axis. Same family as Bar's two-tile door pattern but for a
+      // shorter footprint.
+      return horiz
+        ? [{ x: col + 1, y: row }, { x: col + 2, y: row }]
+        : [{ x: col, y: row + 1 }, { x: col, y: row + 2 }];
     case GC.ObjType.CASHIER:
     case GC.ObjType.ATM:
       // 1×1 — the only footprint tile is also the door tile.

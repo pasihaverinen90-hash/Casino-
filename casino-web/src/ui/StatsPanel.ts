@@ -209,14 +209,19 @@ export class StatsPanel {
     this.yesterdayBlock.style.display = '';
     this.emptyYesterday.style.display = 'none';
 
-    setRow(this.lblYRev,    'Revenue',     `${fmtCash(last.revenue)} 💰`);
-    setRow(this.lblYSlots,  'Slots',       `${fmtCash(last.slot_rev)} 💰`);
-    setRow(this.lblYTables, 'Tables',      `${fmtCash(last.small_rev + last.large_rev)} 💰`);
-    setRow(this.lblYBar,    'Bar',         `${fmtCash(last.bar_rev)} 💰`);
-    setRow(this.lblYAtm,    'ATM',         `${fmtCash(last.atm_rev ?? 0)} 💰`);
-    setRow(this.lblYHotel,  'Hotel rooms', `${fmtCash(last.hotel_rev)} 💰`);
-    setRow(this.lblYGuests, 'Guests',      fmtInt(last.total_guests));
-    setRow(this.lblYRating, 'Rating',      `★ ${fmtRating(last.rating)}`);
+    // Phase N1: Bar/ATM rows became grouped Food & Drink / Services so
+    // Buffet and Sportsbook revenue surfaces without exploding row count.
+    // Legacy records lack buffet_rev/sportsbook_rev — `?? 0` covers them.
+    const foodDrink = last.bar_rev + (last.buffet_rev     ?? 0);
+    const services  = (last.atm_rev ?? 0) + (last.sportsbook_rev ?? 0);
+    setRow(this.lblYRev,    'Revenue',       `${fmtCash(last.revenue)} 💰`);
+    setRow(this.lblYSlots,  'Slots',         `${fmtCash(last.slot_rev)} 💰`);
+    setRow(this.lblYTables, 'Tables',        `${fmtCash(last.small_rev + last.large_rev)} 💰`);
+    setRow(this.lblYBar,    'Food & Drink',  `${fmtCash(foodDrink)} 💰`);
+    setRow(this.lblYAtm,    'Services',      `${fmtCash(services)} 💰`);
+    setRow(this.lblYHotel,  'Hotel rooms',   `${fmtCash(last.hotel_rev)} 💰`);
+    setRow(this.lblYGuests, 'Guests',        fmtInt(last.total_guests));
+    setRow(this.lblYRating, 'Rating',        `★ ${fmtRating(last.rating)}`);
   }
 
   private _refreshHistory(): void {
@@ -248,21 +253,23 @@ export class StatsPanel {
            hasData ? `★ ${fmtRating(bestRating.rating)}  (Day ${bestRating.day})` : '—');
 
     // ── Revenue Breakdown ────────────────────────────────────────────────
-    let sumSlot = 0, sumSmall = 0, sumLarge = 0, sumBar = 0, sumAtm = 0, sumHotel = 0;
+    // Bar/Atm rows became grouped Food & Drink / Services in Phase N1.
+    let sumSlot = 0, sumSmall = 0, sumLarge = 0;
+    let sumFood = 0, sumServices = 0, sumHotel = 0;
     for (const r of records) {
-      sumSlot  += r.slot_rev;
-      sumSmall += r.small_rev;
-      sumLarge += r.large_rev;
-      sumBar   += r.bar_rev;
-      sumAtm   += r.atm_rev ?? 0;
-      sumHotel += r.hotel_rev;
+      sumSlot     += r.slot_rev;
+      sumSmall    += r.small_rev;
+      sumLarge    += r.large_rev;
+      sumFood     += r.bar_rev + (r.buffet_rev     ?? 0);
+      sumServices += (r.atm_rev ?? 0) + (r.sportsbook_rev ?? 0);
+      sumHotel    += r.hotel_rev;
     }
-    setRow(this.lblBrkSlots, 'Slots',        hasData ? `${fmtCash(sumSlot)} 💰`  : '—');
-    setRow(this.lblBrkSmall, 'Small tables', hasData ? `${fmtCash(sumSmall)} 💰` : '—');
-    setRow(this.lblBrkLarge, 'Large tables', hasData ? `${fmtCash(sumLarge)} 💰` : '—');
-    setRow(this.lblBrkBar,   'Bar',          hasData ? `${fmtCash(sumBar)} 💰`   : '—');
-    setRow(this.lblBrkAtm,   'ATM',          hasData ? `${fmtCash(sumAtm)} 💰`   : '—');
-    setRow(this.lblBrkHotel, 'Hotel rooms',  hasData ? `${fmtCash(sumHotel)} 💰` : '—');
+    setRow(this.lblBrkSlots, 'Slots',         hasData ? `${fmtCash(sumSlot)} 💰`     : '—');
+    setRow(this.lblBrkSmall, 'Small tables',  hasData ? `${fmtCash(sumSmall)} 💰`    : '—');
+    setRow(this.lblBrkLarge, 'Large tables',  hasData ? `${fmtCash(sumLarge)} 💰`    : '—');
+    setRow(this.lblBrkBar,   'Food & Drink',  hasData ? `${fmtCash(sumFood)} 💰`     : '—');
+    setRow(this.lblBrkAtm,   'Services',      hasData ? `${fmtCash(sumServices)} 💰` : '—');
+    setRow(this.lblBrkHotel, 'Hotel rooms',   hasData ? `${fmtCash(sumHotel)} 💰`    : '—');
 
     // ── Goals ────────────────────────────────────────────────────────────
     for (let i = 0; i < 10; i++) {

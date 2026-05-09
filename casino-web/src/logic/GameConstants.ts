@@ -21,12 +21,19 @@ export const REV_SMALL_TABLE = 22;
 export const REV_LARGE_TABLE = 30;
 export const REV_BAR         = 6;
 export const REV_ATM         = 5;
+export const REV_BUFFET      = 10;
+export const REV_SPORTSBOOK  = 28;
 export const REV_PER_ROOM    = 24;
 export const BAR_DRAW_RATE   = 0.15;
 // Per-ATM share of guests who pull cash on a given day. Capped at 1.0
 // total in calcRevenue so a casino with many ATMs can't generate more
 // ATM visits than there are guests.
 export const ATM_DRAW_PER_UNIT = 0.10;
+// Per-Buffet / per-Sportsbook share of guests on a given day. Same
+// capped pattern as ATM: total share is min(1, count × rate) so adding
+// more units yields diminishing returns and never exceeds total guests.
+export const BUFFET_DRAW_RATE     = 0.18;
+export const SPORTSBOOK_DRAW_RATE = 0.10;
 
 // Daily upkeep per object. Disabled in this MVP — costs will return later
 // once real staff/operations systems exist.
@@ -87,7 +94,10 @@ export const GOAL_UNLOCKS: readonly (ObjType | null)[] = [
   ObjType.BAR,         // Goal 1 — First Crowd
   ObjType.ATM,         // Goal 2 — Basic Amenity
   ObjType.LARGE_TABLE, // Goal 3 — Real Gaming
-  null, null, null, null, null, null,
+  null,                // Goal 4 — Rising Star
+  ObjType.SPORTSBOOK,  // Goal 5 — First Profit
+  ObjType.BUFFET,      // Goal 6 — Hotel Open
+  null, null, null,
 ];
 export const GOAL_LABELS  = [
   'First Machines', 'First Crowd', 'Basic Amenity', 'Real Gaming',
@@ -117,8 +127,12 @@ export const enum TileType { FLOOR, WALL, LOBBY, BLOCKED }
 // Enum order is fixed — values are persisted in saves. Append new entries.
 // (Old index 5 was PATH, removed in save 1.3.0; CASHIER moved 6 → 5 via migration.)
 // ATM appended at index 6 — old saves never contained that value, so no
-// migration is required.
-export const enum ObjType  { SLOT_MACHINE, SMALL_TABLE, LARGE_TABLE, WC, BAR, CASHIER, ATM }
+// migration is required. BUFFET (7) and SPORTSBOOK (8) appended for the
+// same reason: legacy saves never persist those numeric values.
+export const enum ObjType  {
+  SLOT_MACHINE, SMALL_TABLE, LARGE_TABLE, WC, BAR, CASHIER, ATM,
+  BUFFET, SPORTSBOOK,
+}
 
 // Four-direction orientation. For floor attractions (slot, tables) this is
 // the *front* of the object — the side guests interact from. For wall
@@ -242,6 +256,25 @@ export const OBJ_DEFS: Record<ObjType, ObjDef> = {
     category: 'services', ratingPer: 0.10, revPerVisit: REV_ATM,
     dwellRange: [3, 6], targetWeight: 2, accessRule: 'wall',
   },
+  [ObjType.BUFFET]: {
+    // 4×1 wall service. Same door-pattern family as Bar (two interior
+    // door tiles), but slimmer footprint. Revenue scales with guest
+    // traffic via BUFFET_DRAW_RATE × count, capped at 1.0 in calcRevenue.
+    label: 'Buffet',       cost: 5000, fw: 4, fh: 1, cap: 0,
+    is_wall: true,  max: -1, rating: 0.22, flat: false,
+    color: 0xd4a04a, accessSides: 0, variants: [],
+    category: 'food', ratingPer: 0.22, revPerVisit: REV_BUFFET,
+    dwellRange: [12, 24], targetWeight: 3, accessRule: 'wall',
+  },
+  [ObjType.SPORTSBOOK]: {
+    // 4×1 wall service. Premium per-visit yield with a lower draw rate
+    // than Buffet — fewer guests come through, but they spend more.
+    label: 'Sportsbook',   cost: 10000, fw: 4, fh: 1, cap: 0,
+    is_wall: true,  max: -1, rating: 0.18, flat: false,
+    color: 0x33994d, accessSides: 0, variants: [],
+    category: 'services', ratingPer: 0.18, revPerVisit: REV_SPORTSBOOK,
+    dwellRange: [12, 24], targetWeight: 2, accessRule: 'wall',
+  },
 };
 
 export function getDef(type: ObjType): ObjDef { return OBJ_DEFS[type]; }
@@ -258,6 +291,8 @@ export const ALL_OBJ_TYPES: ObjType[] = [
   ObjType.BAR,
   ObjType.CASHIER,
   ObjType.ATM,
+  ObjType.BUFFET,
+  ObjType.SPORTSBOOK,
 ];
 
 // Build a fresh `Record<ObjType, T>` populated with `value`. Use to
@@ -442,6 +477,10 @@ export interface DayStats {
   // are normalised to 0 in GameState._apply, so SAVE_VERSION did not need
   // to bump.
   atm_rev      : number;
+  // Added with Phase N1 (Buffet/Sportsbook). Same defaulting pattern as
+  // atm_rev — legacy records get 0 in GameState._apply; no save bump.
+  buffet_rev     : number;
+  sportsbook_rev : number;
   hotel_rev    : number;
   occupancy    : number;
   booked       : number;

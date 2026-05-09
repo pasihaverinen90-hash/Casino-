@@ -34,7 +34,9 @@ const BUILD_ITEM_TYPES: GC.ObjType[] = [
   GC.ObjType.WC,
   GC.ObjType.CASHIER,
   GC.ObjType.ATM,
+  GC.ObjType.SPORTSBOOK,
   GC.ObjType.BAR,
+  GC.ObjType.BUFFET,
 ];
 
 const BUILD_CATEGORIES: BuildCategory[] = BUILD_CATEGORY_LABELS.map(({ id, label }) => ({

@@ -76,10 +76,12 @@ export function paintObject(
     case GC.ObjType.SLOT_MACHINE: drawSlotG (g, x, y, w, h, alpha, facing); break;
     case GC.ObjType.SMALL_TABLE:  drawTableG(g, x, y, w, h, alpha, false, facing, variant); break;
     case GC.ObjType.LARGE_TABLE:  drawTableG(g, x, y, w, h, alpha, true,  facing, variant);  break;
-    case GC.ObjType.WC:           drawWCG     (g, x, y, w, h, alpha, wallSide); break;
-    case GC.ObjType.BAR:          drawBarG    (g, x, y, w, h, alpha, wallSide); break;
-    case GC.ObjType.CASHIER:      drawCashierG(g, x, y, w, h, alpha, wallSide); break;
-    case GC.ObjType.ATM:          drawAtmG    (g, x, y, w, h, alpha, wallSide); break;
+    case GC.ObjType.WC:           drawWCG        (g, x, y, w, h, alpha, wallSide); break;
+    case GC.ObjType.BAR:          drawBarG       (g, x, y, w, h, alpha, wallSide); break;
+    case GC.ObjType.CASHIER:      drawCashierG   (g, x, y, w, h, alpha, wallSide); break;
+    case GC.ObjType.ATM:          drawAtmG       (g, x, y, w, h, alpha, wallSide); break;
+    case GC.ObjType.BUFFET:       drawBuffetG    (g, x, y, w, h, alpha, wallSide); break;
+    case GC.ObjType.SPORTSBOOK:   drawSportsbookG(g, x, y, w, h, alpha, wallSide); break;
   }
 }
 
@@ -609,6 +611,166 @@ function drawAtmG(
   }
 }
 
+// Buffet — 4×1 wall service. Wall band on the wall side; warm wood
+// counter facing the floor; a row of chafing-dish humps with brass tops
+// along the floor edge so it reads as "food service" at a glance.
+function drawBuffetG(
+  g: Phaser.GameObjects.Graphics,
+  x: number, y: number, w: number, h: number, a: number,
+  side: WallSide | null,
+): void {
+  const eff: WallSide = side ?? (w >= h ? 'N' : 'W');
+  const { band, body, facing } = splitForWall(x, y, w, h, eff);
+
+  drawWallBand(g, band, a);
+
+  // Warm wood counter body.
+  g.fillStyle(0x8a5a2e, a);
+  g.fillRect(body.x, body.y, body.w, body.h);
+  // Slim darker base line at the wall-side edge of the body for depth.
+  g.fillStyle(0x5a3818, a * 0.85);
+  if (facing === 'N') g.fillRect(body.x, body.y, body.w, 1);
+  else if (facing === 'S') g.fillRect(body.x, body.y + body.h - 1, body.w, 1);
+  else if (facing === 'W') g.fillRect(body.x, body.y, 1, body.h);
+  else g.fillRect(body.x + body.w - 1, body.y, 1, body.h);
+
+  // Chafing-dish row along the floor-facing edge. Brass dome with a
+  // darker base. Number of dishes scales with body length.
+  const horiz = facing === 'N' || facing === 'S';
+  const longLen = horiz ? body.w : body.h;
+  const dishes  = Math.max(2, Math.floor(longLen / 8));
+  const dishW   = Math.max(3, Math.round(longLen / (dishes + 0.4)));
+  for (let i = 0; i < dishes; i++) {
+    const t = (i + 0.5) / dishes;
+    if (facing === 'N') {
+      const cx = body.x + t * body.w;
+      const dy = body.y + body.h - Math.max(2, Math.round(body.h * 0.55));
+      drawChafingDish(g, cx, dy, dishW, Math.max(2, Math.round(body.h * 0.55)), a);
+    } else if (facing === 'S') {
+      const cx = body.x + t * body.w;
+      const dy = body.y;
+      drawChafingDish(g, cx, dy, dishW, Math.max(2, Math.round(body.h * 0.55)), a);
+    } else if (facing === 'W') {
+      const cy = body.y + t * body.h;
+      const dx = body.x + body.w - Math.max(2, Math.round(body.w * 0.55));
+      drawChafingDishV(g, dx, cy, Math.max(2, Math.round(body.w * 0.55)), dishW, a);
+    } else {
+      const cy = body.y + t * body.h;
+      const dx = body.x;
+      drawChafingDishV(g, dx, cy, Math.max(2, Math.round(body.w * 0.55)), dishW, a);
+    }
+  }
+}
+
+// Single chafing dish glyph centred at (cx, top-y), drawn as a brass dome
+// over a darker base. Used by the floor-facing row in Buffet (horizontal).
+function drawChafingDish(
+  g: Phaser.GameObjects.Graphics,
+  cx: number, topY: number, dishW: number, dishH: number, a: number,
+): void {
+  const baseH = Math.max(1, Math.round(dishH * 0.30));
+  const domeH = dishH - baseH;
+  // Base — dark wood/iron tone.
+  g.fillStyle(0x3a1f0e, a);
+  g.fillRect(cx - dishW / 2, topY + domeH, dishW, baseH);
+  // Brass dome.
+  g.fillStyle(0xe8d066, a);
+  g.fillEllipse(cx, topY + domeH, dishW, domeH * 2);
+  // Small handle dot on top.
+  g.fillStyle(0xfff0a8, a);
+  g.fillCircle(cx, topY + Math.max(1, Math.round(domeH * 0.25)),
+               Math.max(1, Math.round(Math.min(dishW, domeH) * 0.18)));
+}
+
+// Vertical-orientation variant for E/W facings.
+function drawChafingDishV(
+  g: Phaser.GameObjects.Graphics,
+  leftX: number, cy: number, dishW: number, dishH: number, a: number,
+): void {
+  const baseW = Math.max(1, Math.round(dishW * 0.30));
+  const domeW = dishW - baseW;
+  g.fillStyle(0x3a1f0e, a);
+  g.fillRect(leftX + domeW, cy - dishH / 2, baseW, dishH);
+  g.fillStyle(0xe8d066, a);
+  g.fillEllipse(leftX + domeW, cy, domeW * 2, dishH);
+  g.fillStyle(0xfff0a8, a);
+  g.fillCircle(leftX + Math.max(1, Math.round(domeW * 0.25)), cy,
+               Math.max(1, Math.round(Math.min(dishH, domeW) * 0.18)));
+}
+
+// Sportsbook — 4×1 wall service. Slate counter on the floor side; two
+// wide green "odds-board" screen panels embedded near the wall side with
+// thin slats reading as betting lines. Brass strip along the counter edge
+// for the cashier-style highlight.
+function drawSportsbookG(
+  g: Phaser.GameObjects.Graphics,
+  x: number, y: number, w: number, h: number, a: number,
+  side: WallSide | null,
+): void {
+  const eff: WallSide = side ?? (w >= h ? 'N' : 'W');
+  const { band, body, facing } = splitForWall(x, y, w, h, eff);
+
+  drawWallBand(g, band, a);
+
+  // Slate counter body.
+  g.fillStyle(0x222a36, a);
+  g.fillRect(body.x, body.y, body.w, body.h);
+
+  // Two green "odds-board" panels biased toward the wall side of the body.
+  const horiz = facing === 'N' || facing === 'S';
+  g.fillStyle(0x1a4d2a, a);
+  if (horiz) {
+    const pad   = Math.max(1, Math.round(body.w * 0.06));
+    const panel = (body.w - pad * 3) / 2;
+    const panH  = Math.max(2, Math.round(body.h * 0.55));
+    const panY  = facing === 'N' ? body.y + 1 : body.y + body.h - 1 - panH;
+    g.fillRect(body.x + pad,             panY, panel, panH);
+    g.fillRect(body.x + pad * 2 + panel, panY, panel, panH);
+    // Slats on each panel — thin ivory horizontal lines.
+    g.fillStyle(0xe8e8e0, a * 0.85);
+    for (let p = 0; p < 2; p++) {
+      const px = body.x + pad + p * (panel + pad);
+      const slats = 3;
+      for (let i = 0; i < slats; i++) {
+        const sy = panY + Math.max(1, Math.round(panH * (0.25 + i * 0.22)));
+        g.fillRect(px + 1, sy, panel - 2, 1);
+      }
+    }
+  } else {
+    const pad   = Math.max(1, Math.round(body.h * 0.06));
+    const panel = (body.h - pad * 3) / 2;
+    const panW  = Math.max(2, Math.round(body.w * 0.55));
+    const panX  = facing === 'W' ? body.x + 1 : body.x + body.w - 1 - panW;
+    g.fillRect(panX, body.y + pad,             panW, panel);
+    g.fillRect(panX, body.y + pad * 2 + panel, panW, panel);
+    g.fillStyle(0xe8e8e0, a * 0.85);
+    for (let p = 0; p < 2; p++) {
+      const py = body.y + pad + p * (panel + pad);
+      const slats = 3;
+      for (let i = 0; i < slats; i++) {
+        const sx = panX + Math.max(1, Math.round(panW * (0.25 + i * 0.22)));
+        g.fillRect(sx, py + 1, 1, panel - 2);
+      }
+    }
+  }
+
+  // Brass strip along the floor-facing edge of the counter.
+  g.fillStyle(0xcc8a44, a);
+  if (facing === 'N') {
+    const t = Math.max(1, Math.round(body.h * 0.18));
+    g.fillRect(body.x, body.y + body.h - t, body.w, t);
+  } else if (facing === 'S') {
+    const t = Math.max(1, Math.round(body.h * 0.18));
+    g.fillRect(body.x, body.y, body.w, t);
+  } else if (facing === 'W') {
+    const t = Math.max(1, Math.round(body.w * 0.18));
+    g.fillRect(body.x + body.w - t, body.y, t, body.h);
+  } else {
+    const t = Math.max(1, Math.round(body.w * 0.18));
+    g.fillRect(body.x, body.y, t, body.h);
+  }
+}
+
 // ── Canvas2D thumbnail renderer (build panel) ────────────────────────────
 
 export function paintThumb(
@@ -627,10 +789,12 @@ export function paintThumb(
     case GC.ObjType.SLOT_MACHINE: drawSlotC(ctx, x, y, w, h); break;
     case GC.ObjType.SMALL_TABLE:  drawTableC(ctx, x, y, w, h, false); break;
     case GC.ObjType.LARGE_TABLE:  drawTableC(ctx, x, y, w, h, true); break;
-    case GC.ObjType.WC:           drawWCC     (ctx, x, y, w, h); break;
-    case GC.ObjType.BAR:          drawBarC    (ctx, x, y, w, h); break;
-    case GC.ObjType.CASHIER:      drawCashierC(ctx, x, y, w, h); break;
-    case GC.ObjType.ATM:          drawAtmC    (ctx, x, y, w, h); break;
+    case GC.ObjType.WC:           drawWCC        (ctx, x, y, w, h); break;
+    case GC.ObjType.BAR:          drawBarC       (ctx, x, y, w, h); break;
+    case GC.ObjType.CASHIER:      drawCashierC   (ctx, x, y, w, h); break;
+    case GC.ObjType.ATM:          drawAtmC       (ctx, x, y, w, h); break;
+    case GC.ObjType.BUFFET:       drawBuffetC    (ctx, x, y, w, h); break;
+    case GC.ObjType.SPORTSBOOK:   drawSportsbookC(ctx, x, y, w, h); break;
   }
 }
 
@@ -702,6 +866,60 @@ function drawCashierC(ctx: CanvasRenderingContext2D, x: number, y: number, w: nu
   ctx.font = `bold ${Math.round(h * 0.5)}px monospace`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('$', x + w / 2, y + h / 2 + 1);
+}
+
+// Buffet thumbnail — warm wood counter with three brass chafing-dish
+// domes along the floor edge. Echoes the in-grid row-of-dishes silhouette.
+function drawBuffetC(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+  fillRect(ctx, '#8a5a2e', x, y, w, h);
+  // Counter base shadow line (top).
+  fillRect(ctx, '#5a3818', x, y, w, Math.max(1, Math.round(h * 0.12)));
+  // Three chafing-dish domes along the bottom.
+  const n = 3;
+  const pad = Math.max(1, Math.round(w * 0.08));
+  const slot = (w - pad * 2) / n;
+  const domeH = Math.max(3, Math.round(h * 0.42));
+  const baseH = Math.max(2, Math.round(h * 0.16));
+  for (let i = 0; i < n; i++) {
+    const cx = x + pad + slot * (i + 0.5);
+    const topY = y + h - domeH - baseH;
+    // Base.
+    fillRect(ctx, '#3a1f0e', cx - slot * 0.4, topY + domeH, slot * 0.8, baseH);
+    // Brass dome.
+    ctx.fillStyle = '#e8d066';
+    ctx.beginPath();
+    ctx.ellipse(cx, topY + domeH, slot * 0.4, domeH, 0, Math.PI, 2 * Math.PI);
+    ctx.fill();
+    // Handle dot.
+    ctx.fillStyle = '#fff0a8';
+    ctx.beginPath();
+    ctx.arc(cx, topY + Math.round(domeH * 0.4), Math.max(1.2, slot * 0.07), 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// Sportsbook thumbnail — slate body, two green odds-board panels with
+// thin slats, brass counter strip at the bottom.
+function drawSportsbookC(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+  fillRect(ctx, '#222a36', x, y, w, h);
+  const pad = Math.max(2, Math.round(w * 0.08));
+  const panel = (w - pad * 3) / 2;
+  const panY = y + Math.max(2, Math.round(h * 0.12));
+  const panH = Math.round(h * 0.50);
+  fillRect(ctx, '#1a4d2a', x + pad,             panY, panel, panH);
+  fillRect(ctx, '#1a4d2a', x + pad * 2 + panel, panY, panel, panH);
+  // Slats.
+  ctx.fillStyle = '#e8e8e0';
+  const slats = 3;
+  for (let p = 0; p < 2; p++) {
+    const px = x + pad + p * (panel + pad);
+    for (let i = 0; i < slats; i++) {
+      const sy = panY + Math.round(panH * (0.22 + i * 0.24));
+      ctx.fillRect(px + 2, sy, panel - 4, 1.5);
+    }
+  }
+  // Brass counter strip.
+  fillRect(ctx, '#cc8a44', x, y + Math.round(h * 0.78), w, Math.max(2, Math.round(h * 0.14)));
 }
 
 // ATM thumbnail — slate body, green screen, brass slot. Echoes the in-grid
