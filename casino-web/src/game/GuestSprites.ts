@@ -75,17 +75,24 @@ interface Guest {
 // a few attractions are running, MAX caps draw + state cost at busy times.
 // Effective formula: clamp(round(totalGuests * VISIBLE_PER_GUEST), MIN, MAX).
 //
-// Guest Behavior V1: reduced from MIN=10 / MAX=36 / 0.333 to avoid the
-// "build first slot → 10 guests pop in" burst. The ramp is now produced
-// jointly by these caps AND a per-spawn cooldown (SPAWN_INTERVAL_SEC),
-// so even when the target jumps the floor fills gradually rather than
-// instantaneously.
-const MIN_VISIBLE        = 4;
-const MAX_VISIBLE        = 24;
-const VISIBLE_PER_GUEST  = 0.15;
+// Guest Behavior V1 dropped these to MIN=4 / MAX=24 / 0.15 to kill the
+// "build first slot → 10 guests pop in" burst, but production telemetry
+// showed the floor reading too empty (~12 visible at 88 guests/day).
+// V1.1 tunes the ratio back up while keeping the per-spawn cooldown that
+// actually produces the smooth fill — the cap controls steady-state
+// density, the cooldown controls fill rate. They are independent levers.
+//   ~20 guests/day  → ~6 visible (MIN floor)
+//   ~50 guests/day  → ~13 visible
+//   ~88 guests/day  → ~22 visible
+//   ~150 guests/day → ~36 visible (MAX cap)
+const MIN_VISIBLE        = 6;
+const MAX_VISIBLE        = 36;
+const VISIBLE_PER_GUEST  = 0.25;
 // Minimum game-seconds between successive spawns. Time-scale aware: at 4×
-// speed a busy casino fills four times faster, which feels right.
-const SPAWN_INTERVAL_SEC = 1.5;
+// speed a busy casino fills four times faster, which feels right. Tightened
+// from 1.5s to 1.0s so the higher MAX reaches steady state in reasonable
+// game-time without going back to a single-tick burst.
+const SPAWN_INTERVAL_SEC = 1.0;
 // Calmer casual-walk pace. Previously 2.5 (≈ particle-fast). At 1× speed
 // (1 real-sec = 1 game-sec) this is one tile per real second, which reads
 // as a person strolling rather than darting around. Speed scaling via
