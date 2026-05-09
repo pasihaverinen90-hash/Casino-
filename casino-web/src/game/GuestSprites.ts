@@ -62,16 +62,30 @@ interface Guest {
   // target change (will be filled by the next _stepGuest call) or when
   // BFS has failed to find a path — the stuck cascade then takes over.
   route : GC.Vec2[];
+  // Reservation key for the interaction tile this guest is heading to or
+  // currently using. null when the guest has no claim (idle pre-spawn,
+  // mid-`to_exit`, or a recovery path picked nothing). One reservation per
+  // guest at a time — claimed when the target is picked, released on
+  // repick / exit / despawn. See _reserve / _releaseReservation.
+  reservedKey: string | null;
 }
 
 // Visible-crowd sizing. The ratio scales the aggregate guests/day down to
-// an on-screen population; the floor felt empty at 0.10, so we use a third
-// of demand. MIN keeps the floor from looking deserted while a few
-// attractions are running, MAX caps draw + state cost at busy times.
-// Effective formula: clamp(round(totalGuests / 3), MIN, MAX).
-const MIN_VISIBLE        = 10;
-const MAX_VISIBLE        = 36;
-const VISIBLE_PER_GUEST  = 1 / 3;
+// an on-screen population; MIN keeps the floor from looking deserted while
+// a few attractions are running, MAX caps draw + state cost at busy times.
+// Effective formula: clamp(round(totalGuests * VISIBLE_PER_GUEST), MIN, MAX).
+//
+// Guest Behavior V1: reduced from MIN=10 / MAX=36 / 0.333 to avoid the
+// "build first slot → 10 guests pop in" burst. The ramp is now produced
+// jointly by these caps AND a per-spawn cooldown (SPAWN_INTERVAL_SEC),
+// so even when the target jumps the floor fills gradually rather than
+// instantaneously.
+const MIN_VISIBLE        = 4;
+const MAX_VISIBLE        = 24;
+const VISIBLE_PER_GUEST  = 0.15;
+// Minimum game-seconds between successive spawns. Time-scale aware: at 4×
+// speed a busy casino fills four times faster, which feels right.
+const SPAWN_INTERVAL_SEC = 1.5;
 // Calmer casual-walk pace. Previously 2.5 (≈ particle-fast). At 1× speed
 // (1 real-sec = 1 game-sec) this is one tile per real second, which reads
 // as a person strolling rather than darting around. Speed scaling via
@@ -96,11 +110,13 @@ const STUCK_DESPAWN_SEC  = 12.0;
 
 // Per-attraction dwell range, in game-seconds, sourced from ObjDef.dwellRange
 // (Phase A2). At 1× speed 1 game-second equals 1 real second, and 1 in-game
-// hour spans 4 real seconds, so existing values map roughly to:
-//   slot       1–2 in-game hours
-//   small      1.5–3 in-game hours
-//   large      2–4 in-game hours
-//   cashier    0.5–1 in-game hours
+// hour spans 4 real seconds, so values after Guest Behavior V1 map roughly to:
+//   slot       3–6 in-game hours
+//   small      ~4.5–9 in-game hours
+//   large      6–12 in-game hours
+//   cashier/atm  0.75–1.5 in-game hours
+// Visual-only — Simulation runs on aggregate counts, not on dwell ticks, so
+// these tweaks do not affect revenue or rating.
 // Fallback used only when the dwell `kind` is null (e.g. mid-`to_exit`
 // transitions where no attraction is associated).
 const DWELL_FALLBACK: [number, number] = [3, 6];
@@ -108,10 +124,43 @@ const DWELL_FALLBACK: [number, number] = [3, 6];
 export class GuestSprites {
   private gfx: Phaser.GameObjects.Graphics;
   private guests: Guest[] = [];
+  // Game-seconds remaining until the next spawn is allowed. Counts down in
+  // _stepLogic; reset to SPAWN_INTERVAL_SEC after each successful spawn.
+  // Negative-or-zero means "ready to spawn now."
+  private _spawnCooldown = 0;
+  // Set of "x,y" keys for interaction tiles currently claimed by a guest.
+  // Used to filter the picker so two guests don't intentionally target the
+  // same chair / table seat / wall-service inward tile. Fail-open: if a
+  // reservation ever leaks (guest removed without releasing), the worst
+  // case is a single unreachable tile, never a softlock — the picker just
+  // routes the rest of the floor.
+  //
+  // Future hotel-guest profiles (longer non-floor dwell, sleep budgets,
+  // etc.) can ignore this set entirely since they don't share interaction
+  // tiles with floor-walk-ins.
+  private _reservedTiles = new Set<string>();
 
   constructor(scene: Phaser.Scene) {
     this.gfx = scene.add.graphics();
     this.gfx.setDepth(3);
+  }
+
+  // ── Reservations ──────────────────────────────────────────────────────────
+
+  private _tileKey(x: number, y: number): string {
+    return `${Math.floor(x)},${Math.floor(y)}`;
+  }
+
+  private _reserve(g: Guest, key: string): void {
+    this._reservedTiles.add(key);
+    g.reservedKey = key;
+  }
+
+  // Drop this guest's claim (if any). Safe to call repeatedly; idempotent.
+  private _releaseReservation(g: Guest): void {
+    if (g.reservedKey == null) return;
+    this._reservedTiles.delete(g.reservedKey);
+    g.reservedKey = null;
   }
 
   // Called every frame by GridScene.update.
@@ -131,10 +180,20 @@ export class GuestSprites {
     // Population target — scaled-down representation of total demand.
     const scaled = Math.round(gameState.totalGuests * VISIBLE_PER_GUEST);
     const target = Math.min(MAX_VISIBLE, Math.max(MIN_VISIBLE, scaled));
-    while (this.guests.length < target) {
+    // At most one spawn per cooldown window. Cooldown counts game-seconds
+    // so 2×/4× speed naturally accelerates fill rate. Without this, a jump
+    // in `target` (e.g. first functional attraction → 4 guests immediately)
+    // would burst the whole population in a single tick.
+    if (this._spawnCooldown > 0) this._spawnCooldown -= dtGame;
+    if (this.guests.length < target && this._spawnCooldown <= 0) {
       const g = this._spawn();
-      if (!g) break; // no functional attractions yet
-      this.guests.push(g);
+      if (g) {
+        this.guests.push(g);
+        this._spawnCooldown = SPAWN_INTERVAL_SEC;
+      }
+      // If _spawn returned null (no functional attractions yet, or every
+      // candidate tile is reserved), leave the cooldown at zero — we'll
+      // retry next tick without waiting an interval for nothing.
     }
     // Don't hard-cull when over-target — let them walk out naturally so the
     // crowd thins gracefully when state changes.
@@ -144,6 +203,9 @@ export class GuestSprites {
       const g = this.guests[i];
       this._stepGuest(g, dtGame);
       if (g.state === 'to_exit' && this._near(g, g.tCol, g.tRow)) {
+        // Despawn — release this guest's interaction-tile claim so a future
+        // guest can reuse it.
+        this._releaseReservation(g);
         this.guests.splice(i, 1);
       }
     }
@@ -160,6 +222,7 @@ export class GuestSprites {
     // target can't pin the guest indefinitely.
     if (g.stuck >= STUCK_DESPAWN_SEC) {
       // T4: snap to exit; the per-tick despawn check then removes us.
+      this._releaseReservation(g);
       g.col   = g.exitCol; g.row = g.exitRow;
       g.tCol  = g.exitCol; g.tRow = g.exitRow;
       g.state = 'to_exit';
@@ -168,6 +231,7 @@ export class GuestSprites {
     }
     if (g.state === 'to_target' && g.stuck >= STUCK_EXIT_SEC) {
       // T3: give up on attractions, head for the exit.
+      this._releaseReservation(g);
       g.state   = 'to_exit';
       g.tCol    = g.exitCol;
       g.tRow    = g.exitRow;
@@ -180,11 +244,15 @@ export class GuestSprites {
       // T2: try a different attraction first — the current target tile may
       // have been demolished, blocked, or just had its open-floor approach
       // built over. Falling back to exit is fine if no attractions remain.
+      // Drop the old reservation before picking; otherwise the picker would
+      // exclude our own current tile from candidates.
+      this._releaseReservation(g);
       const alt = this._pickInteractionTile();
       if (alt) {
         g.tCol    = alt.tile.x + 0.5;
         g.tRow    = alt.tile.y + 0.5;
         g.curKind = alt.kind;
+        this._reserve(g, this._tileKey(alt.tile.x, alt.tile.y));
       } else {
         g.state   = 'to_exit';
         g.tCol    = g.exitCol;
@@ -268,6 +336,9 @@ export class GuestSprites {
   // or head for the exit. Falling back to exit when no targets are left
   // ensures the crowd doesn't pile up at one attraction.
   private _chooseNextLeg(g: Guest): void {
+    // Done with the current attraction — release its claim before picking
+    // a new one so the picker can re-offer it (or any other tile) freely.
+    this._releaseReservation(g);
     if (g.visitsLeft > 0) {
       const next = this._pickInteractionTile();
       if (next) {
@@ -276,6 +347,7 @@ export class GuestSprites {
         g.curKind = next.kind;
         g.state   = 'to_target';
         g.visitsLeft--;
+        this._reserve(g, this._tileKey(next.tile.x, next.tile.y));
         g.route   = findRoute(gameState.tiles, g.col, g.row, g.tCol, g.tRow) ?? [];
         g.stuck   = 0;
         return;
@@ -297,6 +369,11 @@ export class GuestSprites {
     // 'to_exit' arrival is handled by the despawn check in _stepLogic.
   }
 
+  // TODO (guest profiles): future hotel guests should carry longer visit
+  // budgets and a dedicated non-floor dwell while "sleeping in the room"
+  // — likely a per-guest multiplier on this range plus a separate route
+  // that targets the hotel block instead of an attraction. Out of scope
+  // for Guest Behavior V1 (visual-only polish pass).
   private _dwellFor(kind: GC.ObjType | null): number {
     const range = kind != null ? GC.getDef(kind).dwellRange : DWELL_FALLBACK;
     return range[0] + Math.random() * (range[1] - range[0]);
@@ -314,6 +391,8 @@ export class GuestSprites {
     const exit = this._lobbySpawn();
     const tCol = target.tile.x + 0.5;
     const tRow = target.tile.y + 0.5;
+    const reservedKey = this._tileKey(target.tile.x, target.tile.y);
+    this._reservedTiles.add(reservedKey);
     // Slight per-guest skin-tone variation around a warm base tone — keeps
     // heads recognisable while breaking up uniform crowds. ±0x18 per channel.
     const headJitter = (Math.floor(Math.random() * 7) - 3) * 0x080808;
@@ -339,6 +418,7 @@ export class GuestSprites {
       // Random initial phase so the crowd's bobs don't synchronise.
       phase : Math.random() * Math.PI * 2,
       route : findRoute(gameState.tiles, exit.col, exit.row, tCol, tRow) ?? [],
+      reservedKey,
     };
   }
 
@@ -371,7 +451,14 @@ export class GuestSprites {
       // Skip objects whose interaction tiles have momentarily disappeared
       // (e.g. adjacency just changed). Pre-checking here avoids a
       // weighted-pick that lands on an unusable target.
-      const tiles = OV.getInteractionTiles(obj, gameState.tiles);
+      // Reservation filter: drop tiles already claimed by another guest so
+      // two guests don't intentionally target the same chair / seat. If
+      // every tile of an object is reserved, the whole object is skipped
+      // (its weight contributes nothing this pick).
+      const allTiles = OV.getInteractionTiles(obj, gameState.tiles);
+      const tiles = allTiles.filter(
+        t => !this._reservedTiles.has(this._tileKey(t.x, t.y)),
+      );
       if (tiles.length === 0) continue;
       candidates.push({ obj, weight, tiles });
       total += weight;

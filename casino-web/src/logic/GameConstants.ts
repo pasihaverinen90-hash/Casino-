@@ -185,7 +185,11 @@ export const OBJ_DEFS: Record<ObjType, ObjDef> = {
     is_wall: false, max: -1, rating: 0.02, flat: false,
     color: 0xccb31a, accessSides: 1, variants: [],
     category: 'slots', ratingPer: 0.01, revPerVisit: REV_SLOT,
-    dwellRange: [4, 8], targetWeight: 1, accessRule: 'slot',
+    // Visual dwell only — has no effect on Simulation/revenue (sim runs on
+    // aggregate counts, not on per-guest visits). Bumped in Guest Behavior
+    // V1 so guests visibly play a slot for ~1–2 in-game hours instead of
+    // bouncing off after a few real seconds.
+    dwellRange: [12, 24], targetWeight: 1, accessRule: 'slot',
   },
   [ObjType.SMALL_TABLE]: {
     // Tables require a full 1-tile walkable buffer ring on every side.
@@ -194,21 +198,21 @@ export const OBJ_DEFS: Record<ObjType, ObjDef> = {
     is_wall: false, max: -1, rating: 0.18, flat: false,
     color: 0x3380e6, accessSides: 2, variants: ['blackjack', 'poker'],
     category: 'tables', ratingPer: 0.14, revPerVisit: REV_SMALL_TABLE,
-    dwellRange: [6, 12], targetWeight: 4, accessRule: 'table',
+    dwellRange: [18, 36], targetWeight: 4, accessRule: 'table',
   },
   [ObjType.LARGE_TABLE]: {
     label: 'Large Table',  cost: 4500, fw: 2, fh: 4, cap: 6,
     is_wall: false, max: -1, rating: 0.25, flat: false,
     color: 0x1a4dcc, accessSides: 2, variants: ['roulette', 'craps'],
     category: 'tables', ratingPer: 0.25, revPerVisit: REV_LARGE_TABLE,
-    dwellRange: [8, 16], targetWeight: 6, accessRule: 'table',
+    dwellRange: [24, 48], targetWeight: 6, accessRule: 'table',
   },
   [ObjType.WC]: {
     label: 'WC',           cost: 1200, fw: 3, fh: 1, cap: 0,
     is_wall: true,  max: -1, rating: 0.20, flat: false,
     color: 0x4db368, accessSides: 0, variants: [],
     category: 'services', ratingPer: 0.20, revPerVisit: 0,
-    dwellRange: [3, 6], targetWeight: 0, accessRule: 'wall',
+    dwellRange: [4, 8], targetWeight: 0, accessRule: 'wall',
   },
   [ObjType.BAR]: {
     // Bar's rating contribution is currently a flat +0.35 in Simulation
@@ -218,14 +222,15 @@ export const OBJ_DEFS: Record<ObjType, ObjDef> = {
     is_wall: true,  max: 1,  rating: 0.35, flat: true,
     color: 0xcc4d33, accessSides: 0, variants: [],
     category: 'food', ratingPer: 0, revPerVisit: REV_BAR,
-    dwellRange: [3, 6], targetWeight: 0, accessRule: 'wall',
+    dwellRange: [12, 24], targetWeight: 0, accessRule: 'wall',
   },
   [ObjType.CASHIER]: {
     label: 'Cashier',      cost: 1500, fw: 1, fh: 1, cap: 0,
     is_wall: true,  max: -1, rating: 0.18, flat: true,
     color: 0x4d99cc, accessSides: 0, variants: [],
     category: 'services', ratingPer: 0.18, revPerVisit: 0,
-    dwellRange: [2, 4], targetWeight: 2, accessRule: 'wall',
+    // Cashier/ATM stays short — services are quick stops compared to games.
+    dwellRange: [3, 6], targetWeight: 2, accessRule: 'wall',
   },
   [ObjType.ATM]: {
     // 1×1 wall service like Cashier, but cheaper and revenue-bearing.
@@ -235,7 +240,7 @@ export const OBJ_DEFS: Record<ObjType, ObjDef> = {
     is_wall: true,  max: -1, rating: 0.10, flat: true,
     color: 0x2d6e4d, accessSides: 0, variants: [],
     category: 'services', ratingPer: 0.10, revPerVisit: REV_ATM,
-    dwellRange: [2, 4], targetWeight: 2, accessRule: 'wall',
+    dwellRange: [3, 6], targetWeight: 2, accessRule: 'wall',
   },
 };
 
