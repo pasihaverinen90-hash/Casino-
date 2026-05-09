@@ -688,6 +688,21 @@ class GameState extends EventEmitter {
     return 0;
   }
 
+  // ── Debug / test ──────────────────────────────────────────────────────────
+
+  // Hidden dev shortcut for production testing — wired to Ctrl+Shift+1/2/3
+  // in main.ts. Bumps cumulativeIncome too so cumulative-income goals
+  // (e.g. "First Profit") can be tested without waiting on real revenue.
+  // No save schema impact; affects in-memory state only.
+  debugAddCash(amount: number): void {
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    this.cash             += amount;
+    this.cumulativeIncome += amount;
+    this._checkGoals();
+    this.emit('state_changed');
+    this.emit('toast_requested', `Debug: +${amount.toLocaleString()} cash`);
+  }
+
   // ── Unlocks (Phase U1) ────────────────────────────────────────────────────
 
   // Whether `t` is currently buildable. Derived from STARTING_UNLOCKS plus

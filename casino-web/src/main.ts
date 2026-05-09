@@ -181,6 +181,23 @@ document.addEventListener('keydown', e => {
   // Ignore shortcuts until the start screen has been dismissed.
   if (!started) return;
 
+  // Hidden dev/test shortcut: Ctrl+Shift+1/2/3 grants cash for faster
+  // progression testing in production. Use e.code (layout-independent) —
+  // Shift maps '1' → '!' on US keyboards, so e.key would miss the digit.
+  // Handled before the speed switch so Ctrl+Shift+1 doesn't fall through
+  // to "set speed 1×".
+  if (e.ctrlKey && e.shiftKey) {
+    let amount = 0;
+    if      (e.code === 'Digit1') amount = 10_000;
+    else if (e.code === 'Digit2') amount = 50_000;
+    else if (e.code === 'Digit3') amount = 250_000;
+    if (amount > 0) {
+      e.preventDefault();
+      gameState.debugAddCash(amount);
+      return;
+    }
+  }
+
   switch (e.key) {
     case 'Escape':
       _closeAll();
