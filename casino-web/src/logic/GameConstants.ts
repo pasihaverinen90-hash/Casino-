@@ -14,6 +14,66 @@ export const RATING_MIN      = 1.0;
 export const RATING_MAX      = 5.0;
 export const CROWDING_SMOOTH = 0.4;
 
+// ── Rating V2 ────────────────────────────────────────────────────────────────
+// Replaces V1's flat additive formula with a 0–100 internal score across six
+// weighted categories, mapped to the existing 1.0–5.0 range:
+//   rating = clamp(1.0 + (score / 100) × 4.0, 1.0, 5.0)
+// Each category is hard-capped, so spamming a single object type can no longer
+// dominate. Crowding is folded into the capacity pillar (no separate term on
+// the final rating). RATING_BASE above is V1 and is no longer read by Rating
+// V2; it stays exported to avoid touching unrelated callers. ObjDef.rating /
+// ratingPer are likewise still on metadata but are NOT summed by V2 — the
+// rules below own the full computation.
+export const RATING_WEIGHTS = {
+  variety  : 25,
+  comfort  : 25,
+  prestige : 15,
+  capacity : 15,
+  hotel    : 10,
+  finance  : 10,
+} as const;
+
+// Slots are tiny (cap 1 each), so ≥3 are required before "slots" counts as a
+// present gambling type. Every other gambling type counts at ≥1.
+export const VARIETY_SLOT_THRESHOLD = 3;
+
+// target_S = max(1, capacity / divisor_S). adequacy_S = min(1, count_S / target_S).
+// Bar uses a flat target of 1 (it's max:1 anyway). Tuned so a casino at the
+// BASE_DEMAND capacity (30) needs roughly 1.2 WCs / 1 cashier / 0.75 ATM /
+// 0.6 buffet to saturate each service type's adequacy.
+export const COMFORT_TARGET_DIVISORS = {
+  wc      : 25,
+  cashier : 30,
+  atm     : 40,
+  buffet  : 50,
+} as const;
+
+// Per-type prestige multipliers: sqrt(count) × coeff yields diminishing
+// returns within a type while keeping the first unit of each one impactful.
+// HS Table is highest (1 HS = +3 prestige) so late-game premium feels real.
+export const PRESTIGE_COEFF = {
+  largeTable : 1.5,
+  keno       : 2.0,
+  highStakes : 3.0,
+  sportsbook : 2.0,
+  qualityLvl : 1.0,
+} as const;
+
+// Finance pillar saturates at these values — full per-half pool above either.
+export const FINANCE_TARGETS = {
+  dailyRevenue     : 1_500,
+  cumulativeIncome : 50_000,
+} as const;
+
+// Hotel pillar — room count saturates here; quality and occupancy fill rest.
+export const HOTEL_TARGETS = {
+  rooms : 12,
+} as const;
+
+// Capacity sub-score plateau. Same value as BASE_DEMAND below so the rating
+// pillar plateau aligns with calcWalkin's capacity multiplier cap.
+export const CAPACITY_DEMAND_BASELINE = 30;
+
 export const BASE_DEMAND     = 30;
 
 export const REV_SLOT        = 13;

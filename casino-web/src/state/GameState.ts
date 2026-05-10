@@ -600,6 +600,12 @@ class GameState extends EventEmitter {
       quality_level    : this.qualityLevel,
       last_guests      : this.lastGuests,
       prev_crowding    : this.prevCrowding,
+      // Rating V2 — finance + hotel pillars use the prior tick's values.
+      // First call after _newGame passes 0/0 (pre-set in field initializers);
+      // converges within one _recomputeDerived call.
+      prev_occupancy    : this.occupancyRate,
+      prev_revenue      : this.dailyRevenue,
+      cumulative_income : this.cumulativeIncome,
     });
     this._projection   = p;
     this.resortRating  = p.rating;
