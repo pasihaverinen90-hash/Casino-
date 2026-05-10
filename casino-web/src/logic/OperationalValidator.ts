@@ -77,8 +77,7 @@ export function getInteractionTiles(obj: GC.PlacedObj, tiles: GC.Tile[]): GC.Vec
   // (obj_id + is_seat marked on each tile) guarantees these stay walkable
   // for guests and free of competing builds, so we don't need to recompute
   // by scanning neighbours on every call.
-  if (obj.type === GC.ObjType.SMALL_TABLE
-   || obj.type === GC.ObjType.LARGE_TABLE) {
+  if (GC.isTableLike(obj.type)) {
     return obj.seats.map(s => ({ x: s.x, y: s.y }));
   }
 

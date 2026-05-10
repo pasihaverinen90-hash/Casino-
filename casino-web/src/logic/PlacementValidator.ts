@@ -77,8 +77,7 @@ export function checkSpatial(
   } else if (req.type === GC.ObjType.SLOT_MACHINE) {
     if (!seatReachable(tiles, req.col, req.row, req.facing))
       return GC.ValResult.FAIL_NO_ACCESS;
-  } else if (req.type === GC.ObjType.SMALL_TABLE
-          || req.type === GC.ObjType.LARGE_TABLE) {
+  } else if (GC.isTableLike(req.type)) {
     if (!hasFullBufferRing(tiles, req.col, req.row, w, h))
       return GC.ValResult.FAIL_NO_ACCESS;
   }

@@ -286,9 +286,8 @@ export class GridScene extends Phaser.Scene {
     // Tables: centre the footprint roughly under the cursor so rotating
     // doesn't fling the table off to one corner. P3A polish — slots had
     // their own cabinet anchor since P2.2; tables now feel similar.
-    if (this.placeType === GC.ObjType.SMALL_TABLE
-     || this.placeType === GC.ObjType.LARGE_TABLE) {
-      const tl = GC.tableAnchorFromCursor(curCol, curRow, this.placeType, this.placeFacing);
+    if (GC.isTableLike(this.placeType as GC.ObjType)) {
+      const tl = GC.tableAnchorFromCursor(curCol, curRow, this.placeType as GC.ObjType, this.placeFacing);
       return { col: tl.x, row: tl.y };
     }
     return { col: curCol, row: curRow };
@@ -508,7 +507,7 @@ export class GridScene extends Phaser.Scene {
       g.strokeCircle(cx, cy, Math.max(2, ts * 0.18));
       return;
     }
-    if (t !== GC.ObjType.SMALL_TABLE && t !== GC.ObjType.LARGE_TABLE) return;
+    if (!GC.isTableLike(t)) return;
 
     const { w, h } = GC.dimsFor(t, this.placeFacing);
     const playerSides = GC.tablePlayerSides(this.placeFacing);

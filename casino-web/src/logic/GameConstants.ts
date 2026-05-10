@@ -279,6 +279,17 @@ export const OBJ_DEFS: Record<ObjType, ObjDef> = {
 
 export function getDef(type: ObjType): ObjDef { return OBJ_DEFS[type]; }
 
+// Is this an object that uses the "table" geometry contract — full
+// open-floor buffer ring, reserved cardinal-side seat tiles, dealer-side
+// facing? Centralised so future table-like objects (e.g. Keno Lounge,
+// High-Stakes Table planned for Phase N2) can be opted in here once,
+// instead of expanding OR-chains scattered across PlacementValidator,
+// OperationalValidator, GameState, and GridScene.
+export function isTableLike(type: ObjType): boolean {
+  return type === ObjType.SMALL_TABLE
+      || type === ObjType.LARGE_TABLE;
+}
+
 // All ObjType values, in declaration order. Append here whenever a new
 // ObjType is added so generic `Record<ObjType, T>` allocations cover the
 // new type. Saves persist the numeric enum value, so this list also doubles
@@ -446,7 +457,7 @@ export function tableAnchorFromCursor(
 export function tableSeatTiles(
   col: number, row: number, type: ObjType, facing: Orientation,
 ): Vec2[] {
-  if (type !== ObjType.SMALL_TABLE && type !== ObjType.LARGE_TABLE) return [];
+  if (!isTableLike(type)) return [];
   const { w, h } = dimsFor(type, facing);
   const playerSides = tablePlayerSides(facing);
   const out: Vec2[] = [];

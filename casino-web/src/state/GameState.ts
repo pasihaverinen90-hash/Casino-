@@ -397,7 +397,7 @@ class GameState extends EventEmitter {
     }
     // Tables additionally reserve their player-side seat tiles so other
     // builds can't squat on them and so guests have a guaranteed approach.
-    if (objType === GC.ObjType.SMALL_TABLE || objType === GC.ObjType.LARGE_TABLE) {
+    if (GC.isTableLike(objType)) {
       obj.seats = GC.tableSeatTiles(col, row, objType, facing);
       for (const s of obj.seats) {
         const t = this.tiles[s.y * GC.GRID_COLS + s.x];
@@ -836,8 +836,7 @@ class GameState extends EventEmitter {
         const { seat } = GC.slotParts(saved.col, saved.row, saved.facing);
         this.tiles[seat.y * GC.GRID_COLS + seat.x].is_seat = true;
       }
-      if (saved.type === GC.ObjType.SMALL_TABLE
-       || saved.type === GC.ObjType.LARGE_TABLE) {
+      if (GC.isTableLike(saved.type)) {
         obj.seats = GC.tableSeatTiles(saved.col, saved.row, saved.type, saved.facing);
         for (const s of obj.seats) {
           const t = this.tiles[s.y * GC.GRID_COLS + s.x];
