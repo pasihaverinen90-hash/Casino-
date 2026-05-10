@@ -226,7 +226,28 @@ export class GridScene extends Phaser.Scene {
 
     if (this.placing) {
       const a = this._placeAnchor(coord.col, coord.row);
-      const ok = gameState.tryPlace(a.col, a.row, this.placeType as GC.ObjType, this.placeFacing, this.placeVar);
+      const objType = this.placeType as GC.ObjType;
+      // Build-over-guest fix: gently move any visible guest standing on a
+      // tile that's about to become non-walkable. Done *before* tryPlace so
+      // the world isn't mutated if displacement fails (player gets a clean
+      // toast). We pre-validate first — if the request would fail anyway
+      // (out of bounds, locked, can't afford, etc.) we let tryPlace emit
+      // its existing failure toast instead of preempting it here.
+      const pre = PV.validate(
+        { type: objType, col: a.col, row: a.row, facing: this.placeFacing },
+        gameState.tiles, gameState.cash, gameState.barExists,
+        gameState.isUnlocked(objType),
+      );
+      if (pre === GC.ValResult.VALID) {
+        const blocked = this._computePlacementBlockedTiles(
+          objType, a.col, a.row, this.placeFacing,
+        );
+        if (!this.guests.displaceGuestsFromTiles(blocked)) {
+          gameState.emit('toast_requested', 'No safe place to move guests.');
+          return;
+        }
+      }
+      const ok = gameState.tryPlace(a.col, a.row, objType, this.placeFacing, this.placeVar);
       if (ok) {
         // Ctrl-click keeps placement mode open for repeat placements.
         const ev   = ptr.event as MouseEvent | PointerEvent | undefined;
@@ -291,6 +312,27 @@ export class GridScene extends Phaser.Scene {
       return { col: tl.x, row: tl.y };
     }
     return { col: curCol, row: curRow };
+  }
+
+  // Tiles that the planned placement will make unavailable for visible
+  // guests. Used to displace anyone standing in the way before tryPlace
+  // commits the placement.
+  //   • Footprint always — covers slot cabinet+chair, table body, and
+  //     the body of any wall service.
+  //   • Table-likes also reserve seat tiles around the body, so we
+  //     include those.
+  //   • Wall services don't need their door-inward tile included — that
+  //     tile remains open floor; a guest standing on it is in front of
+  //     the new service, not trapped inside it.
+  private _computePlacementBlockedTiles(
+    type: GC.ObjType, col: number, row: number, facing: GC.Orientation,
+  ): GC.Vec2[] {
+    const { w, h } = GC.dimsFor(type, facing);
+    const out: GC.Vec2[] = PV.computeFootprint(col, row, w, h);
+    if (GC.isTableLike(type)) {
+      out.push(...GC.tableSeatTiles(col, row, type, facing));
+    }
+    return out;
   }
 
   // ── Mouse-wheel zoom ───────────────────────────────────────────────────────

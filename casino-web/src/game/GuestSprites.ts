@@ -390,6 +390,114 @@ export class GuestSprites {
     return Math.hypot(g.col - c, g.row - r) < 0.05;
   }
 
+  // ── Displacement (build-over-guest fix) ─────────────────────────────────
+  //
+  // When the player places an object, any guest standing on a tile that is
+  // about to become non-walkable (footprint) or reserved (table seats) is
+  // gently moved to the nearest safe tile via BFS over current open floor.
+  // Visible guests are presentation-only — moving them does not affect
+  // simulation, revenue, or save state.
+  //
+  // Designed to be called *before* gameState.tryPlace commits the placement
+  // so the tile map still reads future-blocked tiles as walkable; callers
+  // pass them in `blocked` and the BFS treats them as forbidden anyway.
+  //
+  // Returns true if every blocked-area guest found a safe tile (or no guest
+  // was in the way). Returns false if at least one guest could not be
+  // moved — caller should abort the placement and toast the player.
+  displaceGuestsFromTiles(blocked: GC.Vec2[]): boolean {
+    if (blocked.length === 0) return true;
+    const blockedKeys = new Set<string>();
+    for (const t of blocked) blockedKeys.add(this._tileKey(t.x, t.y));
+
+    for (const g of this.guests) {
+      const gc = Math.floor(g.col);
+      const gr = Math.floor(g.row);
+      if (!blockedKeys.has(this._tileKey(gc, gr))) continue;
+
+      const safe = this._findSafeTile(gc, gr, blockedKeys);
+      if (!safe) return false;
+
+      // Snap the guest to the safe tile centre and force a fresh leg.
+      // _chooseNextLeg releases any reservation, picks a new (still-
+      // functional) target, reserves it, and recomputes the route — exactly
+      // the recovery a confused guest needs after their world changed under
+      // them. Resetting stuck so they don't immediately hit the cascade.
+      g.col   = safe.x + 0.5;
+      g.row   = safe.y + 0.5;
+      g.route = [];
+      g.stuck = 0;
+      this._chooseNextLeg(g);
+    }
+    return true;
+  }
+
+  // BFS over current open floor, treating `blockedKeys` (and any non-open-
+  // floor tile) as impassable. Returns the closest tile that is genuinely
+  // walkable and not in the blocked set, preferring tiles not occupied by
+  // another visible guest. Falls back to an other-guest-occupied tile if
+  // that's the only option, and null if no walkable tile is reachable at
+  // all (the player gets the "No safe place to move guests." toast).
+  //
+  // Note: traversal also forbids `blockedKeys`, so the search can't hop
+  // through the future footprint to find a tile on the far side. That is
+  // by design — a guest stuck behind a freshly-placed wall service should
+  // come out on the side they were already on.
+  private _findSafeTile(
+    sc: number, sr: number, blockedKeys: Set<string>,
+  ): GC.Vec2 | null {
+    const tiles = gameState.tiles;
+    const W = GC.GRID_COLS;
+    const H = GC.GRID_ROWS;
+    const visited = new Uint8Array(W * H);
+    const startIdx = sr * W + sc;
+    visited[startIdx] = 1;
+    const queue: number[] = [startIdx];
+    let head = 0;
+
+    // Tiles currently occupied by other visible guests — we'd rather not
+    // land on top of them. Self is excluded so we don't reject the BFS
+    // start. Approximate (uses each guest's current tile) — fine for the
+    // visual-stack-avoidance heuristic.
+    const otherGuestTiles = new Set<string>();
+    for (const og of this.guests) {
+      const ogc = Math.floor(og.col);
+      const ogr = Math.floor(og.row);
+      if (ogc === sc && ogr === sr) continue;
+      otherGuestTiles.add(this._tileKey(ogc, ogr));
+    }
+    let fallback: GC.Vec2 | null = null;
+
+    while (head < queue.length) {
+      const idx = queue[head++];
+      const cy = (idx / W) | 0;
+      const cx = idx - cy * W;
+
+      if (idx !== startIdx) {
+        // Every visited non-start tile passed the traversal filter, so it
+        // is a valid destination. BFS guarantees this is the closest such
+        // tile (in unit-step distance). Prefer one without another guest;
+        // remember the first stacked-tile candidate as a fallback.
+        const k = this._tileKey(cx, cy);
+        if (!otherGuestTiles.has(k)) return { x: cx, y: cy };
+        if (fallback === null) fallback = { x: cx, y: cy };
+      }
+
+      for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]] as const) {
+        const nx = cx + dx;
+        const ny = cy + dy;
+        if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+        const nIdx = ny * W + nx;
+        if (visited[nIdx]) continue;
+        visited[nIdx] = 1;
+        if (blockedKeys.has(this._tileKey(nx, ny))) continue;
+        if (!PV.isOpenFloor(tiles, nx, ny)) continue;
+        queue.push(nIdx);
+      }
+    }
+    return fallback;
+  }
+
   // ── Spawn ─────────────────────────────────────────────────────────────────
 
   private _spawn(): Guest | null {
