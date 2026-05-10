@@ -23,6 +23,8 @@ export const REV_BAR         = 6;
 export const REV_ATM         = 5;
 export const REV_BUFFET      = 10;
 export const REV_SPORTSBOOK  = 28;
+export const REV_KENO        = 22;
+export const REV_HIGH_STAKES = 50;
 export const REV_PER_ROOM    = 24;
 export const BAR_DRAW_RATE   = 0.15;
 // Per-ATM share of guests who pull cash on a given day. Capped at 1.0
@@ -34,6 +36,13 @@ export const ATM_DRAW_PER_UNIT = 0.10;
 // more units yields diminishing returns and never exceeds total guests.
 export const BUFFET_DRAW_RATE     = 0.18;
 export const SPORTSBOOK_DRAW_RATE = 0.10;
+// Phase N2 — Keno Lounge / High-Stakes Table follow the same capped
+// per-unit share model rather than feeding the slots-vs-tables capacity
+// partition. Keeps the existing partition untouched while still scaling
+// new content with guest traffic. High-Stakes uses the lowest rate of
+// any object so single units feel premium and rare.
+export const KENO_DRAW_RATE        = 0.10;
+export const HIGH_STAKES_DRAW_RATE = 0.06;
 
 // Daily upkeep per object. Disabled in this MVP — costs will return later
 // once real staff/operations systems exist.
@@ -90,14 +99,15 @@ export const STARTING_UNLOCKS: readonly ObjType[] = [
 // GOAL_LABELS / GOAL_REWARDS so a single goal index drives label, cash,
 // AND unlock — keeping balance tweaks to one place.
 export const GOAL_UNLOCKS: readonly (ObjType | null)[] = [
-  ObjType.SMALL_TABLE, // Goal 0 — First Machines
-  ObjType.BAR,         // Goal 1 — First Crowd
-  ObjType.ATM,         // Goal 2 — Basic Amenity
-  ObjType.LARGE_TABLE, // Goal 3 — Real Gaming
-  null,                // Goal 4 — Rising Star
-  ObjType.SPORTSBOOK,  // Goal 5 — First Profit
-  ObjType.BUFFET,      // Goal 6 — Hotel Open
-  null, null, null,
+  ObjType.SMALL_TABLE,       // Goal 0 — First Machines
+  ObjType.BAR,               // Goal 1 — First Crowd
+  ObjType.ATM,               // Goal 2 — Basic Amenity
+  ObjType.LARGE_TABLE,       // Goal 3 — Real Gaming
+  ObjType.KENO_LOUNGE,       // Goal 4 — Rising Star
+  ObjType.SPORTSBOOK,        // Goal 5 — First Profit
+  ObjType.BUFFET,            // Goal 6 — Hotel Open
+  ObjType.HIGH_STAKES_TABLE, // Goal 7 — Busy Floor
+  null, null,
 ];
 export const GOAL_LABELS  = [
   'First Machines', 'First Crowd', 'Basic Amenity', 'Real Gaming',
@@ -129,9 +139,12 @@ export const enum TileType { FLOOR, WALL, LOBBY, BLOCKED }
 // ATM appended at index 6 — old saves never contained that value, so no
 // migration is required. BUFFET (7) and SPORTSBOOK (8) appended for the
 // same reason: legacy saves never persist those numeric values.
+// KENO_LOUNGE (9) and HIGH_STAKES_TABLE (10) appended in Phase N2 —
+// same precedent: append-only, no save migration required.
 export const enum ObjType  {
   SLOT_MACHINE, SMALL_TABLE, LARGE_TABLE, WC, BAR, CASHIER, ATM,
   BUFFET, SPORTSBOOK,
+  KENO_LOUNGE, HIGH_STAKES_TABLE,
 }
 
 // Four-direction orientation. For floor attractions (slot, tables) this is
@@ -275,6 +288,27 @@ export const OBJ_DEFS: Record<ObjType, ObjDef> = {
     category: 'services', ratingPer: 0.18, revPerVisit: REV_SPORTSBOOK,
     dwellRange: [12, 24], targetWeight: 2, accessRule: 'wall',
   },
+  [ObjType.KENO_LOUNGE]: {
+    // 3×3 table-like floor attraction. Reuses table buffer-ring rules
+    // and seat reservation via isTableLike(). Cap 8 → contributes 8 to
+    // casinoCapacity. Long dwell + medium weight reads as a relaxed
+    // game lounge that holds guests longer than slots.
+    label: 'Keno Lounge', cost: 7500, fw: 3, fh: 3, cap: 8,
+    is_wall: false, max: -1, rating: 0.20, flat: false,
+    color: 0x9a4dcc, accessSides: 2, variants: [],
+    category: 'tables', ratingPer: 0.20, revPerVisit: REV_KENO,
+    dwellRange: [24, 48], targetWeight: 3, accessRule: 'table',
+  },
+  [ObjType.HIGH_STAKES_TABLE]: {
+    // 3×3 premium table. Cap 6, low targetWeight (rare visits), and
+    // the lowest draw rate of any object so a single instance feels
+    // exclusive. Two variants swap the centerpiece motif at draw time.
+    label: 'High-Stakes Table', cost: 15000, fw: 3, fh: 3, cap: 6,
+    is_wall: false, max: -1, rating: 0.30, flat: false,
+    color: 0x8a1a1a, accessSides: 2, variants: ['baccarat', 'high-roller'],
+    category: 'tables', ratingPer: 0.30, revPerVisit: REV_HIGH_STAKES,
+    dwellRange: [24, 48], targetWeight: 2, accessRule: 'table',
+  },
 };
 
 export function getDef(type: ObjType): ObjDef { return OBJ_DEFS[type]; }
@@ -287,7 +321,9 @@ export function getDef(type: ObjType): ObjDef { return OBJ_DEFS[type]; }
 // OperationalValidator, GameState, and GridScene.
 export function isTableLike(type: ObjType): boolean {
   return type === ObjType.SMALL_TABLE
-      || type === ObjType.LARGE_TABLE;
+      || type === ObjType.LARGE_TABLE
+      || type === ObjType.KENO_LOUNGE
+      || type === ObjType.HIGH_STAKES_TABLE;
 }
 
 // All ObjType values, in declaration order. Append here whenever a new
@@ -304,6 +340,8 @@ export const ALL_OBJ_TYPES: ObjType[] = [
   ObjType.ATM,
   ObjType.BUFFET,
   ObjType.SPORTSBOOK,
+  ObjType.KENO_LOUNGE,
+  ObjType.HIGH_STAKES_TABLE,
 ];
 
 // Build a fresh `Record<ObjType, T>` populated with `value`. Use to
@@ -492,6 +530,9 @@ export interface DayStats {
   // atm_rev — legacy records get 0 in GameState._apply; no save bump.
   buffet_rev     : number;
   sportsbook_rev : number;
+  // Added with Phase N2 (Keno Lounge / High-Stakes Table). Same pattern.
+  keno_rev       : number;
+  highstakes_rev : number;
   hotel_rev    : number;
   occupancy    : number;
   booked       : number;

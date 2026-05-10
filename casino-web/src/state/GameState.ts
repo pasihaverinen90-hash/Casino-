@@ -524,6 +524,8 @@ class GameState extends EventEmitter {
       atm_rev        : p.atm_rev        * scale,
       buffet_rev     : p.buffet_rev     * scale,
       sportsbook_rev : p.sportsbook_rev * scale,
+      keno_rev       : p.keno_rev       * scale,
+      highstakes_rev : p.highstakes_rev * scale,
       hotel_rev      : p.hotel_rev      * scale,
       occupancy    : p.occupancy,
       booked       : p.booked,
@@ -572,6 +574,8 @@ class GameState extends EventEmitter {
       this.funcCounts[GC.ObjType.SLOT_MACHINE],
       this.funcCounts[GC.ObjType.SMALL_TABLE],
       this.funcCounts[GC.ObjType.LARGE_TABLE],
+      this.funcCounts[GC.ObjType.KENO_LOUNGE],
+      this.funcCounts[GC.ObjType.HIGH_STAKES_TABLE],
     );
   }
 
@@ -590,6 +594,8 @@ class GameState extends EventEmitter {
       atm_count        : this.funcCounts[GC.ObjType.ATM],
       buffet_count     : this.funcCounts[GC.ObjType.BUFFET],
       sportsbook_count : this.funcCounts[GC.ObjType.SPORTSBOOK],
+      keno_count       : this.funcCounts[GC.ObjType.KENO_LOUNGE],
+      highstakes_count : this.funcCounts[GC.ObjType.HIGH_STAKES_TABLE],
       room_count       : this.roomCount,
       quality_level    : this.qualityLevel,
       last_guests      : this.lastGuests,
@@ -807,6 +813,8 @@ class GameState extends EventEmitter {
       if (typeof r.atm_rev !== 'number') r.atm_rev = 0;
       if (typeof r.buffet_rev     !== 'number') r.buffet_rev     = 0;
       if (typeof r.sportsbook_rev !== 'number') r.sportsbook_rev = 0;
+      if (typeof r.keno_rev       !== 'number') r.keno_rev       = 0;
+      if (typeof r.highstakes_rev !== 'number') r.highstakes_rev = 0;
     }
     this.chartDays      = d.ch_days;   this.chartGuests   = d.ch_guests;
     this.chartRevenue   = d.ch_rev;    this.chartRating   = d.ch_rating;

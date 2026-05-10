@@ -82,6 +82,8 @@ export function paintObject(
     case GC.ObjType.ATM:          drawAtmG       (g, x, y, w, h, alpha, wallSide); break;
     case GC.ObjType.BUFFET:       drawBuffetG    (g, x, y, w, h, alpha, wallSide); break;
     case GC.ObjType.SPORTSBOOK:   drawSportsbookG(g, x, y, w, h, alpha, wallSide); break;
+    case GC.ObjType.KENO_LOUNGE:       drawKenoLoungeG(g, x, y, w, h, alpha); break;
+    case GC.ObjType.HIGH_STAKES_TABLE: drawHighStakesG(g, x, y, w, h, alpha, facing, variant); break;
   }
 }
 
@@ -771,6 +773,175 @@ function drawSportsbookG(
   }
 }
 
+// Keno Lounge — 3×3 floor table-like attraction. Lounge carpet base,
+// felt rim, central 4×4 keno board with a few highlighted "drawn" dots.
+// No dealer band — keno is a relaxed game where players read the board,
+// so the visual reads as "shared lounge" rather than "table game".
+function drawKenoLoungeG(
+  g: Phaser.GameObjects.Graphics,
+  x: number, y: number, w: number, h: number, a: number,
+): void {
+  const pad = Math.max(1, Math.round(Math.min(w, h) * 0.10));
+
+  // Carpet base across the whole footprint.
+  g.fillStyle(0x2a1a4d, a * 0.9);
+  g.fillRect(x, y, w - 1, h - 1);
+
+  // Wood rim — purple-tinted dark wood.
+  g.fillStyle(0x4a2f1a, a);
+  g.fillRect(x + pad, y + pad, w - 2 * pad, h - 2 * pad);
+
+  // Felt — deep purple, the lounge's signature.
+  const felt   = Math.max(1, Math.round(pad * 0.6));
+  const innerX = x + pad + felt;
+  const innerY = y + pad + felt;
+  const innerW = w - 2 * (pad + felt);
+  const innerH = h - 2 * (pad + felt);
+  g.fillStyle(0x4d2a6e, a);
+  g.fillRect(innerX, innerY, innerW, innerH);
+
+  // 4×4 keno-board grid centred on the felt. Dots are gold; a few
+  // randomised slots are brighter to read as "drawn numbers".
+  const cols = 4;
+  const rows = 4;
+  const cellW = innerW / cols;
+  const cellH = innerH / rows;
+  const dotR  = Math.max(1, Math.min(cellW, cellH) * 0.22);
+  // Deterministic-by-position highlight pattern so every Keno Lounge
+  // looks the same. Picked to feel scattered but balanced.
+  const lit = new Set(['0,0', '1,2', '2,1', '3,3']);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cx = innerX + (c + 0.5) * cellW;
+      const cy = innerY + (r + 0.5) * cellH;
+      const isLit = lit.has(`${c},${r}`);
+      g.fillStyle(isLit ? 0xfff0a8 : 0xc8a040, a * (isLit ? 1.0 : 0.7));
+      g.fillCircle(cx, cy, dotR);
+      if (isLit) {
+        // Subtle ring around drawn numbers for emphasis.
+        g.lineStyle(1, 0xe8d066, a * 0.9);
+        g.strokeCircle(cx, cy, dotR + 1);
+      }
+    }
+  }
+  g.lineStyle(0, 0, 0); // reset stroke state for downstream draws
+}
+
+// High-Stakes Table — 3×3 premium table. Deep red felt with gold trim,
+// dealer band on the facing side (same convention as small/large tables),
+// and a variant-dependent centerpiece. Reads as "this is the expensive
+// table" at a glance.
+function drawHighStakesG(
+  g: Phaser.GameObjects.Graphics,
+  x: number, y: number, w: number, h: number, a: number,
+  facing: GC.Orientation, variant: string,
+): void {
+  const pad = Math.max(1, Math.round(Math.min(w, h) * 0.12));
+
+  // Carpet around table — darker than the standard table carpet so the
+  // table itself pops as premium.
+  g.fillStyle(0x140805, a * 0.9);
+  g.fillRect(x, y, w - 1, h - 1);
+
+  // Wood rim — very dark wood with a thin inner gold trim line.
+  g.fillStyle(0x2a0e08, a);
+  g.fillRect(x + pad, y + pad, w - 2 * pad, h - 2 * pad);
+  g.fillStyle(0xe8d066, a * 0.85);
+  const trim = 1;
+  g.fillRect(x + pad,           y + pad,           w - 2 * pad, trim);
+  g.fillRect(x + pad,           y + h - pad - trim, w - 2 * pad, trim);
+  g.fillRect(x + pad,           y + pad,           trim, h - 2 * pad);
+  g.fillRect(x + w - pad - trim, y + pad,           trim, h - 2 * pad);
+
+  // Felt — deep blood red.
+  const felt   = Math.max(1, Math.round(pad * 0.6));
+  const innerX = x + pad + felt;
+  const innerY = y + pad + felt;
+  const innerW = w - 2 * (pad + felt);
+  const innerH = h - 2 * (pad + felt);
+  g.fillStyle(0x6e1a1a, a);
+  g.fillRect(innerX, innerY, innerW, innerH);
+
+  // Dealer band — gold-tinted on the facing side. Matches the small/large
+  // table convention so player seats are read on the other 3 sides.
+  const bandT = Math.max(2, Math.round(Math.min(w, h) * 0.14));
+  g.fillStyle(0x8a3a14, a);
+  if (facing === 'N')      g.fillRect(innerX, innerY,                  innerW, bandT);
+  else if (facing === 'S') g.fillRect(innerX, innerY + innerH - bandT, innerW, bandT);
+  else if (facing === 'W') g.fillRect(innerX, innerY,                  bandT,  innerH);
+  else                     g.fillRect(innerX + innerW - bandT, innerY, bandT,  innerH);
+
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+
+  if (variant === 'high-roller') {
+    drawHighRollerCentre(g, cx, cy, innerW, innerH, a);
+  } else {
+    // baccarat default
+    drawBaccaratCentre(g, cx, cy, innerW, innerH, a);
+  }
+}
+
+// Baccarat centerpiece — gold diamond with a small inner card glyph.
+// Reads as "elegant card game".
+function drawBaccaratCentre(
+  g: Phaser.GameObjects.Graphics,
+  cx: number, cy: number, innerW: number, innerH: number, a: number,
+): void {
+  const r = Math.max(2, Math.min(innerW, innerH) * 0.22);
+  // Gold diamond.
+  g.fillStyle(0xe8d066, a);
+  g.beginPath();
+  g.moveTo(cx,     cy - r);
+  g.lineTo(cx + r, cy);
+  g.lineTo(cx,     cy + r);
+  g.lineTo(cx - r, cy);
+  g.closePath();
+  g.fillPath();
+  // Small inner card glyph — ivory rectangle with a red corner pip.
+  const cw = r * 0.7;
+  const ch = r * 0.9;
+  g.fillStyle(0xfff5e0, a);
+  g.fillRect(cx - cw / 2, cy - ch / 2, cw, ch);
+  g.fillStyle(0x8a1a1a, a);
+  g.fillCircle(cx - cw / 2 + 2, cy - ch / 2 + 2, Math.max(1, cw * 0.18));
+}
+
+// High-roller centerpiece — central black-and-gold chip plus four chip
+// stacks at the corners of an inner square. Reads as "money table".
+function drawHighRollerCentre(
+  g: Phaser.GameObjects.Graphics,
+  cx: number, cy: number, innerW: number, innerH: number, a: number,
+): void {
+  const r = Math.max(2, Math.min(innerW, innerH) * 0.18);
+  // Central chip — dark with gold ring.
+  g.fillStyle(0x1a0e08, a);
+  g.fillCircle(cx, cy, r);
+  g.lineStyle(Math.max(1, r * 0.18), 0xe8d066, a);
+  g.strokeCircle(cx, cy, r);
+  g.lineStyle(0, 0, 0);
+  // Inner gold star-ish dot.
+  g.fillStyle(0xe8d066, a);
+  g.fillCircle(cx, cy, Math.max(1, r * 0.35));
+
+  // Four corner chip stacks — small triple-disc stacks in gold.
+  const off = Math.min(innerW, innerH) * 0.30;
+  const stackR = Math.max(1, r * 0.45);
+  const positions: [number, number][] = [
+    [cx - off, cy - off], [cx + off, cy - off],
+    [cx - off, cy + off], [cx + off, cy + off],
+  ];
+  for (const [px, py] of positions) {
+    // Three offset discs to suggest a stack.
+    g.fillStyle(0x6e5018, a);
+    g.fillCircle(px, py + stackR * 0.25, stackR);
+    g.fillStyle(0x9a7028, a);
+    g.fillCircle(px, py,                 stackR);
+    g.fillStyle(0xe8d066, a);
+    g.fillCircle(px, py - stackR * 0.25, stackR);
+  }
+}
+
 // ── Canvas2D thumbnail renderer (build panel) ────────────────────────────
 
 export function paintThumb(
@@ -795,6 +966,8 @@ export function paintThumb(
     case GC.ObjType.ATM:          drawAtmC       (ctx, x, y, w, h); break;
     case GC.ObjType.BUFFET:       drawBuffetC    (ctx, x, y, w, h); break;
     case GC.ObjType.SPORTSBOOK:   drawSportsbookC(ctx, x, y, w, h); break;
+    case GC.ObjType.KENO_LOUNGE:       drawKenoLoungeC(ctx, x, y, w, h); break;
+    case GC.ObjType.HIGH_STAKES_TABLE: drawHighStakesC(ctx, x, y, w, h); break;
   }
 }
 
@@ -920,6 +1093,67 @@ function drawSportsbookC(ctx: CanvasRenderingContext2D, x: number, y: number, w:
   }
   // Brass counter strip.
   fillRect(ctx, '#cc8a44', x, y + Math.round(h * 0.78), w, Math.max(2, Math.round(h * 0.14)));
+}
+
+// Keno Lounge thumbnail — purple felt, 4×4 dot grid with a few brighter
+// "drawn" highlights. Echoes the in-grid keno-board centerpiece.
+function drawKenoLoungeC(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+  fillRect(ctx, '#4a2f1a', x, y, w, h);
+  const f = Math.max(2, Math.round(Math.min(w, h) * 0.12));
+  fillRect(ctx, '#4d2a6e', x + f, y + f, w - 2 * f, h - 2 * f);
+  // 4×4 dot grid.
+  const cols = 4;
+  const rows = 4;
+  const innerX = x + f;
+  const innerY = y + f;
+  const innerW = w - 2 * f;
+  const innerH = h - 2 * f;
+  const cellW = innerW / cols;
+  const cellH = innerH / rows;
+  const dotR  = Math.max(1, Math.min(cellW, cellH) * 0.22);
+  const lit = new Set(['0,0', '1,2', '2,1', '3,3']);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cx = innerX + (c + 0.5) * cellW;
+      const cy = innerY + (r + 0.5) * cellH;
+      const isLit = lit.has(`${c},${r}`);
+      ctx.fillStyle = isLit ? '#fff0a8' : '#c8a040';
+      ctx.beginPath();
+      ctx.arc(cx, cy, dotR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+// High-Stakes Table thumbnail — dark wood rim with gold trim, blood-red
+// felt, central gold diamond hinting at the baccarat-default centerpiece.
+function drawHighStakesC(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+  // Wood rim.
+  fillRect(ctx, '#2a0e08', x, y, w, h);
+  // Inner gold trim line.
+  ctx.strokeStyle = '#e8d066';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 1.5, y + 1.5, w - 3, h - 3);
+  // Felt.
+  const f = Math.max(2, Math.round(Math.min(w, h) * 0.14));
+  fillRect(ctx, '#6e1a1a', x + f, y + f, w - 2 * f, h - 2 * f);
+  // Dealer band on top edge for table-family consistency.
+  fillRect(ctx, '#8a3a14', x + f, y + f, w - 2 * f, Math.max(2, Math.round(h * 0.14)));
+  // Central gold diamond.
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const r = Math.max(3, Math.min(w, h) * 0.20);
+  ctx.fillStyle = '#e8d066';
+  ctx.beginPath();
+  ctx.moveTo(cx,     cy - r);
+  ctx.lineTo(cx + r, cy);
+  ctx.lineTo(cx,     cy + r);
+  ctx.lineTo(cx - r, cy);
+  ctx.closePath();
+  ctx.fill();
+  // Inner ivory card hint.
+  ctx.fillStyle = '#fff5e0';
+  ctx.fillRect(cx - r * 0.35, cy - r * 0.45, r * 0.7, r * 0.9);
 }
 
 // ATM thumbnail — slate body, green screen, brass slot. Echoes the in-grid

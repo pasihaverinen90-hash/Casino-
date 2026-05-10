@@ -31,6 +31,8 @@ const BUILD_ITEM_TYPES: GC.ObjType[] = [
   GC.ObjType.SLOT_MACHINE,
   GC.ObjType.SMALL_TABLE,
   GC.ObjType.LARGE_TABLE,
+  GC.ObjType.KENO_LOUNGE,
+  GC.ObjType.HIGH_STAKES_TABLE,
   GC.ObjType.WC,
   GC.ObjType.CASHIER,
   GC.ObjType.ATM,
