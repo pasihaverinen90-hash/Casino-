@@ -190,6 +190,9 @@ export function calcRevenue(
   sportsbookCount: number = 0,
   kenoCount: number = 0,
   highStakesCount: number = 0,
+  // Random Challenges V1 — Slot Promotion reward multiplies slot revenue only.
+  // 1.0 by default so non-boosted calls behave identically.
+  slotRevenueMultiplier: number = 1.0,
 ): {
   total: number; slot_rev: number; small_rev: number;
   large_rev: number; bar_rev: number; atm_rev: number;
@@ -237,7 +240,7 @@ export function calcRevenue(
   const highGuests       = highStakesCount > 0
     ? Math.round(totalGuests * highShare) : 0;
 
-  const slot_rev       = slotGuests       * GC.REV_SLOT;
+  const slot_rev       = slotGuests       * GC.REV_SLOT * slotRevenueMultiplier;
   const small_rev      = smallGuests      * GC.REV_SMALL_TABLE;
   const large_rev      = largeGuests      * GC.REV_LARGE_TABLE;
   const bar_rev        = barGuests        * GC.REV_BAR;
@@ -285,6 +288,8 @@ export interface ProjectInput {
   prev_occupancy    : number;
   prev_revenue      : number;
   cumulative_income : number;
+  // Random Challenges V1 — multiplies slot revenue only. 1.0 = no boost.
+  slot_revenue_multiplier : number;
 }
 
 // Pure projection — what today's totals look like at this instant given the
@@ -354,6 +359,7 @@ export function projectDay(s: ProjectInput): DayProjection {
     s.slots, s.small_tables, s.large_tables, s.bar_exists,
     s.atm_count, s.buffet_count, s.sportsbook_count,
     s.keno_count, s.highstakes_count,
+    s.slot_revenue_multiplier,
   );
   return {
     capacity, crowding, rating,

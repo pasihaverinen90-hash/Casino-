@@ -101,6 +101,31 @@ body {
 
 .goal-ticker:active { background: rgba(40, 32, 8, 0.97); }
 
+/* ── ChallengeTicker ─────────────────────────────────────────────────────── */
+/* Sits directly above the GoalTicker (which is at bottom: 80px, height 40px). */
+.challenge-ticker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 120px;
+  height: 36px;
+  background: rgba(6, 20, 16, 0.97);
+  border-top: 1px solid #10403a;
+  border-bottom: 1px solid #10403a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #44ffd0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 10;
+  user-select: none;
+}
+
 /* ── BottomBar ───────────────────────────────────────────────────────────── */
 .bottom-bar {
   position: absolute;

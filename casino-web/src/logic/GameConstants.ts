@@ -82,6 +82,39 @@ export const CAPACITY_DEMAND_BASELINE = 30;
 export const RATING_CAPACITY_CROWDING_MULTIPLIER = 1.25;
 export const RATING_CAPACITY_CROWDING_FLOOR      = 0.35;
 
+// ── Random Challenges V1 ─────────────────────────────────────────────────────
+// V1 ships one manually-triggered challenge (Slot Machine Promotion) plus the
+// minimal scaffolding for future random scheduling. State lives on GameState
+// (activeChallenge / activeBoost) and persists across saves with safe
+// defaults — old saves load with both fields null and no SAVE_VERSION bump.
+export type ChallengeId = 'slot_promotion';
+export type BoostId     = 'slot_revenue_boost';
+
+export interface ActiveChallenge {
+  id          : ChallengeId;
+  startedDay  : number;
+  // Challenge fails the first time dayNumber > deadlineDay (so completing on
+  // the deadline day itself still counts).
+  deadlineDay : number;
+  progress    : number;
+  target      : number;
+}
+
+export interface ActiveBoost {
+  id         : BoostId;
+  multiplier : number;
+  // Boost is active while dayNumber < expiresDay. Completed on day 5 with
+  // a 3-day reward → expiresDay = 8 → active during days 5, 6, 7.
+  expiresDay : number;
+}
+
+// Slot Promotion tuning. The reward multiplier applies to slot revenue only;
+// REV_SLOT itself stays untouched.
+export const SLOT_PROMOTION_TARGET        = 5;
+export const SLOT_PROMOTION_DURATION_DAYS = 3;
+export const SLOT_PROMOTION_REWARD_MULT   = 1.25;
+export const SLOT_PROMOTION_REWARD_DAYS   = 3;
+
 export const BASE_DEMAND     = 30;
 
 export const REV_SLOT        = 13;

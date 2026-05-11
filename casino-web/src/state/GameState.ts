@@ -37,6 +37,10 @@ interface SavePayload {
   // is null for an incomplete goal; null is also legitimate for a goal
   // that was already completed in a pre-1.5.0 save (the day was lost).
   completed_days: (number | null)[];
+  // Random Challenges V1 — added without a SAVE_VERSION bump. Both fields
+  // default to null via normalizeSave so pre-V1 saves load unchanged.
+  active_challenge : GC.ActiveChallenge | null;
+  active_boost     : GC.ActiveBoost     | null;
   stats       : GC.DayStats[];
   ch_days     : number[];
   ch_guests   : number[];
@@ -140,6 +144,8 @@ function normalizeSave(d: any): SavePayload {
     completed_days: Array.isArray(d.completed_days)
                       ? padCompletedDays(d.completed_days)
                       : Array(10).fill(null),
+    active_challenge: d.active_challenge ?? null,
+    active_boost    : d.active_boost     ?? null,
     stats       : Array.isArray(d.stats)     ? d.stats     : [],
     ch_days     : Array.isArray(d.ch_days)   ? d.ch_days   : [],
     ch_guests   : Array.isArray(d.ch_guests) ? d.ch_guests : [],
@@ -249,6 +255,14 @@ class GameState extends EventEmitter {
   // popup never replays on load. Player can keep playing forever after.
   endlessUnlocked = false;
 
+  // ── Random Challenges V1 ─────────────────────────────────────────────────
+  // At most one challenge and one boost active at a time in V1. Progress is
+  // updated from tryPlace (slot placements only, V1). Day-based lifecycle is
+  // resolved in endDay(). Both fields persist via SavePayload with safe nulls
+  // for pre-V1 saves — no SAVE_VERSION bump required.
+  activeChallenge : GC.ActiveChallenge | null = null;
+  activeBoost     : GC.ActiveBoost     | null = null;
+
   // Stats history
   statsRecords  : GC.DayStats[] = [];
   chartDays     : number[] = [];
@@ -325,6 +339,8 @@ class GameState extends EventEmitter {
     this.completedGoals = Array(10).fill(false);
     this.goalCompletedDays = Array(10).fill(null);
     this.endlessUnlocked = false;
+    this.activeChallenge = null;
+    this.activeBoost     = null;
     this._projection = null; this._paidToday = 0; this._hoursThisDay = 0;
     this.statsRecords = [];
     this.chartDays = []; this.chartGuests = []; this.chartRevenue = [];
@@ -409,6 +425,19 @@ class GameState extends EventEmitter {
     this.cash -= def.cost;
     this._updateCounts();
     this._checkGoals();
+    // Random Challenges V1 — Slot Promotion progress. Counts NEW slot
+    // placements only (loaded slots never come through tryPlace), and only
+    // while the slot_promotion challenge is active.
+    if (objType === GC.ObjType.SLOT_MACHINE
+        && this.activeChallenge?.id === 'slot_promotion') {
+      this.activeChallenge.progress++;
+      if (this.activeChallenge.progress >= this.activeChallenge.target) {
+        this._completeSlotPromotion();
+      } else {
+        this.emit('toast_requested',
+          `Slot Promotion: ${this.activeChallenge.progress}/${this.activeChallenge.target} slots built.`);
+      }
+    }
     this.emit('state_changed');
     return true;
   }
@@ -542,8 +571,14 @@ class GameState extends EventEmitter {
     this._hoursThisDay = 0;
     this.dayNumber++;
 
+    // Random Challenges V1 — day-based lifecycle. Order matters: expire the
+    // active challenge first (failure announcement), then the active boost
+    // (which may have been awarded last tick).
+    this._expireChallengeIfDue();
+    this._expireBoostIfDue();
+
     // Re-project once more so subsequent drip uses fresh crowding/rating
-    // feedback.
+    // feedback (and reflects any boost expiration above).
     this._recomputeDerived();
     this._checkGoals();
     this.emit('state_changed');
@@ -606,6 +641,11 @@ class GameState extends EventEmitter {
       prev_occupancy    : this.occupancyRate,
       prev_revenue      : this.dailyRevenue,
       cumulative_income : this.cumulativeIncome,
+      // Random Challenges V1 — Slot Promotion reward, when active.
+      slot_revenue_multiplier:
+        this.activeBoost?.id === 'slot_revenue_boost'
+          ? this.activeBoost.multiplier
+          : 1.0,
     });
     this._projection   = p;
     this.resortRating  = p.rating;
@@ -746,6 +786,65 @@ class GameState extends EventEmitter {
     this.emit('toast_requested', 'Rating breakdown printed to console.');
   }
 
+  // ── Random Challenges V1 ─────────────────────────────────────────────────
+
+  // Hidden dev shortcut for production testing — wired to Ctrl+Shift+C in
+  // main.ts. Starts the Slot Machine Promotion challenge if nothing else
+  // is active. Boost being active does not block starting a new challenge
+  // (challenges and boosts are independent timers in V1).
+  debugStartSlotPromotionChallenge(): void {
+    if (this.activeChallenge) {
+      this.emit('toast_requested', 'Challenge already active.');
+      return;
+    }
+    this.activeChallenge = {
+      id          : 'slot_promotion',
+      startedDay  : this.dayNumber,
+      deadlineDay : this.dayNumber + GC.SLOT_PROMOTION_DURATION_DAYS,
+      progress    : 0,
+      target      : GC.SLOT_PROMOTION_TARGET,
+    };
+    this.emit('toast_requested',
+      `Challenge Started: Build ${GC.SLOT_PROMOTION_TARGET} Slot Machines in ${GC.SLOT_PROMOTION_DURATION_DAYS} days.`);
+    this.emit('state_changed');
+  }
+
+  // Award the slot revenue boost and clear the challenge. Re-projects so the
+  // HUD reflects boosted revenue immediately.
+  private _completeSlotPromotion(): void {
+    this.activeChallenge = null;
+    this.activeBoost = {
+      id         : 'slot_revenue_boost',
+      multiplier : GC.SLOT_PROMOTION_REWARD_MULT,
+      expiresDay : this.dayNumber + GC.SLOT_PROMOTION_REWARD_DAYS,
+    };
+    this._recomputeDerived();
+    this.emit('toast_requested',
+      `Challenge Complete: Slot revenue +${Math.round((GC.SLOT_PROMOTION_REWARD_MULT - 1) * 100)}% for ${GC.SLOT_PROMOTION_REWARD_DAYS} days.`);
+  }
+
+  // Called from endDay() after dayNumber++. Fails the active challenge
+  // silently-with-toast if its deadline has passed; V1 applies no penalty.
+  private _expireChallengeIfDue(): void {
+    const c = this.activeChallenge;
+    if (!c) return;
+    if (this.dayNumber > c.deadlineDay) {
+      this.activeChallenge = null;
+      this.emit('toast_requested', 'Challenge Failed: Slot promotion expired.');
+    }
+  }
+
+  // Drops the boost when its window closes. Re-projects so post-boost slot
+  // revenue updates on the next HUD frame.
+  private _expireBoostIfDue(): void {
+    const b = this.activeBoost;
+    if (!b) return;
+    if (this.dayNumber >= b.expiresDay) {
+      this.activeBoost = null;
+      this.emit('toast_requested', 'Slot promotion boost expired.');
+    }
+  }
+
   // ── Unlocks (Phase U1) ────────────────────────────────────────────────────
 
   // Whether `t` is currently buildable. Derived from STARTING_UNLOCKS plus
@@ -803,6 +902,8 @@ class GameState extends EventEmitter {
       next_id: this._nextId,
       active_goal: this.activeGoal, completed: this.completedGoals,
       completed_days: this.goalCompletedDays,
+      active_challenge: this.activeChallenge,
+      active_boost    : this.activeBoost,
       stats: this.statsRecords,
       ch_days: this.chartDays, ch_guests: this.chartGuests,
       ch_rev: this.chartRevenue, ch_rating: this.chartRating,
@@ -833,6 +934,8 @@ class GameState extends EventEmitter {
     this.completedGoals   = d.completed;
     this.goalCompletedDays = d.completed_days;
     this.endlessUnlocked  = d.endless_unlocked;
+    this.activeChallenge  = d.active_challenge;
+    this.activeBoost      = d.active_boost;
     this.statsRecords     = d.stats;
     // Costs are gone in this MVP. Rewrite historical records so the
     // displayed Net always equals Revenue, regardless of when the

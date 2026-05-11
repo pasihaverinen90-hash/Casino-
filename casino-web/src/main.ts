@@ -12,6 +12,7 @@ import { HotelPanel }  from './ui/HotelPanel';
 import { StatsPanel }  from './ui/StatsPanel';
 import { GoalsPanel }  from './ui/GoalsPanel';
 import { Toast }       from './ui/Toast';
+import { ChallengeTicker } from './ui/ChallengeTicker';
 import { GoalCompletePopup } from './ui/GoalCompletePopup';
 import { StartScreen } from './ui/StartScreen';
 import * as Slots      from './state/SaveSlots';
@@ -41,6 +42,7 @@ new Phaser.Game({
 // ── HTML UI components ────────────────────────────────────────────────────
 const topHUD = new TopHUD(uiRoot);
 new Toast(uiRoot);
+new ChallengeTicker(uiRoot);
 new GoalCompletePopup(uiRoot);
 
 const goalsPanel = new GoalsPanel(uiRoot);
@@ -195,6 +197,14 @@ document.addEventListener('keydown', e => {
     if (e.code === 'KeyR') {
       e.preventDefault();
       gameState.debugRatingBreakdown();
+      return;
+    }
+    // Ctrl+Shift+C — Random Challenges V1 manual trigger. Starts Slot
+    // Machine Promotion if no challenge is active; otherwise toasts a
+    // "already active" message handled inside GameState.
+    if (e.code === 'KeyC') {
+      e.preventDefault();
+      gameState.debugStartSlotPromotionChallenge();
       return;
     }
     let amount = 0;
