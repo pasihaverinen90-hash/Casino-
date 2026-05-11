@@ -110,18 +110,42 @@ function scoreFinance(s: RatingInput): number {
   return rev + cum;
 }
 
+// Per-category breakdown alongside the final score and rating. Used by the
+// hidden Ctrl+Shift+R dev shortcut to inspect which pillar is limiting the
+// current rating during tuning. Numbers are the raw post-cap contributions,
+// not the maxes — pair with RATING_WEIGHTS to render "x / max" lines.
+export interface RatingBreakdown {
+  variety  : number;
+  comfort  : number;
+  prestige : number;
+  capacity : number;
+  hotel    : number;
+  finance  : number;
+  score    : number;
+  rating   : number;
+}
+
+// Rating V2 breakdown — runs the same six score helpers calcRating uses and
+// returns each category plus the rolled-up score and final rating. This is
+// the single source of truth: calcRating below is a thin wrapper.
+export function calcRatingBreakdown(s: RatingInput): RatingBreakdown {
+  const variety  = scoreVariety(s);
+  const comfort  = scoreComfort(s);
+  const prestige = scorePrestige(s);
+  const capacity = scoreCapacity(s);
+  const hotel    = scoreHotel(s);
+  const finance  = scoreFinance(s);
+  const score    = variety + comfort + prestige + capacity + hotel + finance;
+  const rating   = clamp(1.0 + (score / 100) * 4.0, GC.RATING_MIN, GC.RATING_MAX);
+  return { variety, comfort, prestige, capacity, hotel, finance, score, rating };
+}
+
 // Rating V2 — six-category 0–100 score, mapped to the 1.0–5.0 rating range.
 // Replaces V1's flat additive formula. Crowding lives inside scoreCapacity
 // (no standalone "- crowdingPenalty" term), so the final rating is purely
 // the score-to-range mapping. See GameConstants.RATING_WEIGHTS for caps.
 export function calcRating(s: RatingInput): number {
-  const score = scoreVariety(s)
-              + scoreComfort(s)
-              + scorePrestige(s)
-              + scoreCapacity(s)
-              + scoreHotel(s)
-              + scoreFinance(s);
-  return clamp(1.0 + (score / 100) * 4.0, GC.RATING_MIN, GC.RATING_MAX);
+  return calcRatingBreakdown(s).rating;
 }
 
 export function calcUpkeep(
@@ -282,6 +306,11 @@ export interface DayProjection {
   keno_rev       : number;
   highstakes_rev : number;
   hotel_rev      : number;
+  // The exact RatingInput passed to calcRating this tick. Exposed so the
+  // debug breakdown can recompute the per-category split against the same
+  // inputs the live rating saw — no need to capture / mirror prior-tick
+  // values on GameState.
+  rating_input   : RatingInput;
 }
 
 export function projectDay(s: ProjectInput): DayProjection {
@@ -290,7 +319,9 @@ export function projectDay(s: ProjectInput): DayProjection {
     s.keno_count, s.highstakes_count,
   );
   const crowding = calcCrowding(s.last_guests, capacity, s.prev_crowding);
-  const rating   = calcRating({
+  // Build the RatingInput once, then reuse it on the projection so the debug
+  // breakdown sees the exact same values the live rating was computed from.
+  const ratingInput: RatingInput = {
     slots            : s.slots,
     smallTables      : s.small_tables,
     largeTables      : s.large_tables,
@@ -309,7 +340,8 @@ export function projectDay(s: ProjectInput): DayProjection {
     occupancyRate    : s.prev_occupancy,
     dailyRevenue     : s.prev_revenue,
     cumulativeIncome : s.cumulative_income,
-  });
+  };
+  const rating   = calcRating(ratingInput);
   const hotel  = calcOccupancy(s.room_count, s.quality_level, rating);
   const walkin = calcWalkin(capacity, rating);
   const total  = walkin + hotel.hotel_guests;
@@ -333,6 +365,7 @@ export function projectDay(s: ProjectInput): DayProjection {
     keno_rev: rev.keno_rev,
     highstakes_rev: rev.highstakes_rev,
     hotel_rev: rev.hotel_rev,
+    rating_input: ratingInput,
   };
 }
 

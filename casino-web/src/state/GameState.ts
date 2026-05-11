@@ -719,6 +719,33 @@ class GameState extends EventEmitter {
     this.emit('toast_requested', `Debug: +${amount.toLocaleString()} cash`);
   }
 
+  // Hidden dev shortcut for Rating V2 tuning — wired to Ctrl+Shift+R in
+  // main.ts. Reads the RatingInput stored on the live projection (the same
+  // object calcRating saw this tick) and re-runs calcRatingBreakdown to
+  // print per-category scores. No state mutation, no save impact.
+  debugRatingBreakdown(): void {
+    if (!this._projection) {
+      this.emit('toast_requested', 'Rating breakdown unavailable.');
+      return;
+    }
+    const b = Sim.calcRatingBreakdown(this._projection.rating_input);
+    const W = GC.RATING_WEIGHTS;
+    /* eslint-disable no-console */
+    console.log('=== Rating Breakdown ===');
+    console.table([
+      { Category: 'Variety',  Score: b.variety.toFixed(2),  Max: W.variety  },
+      { Category: 'Comfort',  Score: b.comfort.toFixed(2),  Max: W.comfort  },
+      { Category: 'Prestige', Score: b.prestige.toFixed(2), Max: W.prestige },
+      { Category: 'Capacity', Score: b.capacity.toFixed(2), Max: W.capacity },
+      { Category: 'Hotel',    Score: b.hotel.toFixed(2),    Max: W.hotel    },
+      { Category: 'Finance',  Score: b.finance.toFixed(2),  Max: W.finance  },
+    ]);
+    console.log(`Total score: ${b.score.toFixed(2)} / 100`);
+    console.log(`Rating: ${b.rating.toFixed(2)} / 5.00`);
+    /* eslint-enable no-console */
+    this.emit('toast_requested', 'Rating breakdown printed to console.');
+  }
+
   // ── Unlocks (Phase U1) ────────────────────────────────────────────────────
 
   // Whether `t` is currently buildable. Derived from STARTING_UNLOCKS plus

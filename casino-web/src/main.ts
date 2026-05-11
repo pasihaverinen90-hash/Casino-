@@ -187,6 +187,16 @@ document.addEventListener('keydown', e => {
   // Handled before the speed switch so Ctrl+Shift+1 doesn't fall through
   // to "set speed 1×".
   if (e.ctrlKey && e.shiftKey) {
+    // Ctrl+Shift+R prints the live Rating V2 category breakdown for tuning.
+    // Handled here (and returned early) so it doesn't fall through to the
+    // single-key 'R' rotation. GridScene's keydown-R listener also skips
+    // rotation when both modifiers are held, since Phaser's keyboard plugin
+    // fires independently of this document-level handler.
+    if (e.code === 'KeyR') {
+      e.preventDefault();
+      gameState.debugRatingBreakdown();
+      return;
+    }
     let amount = 0;
     if      (e.code === 'Digit1') amount = 10_000;
     else if (e.code === 'Digit2') amount = 50_000;

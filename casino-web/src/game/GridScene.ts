@@ -122,7 +122,10 @@ export class GridScene extends Phaser.Scene {
     });
 
     // R = cycle ghost facing through N → E → S → W while placing.
-    this.input.keyboard?.on('keydown-R', () => {
+    // Skip when Ctrl+Shift are held — that combo is reserved for the hidden
+    // Rating V2 breakdown shortcut handled in main.ts.
+    this.input.keyboard?.on('keydown-R', (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.shiftKey) return;
       if (!this.placing) return;
       this.placeFacing = GC.nextFacing(this.placeFacing);
       if (this.ghostCol >= 0) this._revalidateGhost();
