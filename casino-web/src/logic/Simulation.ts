@@ -93,7 +93,11 @@ function scorePrestige(s: RatingInput): number {
 
 function scoreCapacity(s: RatingInput): number {
   const scale = Math.min(1, s.casinoCapacity / GC.CAPACITY_DEMAND_BASELINE);
-  const oc    = Math.max(0, 1 - 2 * s.crowdingPenalty);
+  // V2.1: softer crowding slope + floor — see RATING_CAPACITY_CROWDING_*.
+  const oc    = Math.max(
+    GC.RATING_CAPACITY_CROWDING_FLOOR,
+    1 - GC.RATING_CAPACITY_CROWDING_MULTIPLIER * s.crowdingPenalty,
+  );
   return GC.RATING_WEIGHTS.capacity * scale * oc;
 }
 

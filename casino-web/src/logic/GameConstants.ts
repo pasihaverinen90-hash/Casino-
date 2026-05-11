@@ -74,6 +74,14 @@ export const HOTEL_TARGETS = {
 // pillar plateau aligns with calcWalkin's capacity multiplier cap.
 export const CAPACITY_DEMAND_BASELINE = 30;
 
+// Rating V2.1 — crowding effect on the Capacity pillar. V2.0 used a 2.0
+// multiplier with no floor, which let an otherwise excellent casino drop
+// Capacity to near-zero once hotel-driven crowding pushed prevCrowding
+// above ~0.5. V2.1 softens the slope (1.25 instead of 2.0) and adds a
+// 0.35 floor so severe crowding still hurts but cannot collapse the pillar.
+export const RATING_CAPACITY_CROWDING_MULTIPLIER = 1.25;
+export const RATING_CAPACITY_CROWDING_FLOOR      = 0.35;
+
 export const BASE_DEMAND     = 30;
 
 export const REV_SLOT        = 13;
