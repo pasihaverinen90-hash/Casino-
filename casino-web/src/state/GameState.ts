@@ -41,6 +41,9 @@ interface SavePayload {
   // default to null via normalizeSave so pre-V1 saves load unchanged.
   active_challenge : GC.ActiveChallenge | null;
   active_boost     : GC.ActiveBoost     | null;
+  // Campaign Challenge Schedule V1 — stable keys for scheduled entries that
+  // have already fired. Defaults to [] in normalizeSave so old saves load.
+  triggered_scheduled_challenges : string[];
   stats       : GC.DayStats[];
   ch_days     : number[];
   ch_guests   : number[];
@@ -146,6 +149,10 @@ function normalizeSave(d: any): SavePayload {
                       : Array(10).fill(null),
     active_challenge: d.active_challenge ?? null,
     active_boost    : d.active_boost     ?? null,
+    triggered_scheduled_challenges:
+      Array.isArray(d.triggered_scheduled_challenges)
+        ? d.triggered_scheduled_challenges.filter((x: unknown) => typeof x === 'string')
+        : [],
     stats       : Array.isArray(d.stats)     ? d.stats     : [],
     ch_days     : Array.isArray(d.ch_days)   ? d.ch_days   : [],
     ch_guests   : Array.isArray(d.ch_guests) ? d.ch_guests : [],
@@ -263,6 +270,12 @@ class GameState extends EventEmitter {
   activeChallenge : GC.ActiveChallenge | null = null;
   activeBoost     : GC.ActiveBoost     | null = null;
 
+  // Campaign Challenge Schedule V1 — stable keys of scheduled entries that
+  // have already fired. See GC.CAMPAIGN_CHALLENGE_SCHEDULE and
+  // _tryStartScheduledChallenges. Resets to [] on new game and on load when
+  // the save predates the field.
+  triggeredScheduledChallenges : string[] = [];
+
   // Stats history
   statsRecords  : GC.DayStats[] = [];
   chartDays     : number[] = [];
@@ -341,6 +354,7 @@ class GameState extends EventEmitter {
     this.endlessUnlocked = false;
     this.activeChallenge = null;
     this.activeBoost     = null;
+    this.triggeredScheduledChallenges = [];
     this._projection = null; this._paidToday = 0; this._hoursThisDay = 0;
     this.statsRecords = [];
     this.chartDays = []; this.chartGuests = []; this.chartRevenue = [];
@@ -577,6 +591,12 @@ class GameState extends EventEmitter {
     this._expireChallengeIfDue();
     this._expireBoostIfDue();
 
+    // Campaign Challenge Schedule V1 — run after expiries so a newly-cleared
+    // slot can immediately receive its scheduled challenge on the same
+    // rollover. If a challenge is still active or a boost is still running,
+    // the scheduler is a no-op and the entry waits for a later day.
+    this._tryStartScheduledChallenges();
+
     // Re-project once more so subsequent drip uses fresh crowding/rating
     // feedback (and reflects any boost expiration above).
     this._recomputeDerived();
@@ -789,13 +809,24 @@ class GameState extends EventEmitter {
   // ── Random Challenges V1 ─────────────────────────────────────────────────
 
   // Hidden dev shortcut for production testing — wired to Ctrl+Shift+C in
-  // main.ts. Starts the Slot Machine Promotion challenge if nothing else
-  // is active. Boost being active does not block starting a new challenge
-  // (challenges and boosts are independent timers in V1).
+  // main.ts. Delegates to the shared start method so the manual path and
+  // the campaign scheduler share rejection rules and side effects.
   debugStartSlotPromotionChallenge(): void {
+    this._startSlotPromotionChallenge('debug');
+  }
+
+  // Shared start for both the debug shortcut and the campaign scheduler.
+  // Rejects (with a source-agnostic toast) if any challenge or boost is
+  // currently active. Returns true on success so the caller knows whether
+  // to mark scheduler history.
+  private _startSlotPromotionChallenge(source: 'debug' | 'schedule'): boolean {
     if (this.activeChallenge) {
       this.emit('toast_requested', 'Challenge already active.');
-      return;
+      return false;
+    }
+    if (this.activeBoost) {
+      this.emit('toast_requested', 'A challenge boost is already active.');
+      return false;
     }
     this.activeChallenge = {
       id          : 'slot_promotion',
@@ -804,9 +835,48 @@ class GameState extends EventEmitter {
       progress    : 0,
       target      : GC.SLOT_PROMOTION_TARGET,
     };
-    this.emit('toast_requested',
-      `Challenge Started: Build ${GC.SLOT_PROMOTION_TARGET} Slot Machines in ${GC.SLOT_PROMOTION_DURATION_DAYS} days.`);
+    // Schedule-sourced starts use the "new challenge" framing so the player
+    // reads it as an in-world event; debug starts keep the verbose framing
+    // they had in Random Challenges V1 for testing legibility.
+    const msg = source === 'schedule'
+      ? `New Challenge: Slot Promotion — Build ${GC.SLOT_PROMOTION_TARGET} Slot Machines in ${GC.SLOT_PROMOTION_DURATION_DAYS} days.`
+      : `Challenge Started: Build ${GC.SLOT_PROMOTION_TARGET} Slot Machines in ${GC.SLOT_PROMOTION_DURATION_DAYS} days.`;
+    this.emit('toast_requested', msg);
     this.emit('state_changed');
+    return true;
+  }
+
+  // Campaign scheduler check — called from endDay() after challenge/boost
+  // expiry. Iterates CAMPAIGN_CHALLENGE_SCHEDULE for the current casino,
+  // picks the earliest entry whose day is ≤ dayNumber and that hasn't fired
+  // yet, and starts it. If the start succeeds, the entry's key is recorded
+  // in triggeredScheduledChallenges so it never replays. If start rejects
+  // (active challenge / boost), the key is NOT marked — the entry stays
+  // eligible for a future day (delayed, not lost).
+  private _tryStartScheduledChallenges(): void {
+    if (this.activeChallenge || this.activeBoost) return;
+    let earliest: GC.ScheduledChallenge | null = null;
+    let earliestKey = '';
+    for (const e of GC.CAMPAIGN_CHALLENGE_SCHEDULE) {
+      if (e.casinoId !== GC.CURRENT_CASINO_ID) continue;
+      if (e.day > this.dayNumber) continue;
+      const key = GC.scheduledChallengeKey(e);
+      if (this.triggeredScheduledChallenges.includes(key)) continue;
+      if (!earliest || e.day < earliest.day) {
+        earliest = e;
+        earliestKey = key;
+      }
+    }
+    if (!earliest) return;
+    // V1 only knows one challenge id, but switch keeps the door open for
+    // future entries (and lets TypeScript exhaustively check ChallengeId).
+    let started = false;
+    switch (earliest.challengeId) {
+      case 'slot_promotion':
+        started = this._startSlotPromotionChallenge('schedule');
+        break;
+    }
+    if (started) this.triggeredScheduledChallenges.push(earliestKey);
   }
 
   // Award the slot revenue boost and clear the challenge. Re-projects so the
@@ -904,6 +974,7 @@ class GameState extends EventEmitter {
       completed_days: this.goalCompletedDays,
       active_challenge: this.activeChallenge,
       active_boost    : this.activeBoost,
+      triggered_scheduled_challenges: this.triggeredScheduledChallenges,
       stats: this.statsRecords,
       ch_days: this.chartDays, ch_guests: this.chartGuests,
       ch_rev: this.chartRevenue, ch_rating: this.chartRating,
@@ -936,6 +1007,7 @@ class GameState extends EventEmitter {
     this.endlessUnlocked  = d.endless_unlocked;
     this.activeChallenge  = d.active_challenge;
     this.activeBoost      = d.active_boost;
+    this.triggeredScheduledChallenges = d.triggered_scheduled_challenges;
     this.statsRecords     = d.stats;
     // Costs are gone in this MVP. Rewrite historical records so the
     // displayed Net always equals Revenue, regardless of when the

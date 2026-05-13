@@ -115,6 +115,37 @@ export const SLOT_PROMOTION_DURATION_DAYS = 3;
 export const SLOT_PROMOTION_REWARD_MULT   = 1.25;
 export const SLOT_PROMOTION_REWARD_DAYS   = 3;
 
+// ── Campaign Challenge Schedule V1 ───────────────────────────────────────────
+// Long-term goal is a campaign with multiple casino scenarios, each with its
+// own pre-authored challenge schedule. V1 has a single 'starter' casino and a
+// single scheduled entry. The scheduler runs on day rollover (see
+// GameState._tryStartScheduledChallenges) and only starts the earliest
+// untriggered entry whose day is ≤ dayNumber — so a scheduled challenge that
+// was blocked by an active challenge/boost is delayed rather than lost.
+//
+// Triggered entries are tracked on GameState.triggeredScheduledChallenges as
+// stable keys: `${casinoId}:${day}:${challengeId}` — survives save/load and
+// stops the same entry from re-firing on later days.
+export type CasinoId = 'starter';
+
+export interface ScheduledChallenge {
+  casinoId    : CasinoId;
+  day         : number;
+  challengeId : ChallengeId;
+}
+
+export const CURRENT_CASINO_ID: CasinoId = 'starter';
+
+export const CAMPAIGN_CHALLENGE_SCHEDULE: readonly ScheduledChallenge[] = [
+  { casinoId: 'starter', day: 3, challengeId: 'slot_promotion' },
+];
+
+// Build the stable key used in triggeredScheduledChallenges. Centralised so
+// schedule lookup and trigger-history match exactly.
+export function scheduledChallengeKey(e: ScheduledChallenge): string {
+  return `${e.casinoId}:${e.day}:${e.challengeId}`;
+}
+
 export const BASE_DEMAND     = 30;
 
 export const REV_SLOT        = 13;
