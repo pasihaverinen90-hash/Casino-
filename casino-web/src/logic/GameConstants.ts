@@ -161,9 +161,9 @@ export interface ScheduledChallenge {
 export const CURRENT_CASINO_ID: CasinoId = 'starter';
 
 export const CAMPAIGN_CHALLENGE_SCHEDULE: readonly ScheduledChallenge[] = [
-  { casinoId: 'starter', day:  3, challengeId: 'slot_promotion' },
-  { casinoId: 'starter', day:  7, challengeId: 'comfort_check'  },
-  { casinoId: 'starter', day: 12, challengeId: 'tourist_bus'    },
+  { casinoId: 'starter', day:  5, challengeId: 'slot_promotion' },
+  { casinoId: 'starter', day: 10, challengeId: 'comfort_check'  },
+  { casinoId: 'starter', day: 16, challengeId: 'tourist_bus'    },
 ];
 
 // Build the stable key used in triggeredScheduledChallenges. Centralised so

@@ -1,16 +1,23 @@
 // ChallengeTicker.ts — thin strip showing the active random challenge or its
 // boost. Hides when neither is active. Mirrors GoalTicker's pattern:
 // subscribes to state_changed and re-renders. Text is per-id so units and
-// labels match the challenge / boost in flight.
-import type * as GC from '../logic/GameConstants';
+// labels match the challenge / boost in flight. Clicking the strip opens a
+// details modal so the player can re-read objectives after the start toast
+// fades — especially important for Comfort Check's five-service list.
+import * as GC from '../logic/GameConstants';
 import { gameState } from '../state/GameState';
 
 export class ChallengeTicker {
-  private el: HTMLElement;
+  private el      : HTMLElement;
+  private _parent : HTMLElement;
 
   constructor(parent: HTMLElement) {
+    this._parent = parent;
     this.el = document.createElement('div');
-    this.el.className = 'challenge-ticker';
+    // 'interactive' is the project-wide class that lets pointer events
+    // through and matches the cursor/hover styling used by GoalTicker.
+    this.el.className = 'challenge-ticker interactive';
+    this.el.onclick   = () => this._showDetails();
     parent.appendChild(this.el);
 
     gameState.on('state_changed', () => this._refresh());
@@ -23,18 +30,129 @@ export class ChallengeTicker {
     if (c) {
       const left = Math.max(0, c.deadlineDay - gameState.dayNumber);
       this.el.textContent =
-        `Challenge: ${this._title(c.id)} — ${c.progress}/${c.target} ${this._unit(c.id)} — ${left} ${left === 1 ? 'day' : 'days'} left`;
+        `Challenge: ${this._title(c.id)} — ${c.progress}/${c.target} ${this._unit(c.id)} — ${left} ${this._dayWord(left)} left`;
       this.el.style.display = '';
     } else if (b) {
       const left = Math.max(0, b.expiresDay - gameState.dayNumber);
       this.el.textContent =
-        `Boost: ${this._boostText(b.id, b.multiplier)} — ${left} ${left === 1 ? 'day' : 'days'} left`;
+        `Boost: ${this._boostText(b.id, b.multiplier)} — ${left} ${this._dayWord(left)} left`;
       this.el.style.display = '';
     } else {
       this.el.textContent = '';
       this.el.style.display = 'none';
     }
   }
+
+  // ── Click handler ───────────────────────────────────────────────────────
+
+  private _showDetails(): void {
+    const c = gameState.activeChallenge;
+    const b = gameState.activeBoost;
+    if (c) {
+      this._openModal(this._challengeTitle(c.id), this._challengeBody(c));
+    } else if (b) {
+      this._openModal(this._boostTitle(b.id), this._boostBody(b));
+    }
+  }
+
+  // ── Modal infra ─────────────────────────────────────────────────────────
+  // Mirrors the project's _confirmReturnToMenu pattern in main.ts — same
+  // overlay / card / title / btn classes so the look matches every other
+  // modal in the game.
+
+  private _openModal(titleText: string, body: HTMLElement): void {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay interactive';
+
+    const card = document.createElement('div');
+    card.className = 'modal-card';
+
+    const title = document.createElement('div');
+    title.className   = 'modal-title';
+    title.textContent = titleText;
+    card.appendChild(title);
+
+    body.classList.add('modal-body', 'event-details');
+    card.appendChild(body);
+
+    const btnClose = document.createElement('button');
+    btnClose.className   = 'modal-btn';
+    btnClose.textContent = 'Close';
+    btnClose.onclick     = () => overlay.remove();
+    card.appendChild(btnClose);
+
+    // Click outside the card closes — convenience only; clicking the card
+    // itself does not close.
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+    overlay.appendChild(card);
+    this._parent.appendChild(overlay);
+  }
+
+  // ── Body builders ───────────────────────────────────────────────────────
+
+  private _challengeBody(c: GC.ActiveChallenge): HTMLElement {
+    const left = Math.max(0, c.deadlineDay - gameState.dayNumber);
+    const root = document.createElement('div');
+    root.appendChild(this._section('Objective', this._objectiveText(c.id)));
+    if (c.id === 'comfort_check') {
+      root.appendChild(this._listSection('Required services', [
+        '2 functional WC',
+        '2 functional Cashiers',
+        '1 functional ATM',
+        '1 functional Bar',
+        '1 functional Buffet',
+      ]));
+    }
+    root.appendChild(this._section('Progress', `${c.progress} / ${c.target} ${this._unit(c.id)}`));
+    root.appendChild(this._section('Deadline', `${left} ${this._dayWord(left)} left`));
+    const effect = this._effectText(c.id);
+    if (effect) root.appendChild(this._section('Effect during event', effect));
+    root.appendChild(this._section('Reward', this._rewardText(c.id)));
+    root.appendChild(this._section('Failure', 'No penalty.'));
+    return root;
+  }
+
+  private _boostBody(b: GC.ActiveBoost): HTMLElement {
+    const left = Math.max(0, b.expiresDay - gameState.dayNumber);
+    const root = document.createElement('div');
+    root.appendChild(this._section('Effect', this._boostEffectText(b)));
+    root.appendChild(this._section('Duration', `${left} ${this._dayWord(left)} left`));
+    root.appendChild(this._section('Source', this._boostSourceText(b.id)));
+    return root;
+  }
+
+  private _section(label: string, text: string): HTMLElement {
+    const sec = document.createElement('div');
+    sec.className = 'event-section';
+    const l = document.createElement('div');
+    l.className = 'event-section-label';
+    l.textContent = label;
+    const t = document.createElement('div');
+    t.className = 'event-section-text';
+    t.textContent = text;
+    sec.append(l, t);
+    return sec;
+  }
+
+  private _listSection(label: string, items: string[]): HTMLElement {
+    const sec = document.createElement('div');
+    sec.className = 'event-section';
+    const l = document.createElement('div');
+    l.className = 'event-section-label';
+    l.textContent = label;
+    const ul = document.createElement('ul');
+    ul.className = 'event-section-list';
+    for (const i of items) {
+      const li = document.createElement('li');
+      li.textContent = i;
+      ul.appendChild(li);
+    }
+    sec.append(l, ul);
+    return sec;
+  }
+
+  // ── Per-id text ─────────────────────────────────────────────────────────
 
   private _title(id: GC.ChallengeId): string {
     switch (id) {
@@ -57,6 +175,74 @@ export class ChallengeTicker {
     switch (id) {
       case 'slot_revenue_boost': return `Slot revenue +${pct}%`;
       case 'walkin_boost':       return `Walk-in +${pct}%`;
+    }
+  }
+
+  private _dayWord(n: number): string { return n === 1 ? 'day' : 'days'; }
+
+  private _challengeTitle(id: GC.ChallengeId): string {
+    switch (id) {
+      case 'slot_promotion': return 'Slot Machine Promotion';
+      case 'tourist_bus':    return 'Tourist Bus Arrival';
+      case 'comfort_check':  return 'Comfort Check';
+    }
+  }
+
+  private _objectiveText(id: GC.ChallengeId): string {
+    switch (id) {
+      case 'slot_promotion':
+        return `Build ${GC.SLOT_PROMOTION_TARGET} new Slot Machines within ${GC.SLOT_PROMOTION_DURATION_DAYS} days.`;
+      case 'tourist_bus':
+        return `Serve ${GC.TOURIST_BUS_TARGET} guests during the ${GC.TOURIST_BUS_DURATION_DAYS}-day event.`;
+      case 'comfort_check':
+        return `Provide every required guest comfort service before the deadline.`;
+    }
+  }
+
+  private _effectText(id: GC.ChallengeId): string | null {
+    switch (id) {
+      case 'tourist_bus': {
+        const pct = Math.round((GC.TOURIST_BUS_WALKIN_MULT - 1) * 100);
+        return `Walk-in demand +${pct}%`;
+      }
+      case 'slot_promotion':
+      case 'comfort_check':
+        return null;
+    }
+  }
+
+  private _rewardText(id: GC.ChallengeId): string {
+    switch (id) {
+      case 'slot_promotion': {
+        const pct = Math.round((GC.SLOT_PROMOTION_REWARD_MULT - 1) * 100);
+        return `Slot revenue +${pct}% for ${GC.SLOT_PROMOTION_REWARD_DAYS} days`;
+      }
+      case 'tourist_bus':
+        return `+$${GC.TOURIST_BUS_REWARD_CASH.toLocaleString()} cash`;
+      case 'comfort_check':
+        return `+$${GC.COMFORT_CHECK_REWARD_CASH.toLocaleString()} cash`;
+    }
+  }
+
+  private _boostTitle(id: GC.BoostId): string {
+    switch (id) {
+      case 'slot_revenue_boost': return 'Slot Revenue Boost';
+      case 'walkin_boost':       return 'Tourist Bus Traffic';
+    }
+  }
+
+  private _boostEffectText(b: GC.ActiveBoost): string {
+    const pct = Math.round((b.multiplier - 1) * 100);
+    switch (b.id) {
+      case 'slot_revenue_boost': return `Slot Machine revenue +${pct}%`;
+      case 'walkin_boost':       return `Walk-in demand +${pct}%`;
+    }
+  }
+
+  private _boostSourceText(id: GC.BoostId): string {
+    switch (id) {
+      case 'slot_revenue_boost': return 'Slot Machine Promotion';
+      case 'walkin_boost':       return 'Tourist Bus Arrival';
     }
   }
 }

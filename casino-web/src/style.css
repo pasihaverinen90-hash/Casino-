@@ -985,6 +985,21 @@ body {
   margin-bottom: 16px;
 }
 
+/* Event details modal — left-aligned sections, used by ChallengeTicker. */
+.modal-body.event-details { text-align: left; max-width: 360px; }
+.event-section { margin-bottom: 12px; }
+.event-section:last-child { margin-bottom: 0; }
+.event-section-label {
+  color: #ffcc44;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.event-section-text  { color: #c8cce0; line-height: 1.45; }
+.event-section-list  { margin: 0; padding-left: 18px; color: #c8cce0; line-height: 1.55; }
+
 .modal-btn.danger {
   background: rgba(180, 50, 50, 0.25);
   border-color: rgba(220, 70, 70, 0.55);
