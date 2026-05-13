@@ -87,7 +87,7 @@ export const RATING_CAPACITY_CROWDING_FLOOR      = 0.35;
 // minimal scaffolding for future random scheduling. State lives on GameState
 // (activeChallenge / activeBoost) and persists across saves with safe
 // defaults — old saves load with both fields null and no SAVE_VERSION bump.
-export type ChallengeId = 'slot_promotion' | 'tourist_bus';
+export type ChallengeId = 'slot_promotion' | 'tourist_bus' | 'comfort_check';
 export type BoostId     = 'slot_revenue_boost' | 'walkin_boost';
 
 export interface ActiveChallenge {
@@ -126,6 +126,19 @@ export const TOURIST_BUS_DURATION_DAYS  = 3;
 export const TOURIST_BUS_WALKIN_MULT    = 1.5;
 export const TOURIST_BUS_REWARD_CASH    = 5_000;
 
+// Comfort Check — presence challenge. Progress is the count of requirement
+// categories currently satisfied by the functional object counts; success
+// when all 5 categories are met within the window. No boost, no penalty.
+export const COMFORT_CHECK_DURATION_DAYS = 3;
+export const COMFORT_CHECK_REWARD_CASH   = 3_000;
+export const COMFORT_CHECK_REQUIREMENTS = {
+  wc      : 2,
+  cashier : 2,
+  atm     : 1,
+  bar     : 1,
+  buffet  : 1,
+} as const;
+
 // ── Campaign Challenge Schedule V1 ───────────────────────────────────────────
 // Long-term goal is a campaign with multiple casino scenarios, each with its
 // own pre-authored challenge schedule. V1 has a single 'starter' casino and a
@@ -149,6 +162,7 @@ export const CURRENT_CASINO_ID: CasinoId = 'starter';
 
 export const CAMPAIGN_CHALLENGE_SCHEDULE: readonly ScheduledChallenge[] = [
   { casinoId: 'starter', day:  3, challengeId: 'slot_promotion' },
+  { casinoId: 'starter', day:  7, challengeId: 'comfort_check'  },
   { casinoId: 'starter', day: 12, challengeId: 'tourist_bus'    },
 ];
 

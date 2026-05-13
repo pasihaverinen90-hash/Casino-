@@ -40,6 +40,7 @@ export class ChallengeTicker {
     switch (id) {
       case 'slot_promotion': return 'Slot Promotion';
       case 'tourist_bus':    return 'Tourist Bus';
+      case 'comfort_check':  return 'Comfort Check';
     }
   }
 
@@ -47,6 +48,7 @@ export class ChallengeTicker {
     switch (id) {
       case 'slot_promotion': return 'slots';
       case 'tourist_bus':    return 'guests';
+      case 'comfort_check':  return 'services';
     }
   }
 

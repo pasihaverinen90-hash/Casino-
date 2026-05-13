@@ -452,6 +452,8 @@ class GameState extends EventEmitter {
           `Slot Promotion: ${this.activeChallenge.progress}/${this.activeChallenge.target} slots built.`);
       }
     }
+    // Comfort Check is presence-based — recompute on every successful place.
+    this._updateComfortCheckProgressAndMaybeComplete();
     this.emit('state_changed');
     return true;
   }
@@ -482,6 +484,8 @@ class GameState extends EventEmitter {
     this.cash += refund;
     this._updateCounts();
     this._checkGoals();
+    // Removing a required service can drop Comfort Check progress.
+    this._updateComfortCheckProgressAndMaybeComplete();
     this.emit('state_changed');
     this.emit('toast_requested', `Demolished. +${refund} cash`);
   }
@@ -597,9 +601,11 @@ class GameState extends EventEmitter {
     this._hoursThisDay = 0;
     this.dayNumber++;
 
-    // Random Challenges V1 — day-based lifecycle. Order matters: expire the
-    // active challenge first (failure announcement), then the active boost
-    // (which may have been awarded last tick).
+    // Random Challenges V1 — day-based lifecycle. Order matters:
+    //   1. update comfort-check progress so a deadline-day pass wins
+    //   2. expire the active challenge (failure announcement)
+    //   3. expire the active boost (which may have been awarded last tick)
+    this._updateComfortCheckProgressAndMaybeComplete();
     this._expireChallengeIfDue();
     this._expireBoostIfDue();
 
@@ -863,6 +869,69 @@ class GameState extends EventEmitter {
     return true;
   }
 
+  // Comfort Check start — presence challenge with no boost. Completes
+  // immediately at the end of this call if requirements are already met
+  // when the scheduler fires (handled via the trailing _update call).
+  private _startComfortCheckChallenge(source: 'schedule'): boolean {
+    void source;
+    if (this.activeChallenge) {
+      this.emit('toast_requested', 'Challenge already active.');
+      return false;
+    }
+    if (this.activeBoost) {
+      this.emit('toast_requested', 'A challenge boost is already active.');
+      return false;
+    }
+    const req = GC.COMFORT_CHECK_REQUIREMENTS;
+    this.activeChallenge = {
+      id          : 'comfort_check',
+      startedDay  : this.dayNumber,
+      deadlineDay : this.dayNumber + GC.COMFORT_CHECK_DURATION_DAYS,
+      progress    : 0,
+      target      : 5,
+    };
+    this.emit('toast_requested',
+      `Comfort Check: Provide ${req.wc} WC, ${req.cashier} Cashiers, ${req.atm} ATM, ${req.bar} Bar, and ${req.buffet} Buffet within ${GC.COMFORT_CHECK_DURATION_DAYS} days.`);
+    this.emit('state_changed');
+    // Casino may already be over-built — resolve immediately so the player
+    // gets credit without waiting for the next placement.
+    this._updateComfortCheckProgressAndMaybeComplete();
+    return true;
+  }
+
+  // Presence-based progress + auto-complete for Comfort Check. Cheap and
+  // idempotent — safe to call from any state-change hook. Reads only
+  // funcCounts / funcBarExists, both already kept fresh by _updateCounts.
+  private _updateComfortCheckProgressAndMaybeComplete(): void {
+    const c = this.activeChallenge;
+    if (c?.id !== 'comfort_check') return;
+    const req = GC.COMFORT_CHECK_REQUIREMENTS;
+    let satisfied = 0;
+    if (this.funcCounts[GC.ObjType.WC]      >= req.wc)      satisfied++;
+    if (this.funcCounts[GC.ObjType.CASHIER] >= req.cashier) satisfied++;
+    if (this.funcCounts[GC.ObjType.ATM]     >= req.atm)     satisfied++;
+    if (this.funcBarExists)                                 satisfied++;
+    if (this.funcCounts[GC.ObjType.BUFFET]  >= req.buffet)  satisfied++;
+    if (c.progress !== satisfied) {
+      c.progress = satisfied;
+      this.emit('state_changed');
+    }
+    if (satisfied >= c.target) {
+      this._completeComfortCheck();
+    }
+  }
+
+  // Award Comfort Check reward and clear the challenge. No boost involved.
+  private _completeComfortCheck(): void {
+    if (this.activeChallenge?.id !== 'comfort_check') return;
+    this.activeChallenge = null;
+    this.cash             += GC.COMFORT_CHECK_REWARD_CASH;
+    this.cumulativeIncome += GC.COMFORT_CHECK_REWARD_CASH;
+    this.emit('toast_requested',
+      `Comfort Check passed: $${GC.COMFORT_CHECK_REWARD_CASH.toLocaleString()} bonus earned!`);
+    this.emit('state_changed');
+  }
+
   // Tourist Bus start — invoked by the scheduler on starter Day 12 (and on
   // later days if delayed). Awards the walk-in boost simultaneously with
   // the challenge; both share the same duration window.
@@ -939,6 +1008,9 @@ class GameState extends EventEmitter {
       case 'tourist_bus':
         started = this._startTouristBusChallenge('schedule');
         break;
+      case 'comfort_check':
+        started = this._startComfortCheckChallenge('schedule');
+        break;
     }
     if (started) this.triggeredScheduledChallenges.push(earliestKey);
   }
@@ -965,9 +1037,18 @@ class GameState extends EventEmitter {
     const c = this.activeChallenge;
     if (!c) return;
     if (this.dayNumber > c.deadlineDay) {
-      const msg = c.id === 'tourist_bus'
-        ? 'Tourist Bus: missed the guest target.'
-        : 'Challenge Failed: Slot promotion expired.';
+      let msg: string;
+      switch (c.id) {
+        case 'slot_promotion':
+          msg = 'Challenge Failed: Slot promotion expired.';
+          break;
+        case 'tourist_bus':
+          msg = 'Tourist Bus: missed the guest target.';
+          break;
+        case 'comfort_check':
+          msg = 'Comfort Check missed: basic services were incomplete.';
+          break;
+      }
       this.activeChallenge = null;
       this.emit('toast_requested', msg);
     }
@@ -1136,6 +1217,9 @@ class GameState extends EventEmitter {
 
     this._recomputeDerived();
     this._checkGoals();
+    // If the loaded save already satisfies an in-flight Comfort Check, give
+    // the player credit immediately rather than waiting for the next action.
+    this._updateComfortCheckProgressAndMaybeComplete();
   }
 
   private _tryLoad(key: string): boolean {
