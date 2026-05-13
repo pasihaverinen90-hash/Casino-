@@ -578,6 +578,18 @@ class GameState extends EventEmitter {
     };
     this._appendStats(day_stats);
 
+    // Tourist Bus progress — uses the canonical completed-day guest total
+    // (the same number written to DayStats) so save/load can't double-count
+    // and live partial projections can't leak in. Success awards cash here
+    // and clears the challenge; the walk-in boost survives until its own
+    // expiresDay (handled in _expireBoostIfDue below).
+    if (this.activeChallenge?.id === 'tourist_bus') {
+      this.activeChallenge.progress += day_stats.total_guests;
+      if (this.activeChallenge.progress >= this.activeChallenge.target) {
+        this._completeTouristBus();
+      }
+    }
+
     this.lastGuests   = p.total_guests;
     this.prevCrowding = p.crowding;
     this.dailyRevenue = this._paidToday;
@@ -664,6 +676,11 @@ class GameState extends EventEmitter {
       // Random Challenges V1 — Slot Promotion reward, when active.
       slot_revenue_multiplier:
         this.activeBoost?.id === 'slot_revenue_boost'
+          ? this.activeBoost.multiplier
+          : 1.0,
+      // Tourist Bus walk-in boost, when active.
+      walkin_multiplier:
+        this.activeBoost?.id === 'walkin_boost'
           ? this.activeBoost.multiplier
           : 1.0,
     });
@@ -846,6 +863,50 @@ class GameState extends EventEmitter {
     return true;
   }
 
+  // Tourist Bus start — invoked by the scheduler on starter Day 12 (and on
+  // later days if delayed). Awards the walk-in boost simultaneously with
+  // the challenge; both share the same duration window.
+  private _startTouristBusChallenge(source: 'schedule'): boolean {
+    void source; // reserved for future debug/scheduled differentiation
+    if (this.activeChallenge) {
+      this.emit('toast_requested', 'Challenge already active.');
+      return false;
+    }
+    if (this.activeBoost) {
+      this.emit('toast_requested', 'A challenge boost is already active.');
+      return false;
+    }
+    this.activeChallenge = {
+      id          : 'tourist_bus',
+      startedDay  : this.dayNumber,
+      deadlineDay : this.dayNumber + GC.TOURIST_BUS_DURATION_DAYS,
+      progress    : 0,
+      target      : GC.TOURIST_BUS_TARGET,
+    };
+    this.activeBoost = {
+      id         : 'walkin_boost',
+      multiplier : GC.TOURIST_BUS_WALKIN_MULT,
+      expiresDay : this.dayNumber + GC.TOURIST_BUS_DURATION_DAYS,
+    };
+    const pct = Math.round((GC.TOURIST_BUS_WALKIN_MULT - 1) * 100);
+    this.emit('toast_requested',
+      `Tourist Bus Arriving: Serve ${GC.TOURIST_BUS_TARGET} guests in ${GC.TOURIST_BUS_DURATION_DAYS} days. Walk-in +${pct}% during the event.`);
+    this._recomputeDerived();
+    this.emit('state_changed');
+    return true;
+  }
+
+  // Award the Tourist Bus cash reward and clear the challenge. The walk-in
+  // boost is deliberately left in place — it owns its own expiry day.
+  private _completeTouristBus(): void {
+    if (this.activeChallenge?.id !== 'tourist_bus') return;
+    this.activeChallenge = null;
+    this.cash             += GC.TOURIST_BUS_REWARD_CASH;
+    this.cumulativeIncome += GC.TOURIST_BUS_REWARD_CASH;
+    this.emit('toast_requested',
+      `Tourist Bus: $${GC.TOURIST_BUS_REWARD_CASH.toLocaleString()} bonus earned!`);
+  }
+
   // Campaign scheduler check — called from endDay() after challenge/boost
   // expiry. Iterates CAMPAIGN_CHALLENGE_SCHEDULE for the current casino,
   // picks the earliest entry whose day is ≤ dayNumber and that hasn't fired
@@ -868,12 +929,15 @@ class GameState extends EventEmitter {
       }
     }
     if (!earliest) return;
-    // V1 only knows one challenge id, but switch keeps the door open for
-    // future entries (and lets TypeScript exhaustively check ChallengeId).
+    // Per-id dispatch — switch lets TypeScript exhaustively check ChallengeId
+    // when new events are added.
     let started = false;
     switch (earliest.challengeId) {
       case 'slot_promotion':
         started = this._startSlotPromotionChallenge('schedule');
+        break;
+      case 'tourist_bus':
+        started = this._startTouristBusChallenge('schedule');
         break;
     }
     if (started) this.triggeredScheduledChallenges.push(earliestKey);
@@ -895,23 +959,31 @@ class GameState extends EventEmitter {
 
   // Called from endDay() after dayNumber++. Fails the active challenge
   // silently-with-toast if its deadline has passed; V1 applies no penalty.
+  // Tourist Bus uses its own copy so the boost isn't cleared on challenge
+  // failure — the walk-in boost is owned by _expireBoostIfDue.
   private _expireChallengeIfDue(): void {
     const c = this.activeChallenge;
     if (!c) return;
     if (this.dayNumber > c.deadlineDay) {
+      const msg = c.id === 'tourist_bus'
+        ? 'Tourist Bus: missed the guest target.'
+        : 'Challenge Failed: Slot promotion expired.';
       this.activeChallenge = null;
-      this.emit('toast_requested', 'Challenge Failed: Slot promotion expired.');
+      this.emit('toast_requested', msg);
     }
   }
 
-  // Drops the boost when its window closes. Re-projects so post-boost slot
-  // revenue updates on the next HUD frame.
+  // Drops the boost when its window closes. Re-projects so the post-boost
+  // multiplier (slot rev / walk-in) updates on the next HUD frame.
   private _expireBoostIfDue(): void {
     const b = this.activeBoost;
     if (!b) return;
     if (this.dayNumber >= b.expiresDay) {
+      const msg = b.id === 'walkin_boost'
+        ? 'Tourist bus traffic has subsided.'
+        : 'Slot promotion boost expired.';
       this.activeBoost = null;
-      this.emit('toast_requested', 'Slot promotion boost expired.');
+      this.emit('toast_requested', msg);
     }
   }
 

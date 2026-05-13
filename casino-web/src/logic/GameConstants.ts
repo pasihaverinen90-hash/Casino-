@@ -87,8 +87,8 @@ export const RATING_CAPACITY_CROWDING_FLOOR      = 0.35;
 // minimal scaffolding for future random scheduling. State lives on GameState
 // (activeChallenge / activeBoost) and persists across saves with safe
 // defaults — old saves load with both fields null and no SAVE_VERSION bump.
-export type ChallengeId = 'slot_promotion';
-export type BoostId     = 'slot_revenue_boost';
+export type ChallengeId = 'slot_promotion' | 'tourist_bus';
+export type BoostId     = 'slot_revenue_boost' | 'walkin_boost';
 
 export interface ActiveChallenge {
   id          : ChallengeId;
@@ -115,6 +115,17 @@ export const SLOT_PROMOTION_DURATION_DAYS = 3;
 export const SLOT_PROMOTION_REWARD_MULT   = 1.25;
 export const SLOT_PROMOTION_REWARD_DAYS   = 3;
 
+// Tourist Bus Arrival — the campaign's first *ambient effect* event. Walk-in
+// demand is multiplied by TOURIST_BUS_WALKIN_MULT throughout the challenge
+// window; progress accumulates from each completed day's recorded guest
+// total (DayStats.total_guests). Hitting target by deadline pays the cash
+// reward. The walk-in boost expires on its own day regardless of objective
+// outcome — challenge success does NOT clear the boost early.
+export const TOURIST_BUS_TARGET         = 250;
+export const TOURIST_BUS_DURATION_DAYS  = 3;
+export const TOURIST_BUS_WALKIN_MULT    = 1.5;
+export const TOURIST_BUS_REWARD_CASH    = 5_000;
+
 // ── Campaign Challenge Schedule V1 ───────────────────────────────────────────
 // Long-term goal is a campaign with multiple casino scenarios, each with its
 // own pre-authored challenge schedule. V1 has a single 'starter' casino and a
@@ -137,7 +148,8 @@ export interface ScheduledChallenge {
 export const CURRENT_CASINO_ID: CasinoId = 'starter';
 
 export const CAMPAIGN_CHALLENGE_SCHEDULE: readonly ScheduledChallenge[] = [
-  { casinoId: 'starter', day: 3, challengeId: 'slot_promotion' },
+  { casinoId: 'starter', day:  3, challengeId: 'slot_promotion' },
+  { casinoId: 'starter', day: 12, challengeId: 'tourist_bus'    },
 ];
 
 // Build the stable key used in triggeredScheduledChallenges. Centralised so

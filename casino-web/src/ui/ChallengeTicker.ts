@@ -1,6 +1,8 @@
 // ChallengeTicker.ts — thin strip showing the active random challenge or its
-// post-completion boost. Hides when neither is active. Mirrors GoalTicker's
-// pattern: subscribes to state_changed and re-renders.
+// boost. Hides when neither is active. Mirrors GoalTicker's pattern:
+// subscribes to state_changed and re-renders. Text is per-id so units and
+// labels match the challenge / boost in flight.
+import type * as GC from '../logic/GameConstants';
 import { gameState } from '../state/GameState';
 
 export class ChallengeTicker {
@@ -21,17 +23,38 @@ export class ChallengeTicker {
     if (c) {
       const left = Math.max(0, c.deadlineDay - gameState.dayNumber);
       this.el.textContent =
-        `Challenge: Slot Promotion — ${c.progress}/${c.target} slots — ${left} ${left === 1 ? 'day' : 'days'} left`;
+        `Challenge: ${this._title(c.id)} — ${c.progress}/${c.target} ${this._unit(c.id)} — ${left} ${left === 1 ? 'day' : 'days'} left`;
       this.el.style.display = '';
     } else if (b) {
       const left = Math.max(0, b.expiresDay - gameState.dayNumber);
-      const pct  = Math.round((b.multiplier - 1) * 100);
       this.el.textContent =
-        `Boost: Slot revenue +${pct}% — ${left} ${left === 1 ? 'day' : 'days'} left`;
+        `Boost: ${this._boostText(b.id, b.multiplier)} — ${left} ${left === 1 ? 'day' : 'days'} left`;
       this.el.style.display = '';
     } else {
       this.el.textContent = '';
       this.el.style.display = 'none';
+    }
+  }
+
+  private _title(id: GC.ChallengeId): string {
+    switch (id) {
+      case 'slot_promotion': return 'Slot Promotion';
+      case 'tourist_bus':    return 'Tourist Bus';
+    }
+  }
+
+  private _unit(id: GC.ChallengeId): string {
+    switch (id) {
+      case 'slot_promotion': return 'slots';
+      case 'tourist_bus':    return 'guests';
+    }
+  }
+
+  private _boostText(id: GC.BoostId, mult: number): string {
+    const pct = Math.round((mult - 1) * 100);
+    switch (id) {
+      case 'slot_revenue_boost': return `Slot revenue +${pct}%`;
+      case 'walkin_boost':       return `Walk-in +${pct}%`;
     }
   }
 }

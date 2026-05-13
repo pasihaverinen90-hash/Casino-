@@ -290,6 +290,10 @@ export interface ProjectInput {
   cumulative_income : number;
   // Random Challenges V1 — multiplies slot revenue only. 1.0 = no boost.
   slot_revenue_multiplier : number;
+  // Tourist Bus event — multiplies walk-in demand only. 1.0 = no boost.
+  // Applied AFTER calcWalkin; does not affect rating, capacity, or revenue
+  // per visit (those react naturally to the higher guest count).
+  walkin_multiplier       : number;
 }
 
 // Pure projection — what today's totals look like at this instant given the
@@ -352,7 +356,9 @@ export function projectDay(s: ProjectInput): DayProjection {
   };
   const rating   = calcRating(ratingInput);
   const hotel  = calcOccupancy(s.room_count, s.quality_level, rating);
-  const walkin = calcWalkin(capacity, rating);
+  // Apply walk-in multiplier post-calc so the base formula stays untouched.
+  // Re-round so totalGuests stays integer-shaped for downstream partitioning.
+  const walkin = Math.round(calcWalkin(capacity, rating) * s.walkin_multiplier);
   const total  = walkin + hotel.hotel_guests;
   const rev    = calcRevenue(
     total, hotel.booked,
