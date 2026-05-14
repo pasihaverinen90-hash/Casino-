@@ -410,8 +410,31 @@ export class GridScene extends Phaser.Scene {
 
     // 2. Placed objects — non-functional ones (no open-floor adjacency)
     // render dimmed so the player can see at a glance which builds are inert.
+    //
+    // Depth-sort preparation (Phase P1 of the 2.5D plan): render in a stable
+    // "back-to-front" tile order so future angled/oblique work doesn't have
+    // to retro-fit draw ordering. Today's flat top-down art is visually
+    // unaffected because object footprints don't overlap (placement rules
+    // forbid it). Sort key:
+    //   primary    — bottom-edge row     (obj.row + obj.h)
+    //   secondary  — right-edge column   (obj.col + obj.w)
+    //   tertiary   — original array index (stable; preserves save order
+    //                where the primary/secondary keys tie)
+    // We sort a shallow copy — gameState.placedObjs itself is never mutated,
+    // so save order, object ids, and downstream callers are untouched.
+    const placedOrder = gameState.placedObjs
+      .map((obj, index) => ({ obj, index }))
+      .sort((a, b) => {
+        const da = a.obj.row + a.obj.h;
+        const db = b.obj.row + b.obj.h;
+        if (da !== db) return da - db;
+        const xa = a.obj.col + a.obj.w;
+        const xb = b.obj.col + b.obj.w;
+        if (xa !== xb) return xa - xb;
+        return a.index - b.index;
+      });
     const usedIds = new Set<string>();
-    for (const obj of gameState.placedObjs) {
+    for (const { obj } of placedOrder) {
       const isFunc = gameState.functionalIds.has(obj.id);
       const alpha  = isFunc ? 1 : 0.45;
       const def    = GC.getDef(obj.type);
