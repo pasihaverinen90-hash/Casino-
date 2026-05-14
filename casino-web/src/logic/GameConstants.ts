@@ -285,28 +285,39 @@ export const GOAL_DESCS = [
   'Build the bar',
 ];
 
-// Phaser hex colours for tiles
-export const COL_FLOOR   = 0x2e3438;
+// Phaser hex colours for tiles. COL_WALL and COL_BLOCKED stay dark and
+// neutral so they read clearly against the new burgundy carpet.
+//
+// V1.1 bumps COL_FLOOR and COL_FLOOR_ALT to dark burgundy tones so the
+// casino floor reads as a real red carpet instead of a grey grid. The
+// only consumers of these constants are GridScene._paintTile (the active
+// carpet recipe) and the legacy _tileColor switch, so the colour change
+// has no cross-system effect.
+export const COL_FLOOR   = 0x3a1418;
 export const COL_WALL    = 0x1e2124;
 export const COL_LOBBY   = 0x403824;
 export const COL_BLOCKED = 0x262d40;
 
-// Phase V1 visual uplift — additive colors only. Existing COL_* values
-// above are unchanged (object recipes reference them). These are layered
-// on top by GridScene._paintTile and ObjectArt.paintObjectShadow to give
-// the casino a richer carpet / drop-shadow feel without touching any
-// gameplay coordinate or footprint.
-//   COL_FLOOR_ALT   — warmer carpet companion tone, used as a low-alpha
-//                     pattern overlay on alternate floor groups.
-//   COL_LOBBY_BASE  — richer red base painted over LOBBY tiles before any
-//                     accent. Distinct from COL_LOBBY so existing code
-//                     that reads COL_LOBBY is unaffected.
-//   COL_LOBBY_ALT   — muted gold for the lobby border/accent.
-//   COL_SHADOW      — soft dark used for object drop shadows.
-export const COL_FLOOR_ALT  = 0x3a2e2a;
-export const COL_LOBBY_BASE = 0x5a2024;
-export const COL_LOBBY_ALT  = 0xb58a3a;
-export const COL_SHADOW     = 0x07090c;
+// V1.1 carpet & lobby palette. Layered on top of the base tile colors by
+// GridScene._paintTile to give the casino a richer carpet / drop-shadow
+// feel without touching any gameplay coordinate or footprint.
+//   COL_FLOOR_ALT     — slightly lighter red-brown, painted at moderate
+//                       alpha over alternate 2×2 floor groups for woven
+//                       variation.
+//   COL_CARPET_ACCENT — muted antique gold, painted as a small centred
+//                       dot at every 4×4 group's centre tile. Implies a
+//                       repeating carpet motif without overpowering the
+//                       grid.
+//   COL_LOBBY_BASE    — richer red base painted over LOBBY tiles before
+//                       any accent. Distinct from COL_LOBBY so existing
+//                       code that reads COL_LOBBY is unaffected.
+//   COL_LOBBY_ALT     — muted gold for the lobby border/accent.
+//   COL_SHADOW        — soft dark used for object drop shadows.
+export const COL_FLOOR_ALT     = 0x4a1f24;
+export const COL_CARPET_ACCENT = 0x8a6024;
+export const COL_LOBBY_BASE    = 0x5a2024;
+export const COL_LOBBY_ALT     = 0xb58a3a;
+export const COL_SHADOW        = 0x07090c;
 
 export const enum TileType { FLOOR, WALL, LOBBY, BLOCKED }
 // Enum order is fixed — values are persisted in saves. Append new entries.

@@ -541,21 +541,14 @@ export class GridScene extends Phaser.Scene {
     }
   }
 
-  private _tileColor(t: GC.TileType): number {
-    switch (t) {
-      case GC.TileType.WALL:    return GC.COL_WALL;
-      case GC.TileType.LOBBY:   return GC.COL_LOBBY;
-      case GC.TileType.BLOCKED: return GC.COL_BLOCKED;
-      default:                  return GC.COL_FLOOR;
-    }
-  }
-
-  // Phase V1 carpet/lobby tile painter. WALL and BLOCKED keep the legacy
-  // solid fill. FLOOR gets a 2×2 deterministic carpet weave: every other
-  // 2×2 group of tiles gets a low-alpha COL_FLOOR_ALT overlay so the
-  // floor reads as a real carpet instead of one flat colour. LOBBY swaps
-  // the muted brown for a richer red base with a thin gold border accent,
-  // suggesting an entrance carpet runner. All effects degrade gracefully
+  // V1.1 carpet/lobby tile painter. WALL and BLOCKED keep the legacy
+  // solid fill so they read clearly against the carpet. FLOOR paints a
+  // dark burgundy base, a 2×2-group COL_FLOOR_ALT overlay for woven
+  // variation, and a sparse antique-gold accent dot at every 4×4 group
+  // centre so the floor reads as a real casino carpet with a repeating
+  // motif. LOBBY swaps the muted brown for a richer red base with thin
+  // gold border stripes, suggesting an entrance carpet runner that's
+  // distinct from the regular floor. All effects degrade gracefully
   // below ts < 14 — at the smallest zoom only the base colours render so
   // the floor never looks noisy.
   private _paintTile(
@@ -604,19 +597,29 @@ export class GridScene extends Phaser.Scene {
       return;
     }
 
-    // FLOOR — carpet base + a soft 2×2-group weave overlay.
+    // FLOOR — burgundy carpet base, 2×2-group woven overlay, and a
+    // sparse antique-gold motif dot at every 4×4 group centre. The
+    // 1 px gap from (w, h) = (ts-1, ts-1) already provides grout
+    // between carpet sections, so V1.1 drops the explicit grout pip
+    // (it muddied on the darker carpet without adding much).
     g.fillStyle(GC.COL_FLOOR, 1);
     g.fillRect(x, y, w, h);
     if (detail) {
       const altGroup = (((col >> 1) + (row >> 1)) & 1) === 0;
       if (altGroup) {
-        g.fillStyle(GC.COL_FLOOR_ALT, 0.28);
+        g.fillStyle(GC.COL_FLOOR_ALT, 0.42);
         g.fillRect(x, y, w, h);
       }
-      // Tiny darker pip in the top-left of every tile — implies grout
-      // between carpet sections without any geometry change.
-      g.fillStyle(GC.COL_SHADOW, 0.18);
-      g.fillRect(x, y, 1, 1);
+      // Antique-gold accent at the centre of every 4×4 group. About
+      // 1-in-16 tiles get the dot, which reads as a repeating woven
+      // motif rather than per-tile noise.
+      if ((col & 3) === 2 && (row & 3) === 2) {
+        const d  = Math.max(2, Math.round(ts * 0.14));
+        const dx = x + Math.round((w - d) / 2);
+        const dy = y + Math.round((h - d) / 2);
+        g.fillStyle(GC.COL_CARPET_ACCENT, 0.55);
+        g.fillRect(dx, dy, d, d);
+      }
     }
   }
 

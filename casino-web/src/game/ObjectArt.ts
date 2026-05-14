@@ -79,7 +79,10 @@ function paintObjectShadow(
   const sw  = Math.max(1, w - 1);
   const sh  = Math.max(1, h - 1);
   const r   = Math.max(1, Math.min(sw, sh) * 0.10);
-  g.fillStyle(GC.COL_SHADOW, 0.22);
+  // V1.1 — bumped from 0.22 to 0.30 so objects keep visible lift against
+  // the new dark-burgundy carpet. Still inside the footprint plus ≤2 px,
+  // so the shadow never bleeds onto an adjacent build tile.
+  g.fillStyle(GC.COL_SHADOW, 0.30);
   g.fillRoundedRect(x + off, y + off, sw, sh, r);
 }
 
