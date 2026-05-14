@@ -291,6 +291,23 @@ export const COL_WALL    = 0x1e2124;
 export const COL_LOBBY   = 0x403824;
 export const COL_BLOCKED = 0x262d40;
 
+// Phase V1 visual uplift — additive colors only. Existing COL_* values
+// above are unchanged (object recipes reference them). These are layered
+// on top by GridScene._paintTile and ObjectArt.paintObjectShadow to give
+// the casino a richer carpet / drop-shadow feel without touching any
+// gameplay coordinate or footprint.
+//   COL_FLOOR_ALT   — warmer carpet companion tone, used as a low-alpha
+//                     pattern overlay on alternate floor groups.
+//   COL_LOBBY_BASE  — richer red base painted over LOBBY tiles before any
+//                     accent. Distinct from COL_LOBBY so existing code
+//                     that reads COL_LOBBY is unaffected.
+//   COL_LOBBY_ALT   — muted gold for the lobby border/accent.
+//   COL_SHADOW      — soft dark used for object drop shadows.
+export const COL_FLOOR_ALT  = 0x3a2e2a;
+export const COL_LOBBY_BASE = 0x5a2024;
+export const COL_LOBBY_ALT  = 0xb58a3a;
+export const COL_SHADOW     = 0x07090c;
+
 export const enum TileType { FLOOR, WALL, LOBBY, BLOCKED }
 // Enum order is fixed — values are persisted in saves. Append new entries.
 // (Old index 5 was PATH, removed in save 1.3.0; CASHIER moved 6 → 5 via migration.)

@@ -397,18 +397,14 @@ export class GridScene extends Phaser.Scene {
 
     g.clear();
 
-    // 1. Tiles
+    // 1. Tiles — Phase V1 visual uplift. Floor and lobby get a richer
+    // procedural carpet treatment; wall/blocked stay solid for clarity.
+    // Pattern is deterministic from (col, row) only — no time, no random —
+    // so pan/zoom/save/reload are visually stable.
     for (let row = 0; row < GC.GRID_ROWS; row++) {
       for (let col = 0; col < GC.GRID_COLS; col++) {
         const t = gameState.tiles[row * GC.GRID_COLS + col];
-        g.fillStyle(this._tileColor(t.tile_type), 1);
-        g.fillRect(baseX + col * ts, baseY + row * ts, ts - 1, ts - 1);
-
-        // Lobby gets a subtle accent stripe so the entrance reads at a glance.
-        if (t.tile_type === GC.TileType.LOBBY) {
-          g.fillStyle(0x6a5a2a, 1);
-          g.fillRect(baseX + col * ts + 2, baseY + row * ts + 2, ts - 5, 2);
-        }
+        this._paintTile(g, t, col, row, baseX, baseY, ts);
       }
     }
 
@@ -528,6 +524,76 @@ export class GridScene extends Phaser.Scene {
       case GC.TileType.LOBBY:   return GC.COL_LOBBY;
       case GC.TileType.BLOCKED: return GC.COL_BLOCKED;
       default:                  return GC.COL_FLOOR;
+    }
+  }
+
+  // Phase V1 carpet/lobby tile painter. WALL and BLOCKED keep the legacy
+  // solid fill. FLOOR gets a 2×2 deterministic carpet weave: every other
+  // 2×2 group of tiles gets a low-alpha COL_FLOOR_ALT overlay so the
+  // floor reads as a real carpet instead of one flat colour. LOBBY swaps
+  // the muted brown for a richer red base with a thin gold border accent,
+  // suggesting an entrance carpet runner. All effects degrade gracefully
+  // below ts < 14 — at the smallest zoom only the base colours render so
+  // the floor never looks noisy.
+  private _paintTile(
+    g: Phaser.GameObjects.Graphics,
+    t: GC.Tile,
+    col: number, row: number,
+    baseX: number, baseY: number, ts: number,
+  ): void {
+    const x = baseX + col * ts;
+    const y = baseY + row * ts;
+    const w = ts - 1;
+    const h = ts - 1;
+    const detail = ts >= 14;
+
+    if (t.tile_type === GC.TileType.WALL) {
+      g.fillStyle(GC.COL_WALL, 1);
+      g.fillRect(x, y, w, h);
+      return;
+    }
+    if (t.tile_type === GC.TileType.BLOCKED) {
+      g.fillStyle(GC.COL_BLOCKED, 1);
+      g.fillRect(x, y, w, h);
+      return;
+    }
+    if (t.tile_type === GC.TileType.LOBBY) {
+      g.fillStyle(GC.COL_LOBBY_BASE, 1);
+      g.fillRect(x, y, w, h);
+      if (detail) {
+        // Gold top + bottom stripes — reads as a carpet runner edge.
+        g.fillStyle(GC.COL_LOBBY_ALT, 0.55);
+        g.fillRect(x + 1, y + 1, w - 2, 1);
+        g.fillRect(x + 1, y + h - 2, w - 2, 1);
+        // Subtle deterministic inner weave on alternating tiles so the
+        // lobby has visible texture without being noisy.
+        if (((col + row) & 1) === 0) {
+          const m = Math.max(2, Math.round(ts * 0.22));
+          g.fillStyle(GC.COL_LOBBY_ALT, 0.10);
+          g.fillRect(x + m, y + m, Math.max(1, w - 2 * m), Math.max(1, h - 2 * m));
+        }
+      } else {
+        // At small zoom, a single thin gold edge still marks the lobby
+        // boundary without adding visual noise.
+        g.fillStyle(GC.COL_LOBBY_ALT, 0.45);
+        g.fillRect(x, y, w, 1);
+      }
+      return;
+    }
+
+    // FLOOR — carpet base + a soft 2×2-group weave overlay.
+    g.fillStyle(GC.COL_FLOOR, 1);
+    g.fillRect(x, y, w, h);
+    if (detail) {
+      const altGroup = (((col >> 1) + (row >> 1)) & 1) === 0;
+      if (altGroup) {
+        g.fillStyle(GC.COL_FLOOR_ALT, 0.28);
+        g.fillRect(x, y, w, h);
+      }
+      // Tiny darker pip in the top-left of every tile — implies grout
+      // between carpet sections without any geometry change.
+      g.fillStyle(GC.COL_SHADOW, 0.18);
+      g.fillRect(x, y, 1, 1);
     }
   }
 

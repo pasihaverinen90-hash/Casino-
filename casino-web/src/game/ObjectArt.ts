@@ -63,6 +63,26 @@ function splitForWall(
 
 // ── Phaser Graphics renderer (in-grid) ───────────────────────────────────
 
+// Phase V1 — subtle drop shadow painted just inside an object's footprint
+// rect, called from paintObject before any body draw. Only fires at full
+// alpha so the placement ghost (alpha 0.6) and non-functional objects
+// (alpha 0.45) stay clean — both depend on a dim/coloured overlay reading
+// clearly, and a shadow underneath would muddy them. The shadow stays
+// within the footprint plus ≤2 px, so it can never bleed onto adjacent
+// build tiles or make a neighbour read as occupied.
+function paintObjectShadow(
+  g: Phaser.GameObjects.Graphics,
+  x: number, y: number, w: number, h: number, alpha: number,
+): void {
+  if (alpha < 1) return;
+  const off = Math.min(2, Math.max(1, Math.floor(Math.min(w, h) * 0.06)));
+  const sw  = Math.max(1, w - 1);
+  const sh  = Math.max(1, h - 1);
+  const r   = Math.max(1, Math.min(sw, sh) * 0.10);
+  g.fillStyle(GC.COL_SHADOW, 0.22);
+  g.fillRoundedRect(x + off, y + off, sw, sh, r);
+}
+
 export function paintObject(
   g: Phaser.GameObjects.Graphics,
   type: GC.ObjType,
@@ -72,6 +92,7 @@ export function paintObject(
   facing: GC.Orientation = 'S',
   variant: string = '',
 ): void {
+  paintObjectShadow(g, x, y, w, h, alpha);
   switch (type) {
     case GC.ObjType.SLOT_MACHINE: drawSlotG (g, x, y, w, h, alpha, facing); break;
     case GC.ObjType.SMALL_TABLE:  drawTableG(g, x, y, w, h, alpha, false, facing, variant); break;
@@ -169,6 +190,12 @@ function drawSlotCabinet(
   g.fillStyle(0xccb31a, a);
   g.fillRect(x + pad, y + pad, w - 2 * pad, h - 2 * pad - baseH);
 
+  // Phase V1 dimensional cue — 1px brighter highlight at the top of the
+  // cabinet body sells "this stands upright". Pure overlay, no geometry
+  // change.
+  g.fillStyle(0xfff5d6, a * 0.35);
+  g.fillRect(x + pad, y + pad, w - 2 * pad, 1);
+
   // Screen (dark inset).
   g.fillStyle(0x0e1115, a);
   g.fillRect(
@@ -184,6 +211,11 @@ function drawSlotCabinet(
     Math.max(2, Math.round(w * 0.30)),
     Math.max(1, Math.round(h * 0.06)),
   );
+
+  // Phase V1 — slim shadow line just above the base. Defines the lip
+  // between cabinet body and base plate so the cabinet feels less flat.
+  g.fillStyle(GC.COL_SHADOW, a * 0.45);
+  g.fillRect(x + pad, y + h - pad - baseH - 1, w - 2 * pad, 1);
 
   // Base.
   g.fillStyle(0x3a2f12, a);
@@ -246,6 +278,15 @@ function drawTableG(
   // Wood rim.
   g.fillStyle(palette.rim, a);
   g.fillRect(x + pad, y + pad, w - 2 * pad, h - 2 * pad);
+
+  // Phase V1 dimensional cues — 1px rim highlight on the top edge and a
+  // 1px shadow line at the bottom edge give the rim subtle thickness so
+  // the table feels less like a flat rectangle. Felt drawn over them
+  // preserves the dealer band / centerpiece readability.
+  g.fillStyle(0xfff5d6, a * 0.28);
+  g.fillRect(x + pad, y + pad, w - 2 * pad, 1);
+  g.fillStyle(GC.COL_SHADOW, a * 0.40);
+  g.fillRect(x + pad, y + h - pad - 1, w - 2 * pad, 1);
 
   // Felt.
   g.fillStyle(palette.felt, a);
@@ -472,6 +513,15 @@ function drawBarG(
   g.fillStyle(0x4a1a14, a);
   g.fillRect(body.x, body.y, body.w, body.h);
 
+  // Phase V1 — slim top highlight + bottom shadow give the counter
+  // perceived thickness. The brass strip drawn next overlaps these on
+  // the floor-facing edge; on the wall-facing edge they remain visible
+  // and sell "the counter has depth".
+  g.fillStyle(0xfff5d6, a * 0.22);
+  g.fillRect(body.x, body.y, body.w, 1);
+  g.fillStyle(GC.COL_SHADOW, a * 0.40);
+  g.fillRect(body.x, body.y + body.h - 1, body.w, 1);
+
   // Brass front edge band on the floor-facing side.
   g.fillStyle(0xcc8a44, a);
   if (facing === 'N') {
@@ -629,6 +679,12 @@ function drawBuffetG(
   // Warm wood counter body.
   g.fillStyle(0x8a5a2e, a);
   g.fillRect(body.x, body.y, body.w, body.h);
+  // Phase V1 — slim warm-tone top highlight on the body. Sits at the
+  // body's world-y top edge; the chafing-dish row and the existing
+  // facing-dependent dark base line below stay intact. Adds a "lit
+  // counter top" feel without changing any geometry.
+  g.fillStyle(0xfff0c8, a * 0.22);
+  g.fillRect(body.x, body.y, body.w, 1);
   // Slim darker base line at the wall-side edge of the body for depth.
   g.fillStyle(0x5a3818, a * 0.85);
   if (facing === 'N') g.fillRect(body.x, body.y, body.w, 1);
