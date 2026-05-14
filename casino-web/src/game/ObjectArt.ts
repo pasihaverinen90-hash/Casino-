@@ -200,12 +200,33 @@ function drawSlotCabinet(
   g.fillRect(x + pad, y + pad, w - 2 * pad, 1);
 
   // Screen (dark inset).
+  const sx = x + pad * 2;
+  const sy = y + pad * 2;
+  const sw = Math.max(1, w - 4 * pad);
+  const sh = Math.max(2, Math.round(h * 0.36));
   g.fillStyle(0x0e1115, a);
-  g.fillRect(
-    x + pad * 2, y + pad * 2,
-    Math.max(1, w - 4 * pad),
-    Math.max(2, Math.round(h * 0.36)),
-  );
+  g.fillRect(sx, sy, sw, sh);
+
+  // V2 — brass bezel around the screen reads as a framed display.
+  g.fillStyle(0x8a6a18, a * 0.7);
+  g.fillRect(sx - 1, sy - 1, sw + 2, 1);
+  g.fillRect(sx - 1, sy + sh, sw + 2, 1);
+  g.fillRect(sx - 1, sy - 1, 1, sh + 2);
+  g.fillRect(sx + sw, sy - 1, 1, sh + 2);
+
+  // V2 — screen glow + bright catch-light at strong alpha only. Skipped
+  // on placement ghost (a 0.6) and non-functional (a 0.45) so those
+  // signals stay clean.
+  if (a >= 0.8) {
+    g.fillStyle(0x4d8a3a, 0.32);
+    g.fillRect(sx + 1, sy + 1, Math.max(1, sw - 2), Math.max(1, sh - 2));
+    g.fillStyle(0xfff5a8, 0.55);
+    g.fillRect(
+      sx + 2, sy + 2,
+      Math.max(1, Math.round(sw * 0.25)),
+      Math.max(1, Math.round(sh * 0.25)),
+    );
+  }
 
   // Coin slot / handle area.
   g.fillStyle(0x6a5a14, a);
@@ -223,6 +244,11 @@ function drawSlotCabinet(
   // Base.
   g.fillStyle(0x3a2f12, a);
   g.fillRect(x + pad, y + h - pad - baseH, w - 2 * pad, baseH);
+
+  // V2 — brass highlight on top of the base plinth. Reads as a separate
+  // metal kickplate rather than a flat dark band.
+  g.fillStyle(0xe8d066, a * 0.42);
+  g.fillRect(x + pad, y + h - pad - baseH, w - 2 * pad, 1);
 }
 
 // Small chair glyph. The seat hugs the side opposite the cabinet so it
@@ -299,6 +325,22 @@ function drawTableG(
   const innerW = w - 2 * (pad + felt);
   const innerH = h - 2 * (pad + felt);
   g.fillRect(innerX, innerY, innerW, innerH);
+
+  // V2 — brass inlay between rim and felt. Adds premium table edge.
+  g.fillStyle(0xe8d066, a * 0.45);
+  g.fillRect(innerX - 1, innerY - 1, innerW + 2, 1);
+  g.fillRect(innerX - 1, innerY + innerH, innerW + 2, 1);
+  g.fillRect(innerX - 1, innerY - 1, 1, innerH + 2);
+  g.fillRect(innerX + innerW, innerY - 1, 1, innerH + 2);
+
+  // V2 — felt vignette. Dark 1px stripe just inside the felt edge gives
+  // the playing surface a recessed feel. Dealer band overlays one side
+  // and variant centerpieces sit safely in the middle.
+  g.fillStyle(GC.COL_SHADOW, a * 0.22);
+  g.fillRect(innerX, innerY, innerW, 1);
+  g.fillRect(innerX, innerY + innerH - 1, innerW, 1);
+  g.fillRect(innerX, innerY, 1, innerH);
+  g.fillRect(innerX + innerW - 1, innerY, 1, innerH);
 
   // Dealer band on the facing side — cue for which 3 sides have seats.
   const bandT = Math.max(2, Math.round(Math.min(w, h) * 0.16));
@@ -503,12 +545,23 @@ function drawBarG(
       const bx = band.x + (i + 0.5) * (band.w / n);
       g.fillRect(bx - 1, band.y + inset, 2, Math.max(2, band.h - 2 * inset));
     }
+    // V2 — bright bottle caps so the back-bar shelving pops.
+    g.fillStyle(0xfff5d6, a * 0.75);
+    for (let i = 0; i < n; i++) {
+      const bx = band.x + (i + 0.5) * (band.w / n);
+      g.fillRect(bx - 1, band.y + inset, 2, 1);
+    }
   } else {
     const n = Math.max(3, Math.floor(band.h / 12));
     const inset = Math.max(1, Math.round(band.w * 0.25));
     for (let i = 0; i < n; i++) {
       const by = band.y + (i + 0.5) * (band.h / n);
       g.fillRect(band.x + inset, by - 1, Math.max(2, band.w - 2 * inset), 2);
+    }
+    g.fillStyle(0xfff5d6, a * 0.75);
+    for (let i = 0; i < n; i++) {
+      const by = band.y + (i + 0.5) * (band.h / n);
+      g.fillRect(band.x + inset, by - 1, 1, 2);
     }
   }
 
@@ -540,6 +593,14 @@ function drawBarG(
     const t = Math.max(2, Math.round(body.w * 0.4));
     g.fillRect(body.x + body.w - t, body.y, t, body.h);
   }
+
+  // V2 — 1px bright shine along the outer edge of the brass band so
+  // the counter front catches the eye.
+  g.fillStyle(0xffe6a8, a * 0.6);
+  if (facing === 'N')      g.fillRect(body.x, body.y, body.w, 1);
+  else if (facing === 'S') g.fillRect(body.x, body.y + body.h - 1, body.w, 1);
+  else if (facing === 'W') g.fillRect(body.x, body.y, 1, body.h);
+  else                     g.fillRect(body.x + body.w - 1, body.y, 1, body.h);
 }
 
 function drawCashierG(
@@ -577,6 +638,15 @@ function drawCashierG(
   const m = Math.max(1, Math.round(Math.min(body.w, body.h) * 0.2));
   g.fillStyle(0xc8e0ff, a * 0.85);
   g.fillRect(body.x + m, body.y + m, Math.max(1, body.w - 2 * m), Math.max(1, body.h - 2 * m));
+
+  // V2 — diagonal catch-light glint along the upper-left of the glass so
+  // it reads as a real teller window. Sized as a thin 1px strip; leaves
+  // the centre clear for the "$" label drawn by GridScene.
+  g.fillStyle(0xffffff, a * 0.55);
+  g.fillRect(
+    body.x + m, body.y + m,
+    Math.max(1, Math.round((body.w - 2 * m) * 0.35)), 1,
+  );
 
   // Service slot facing the floor.
   g.fillStyle(0x1a2a3a, a);
@@ -648,6 +718,11 @@ function drawAtmG(
   const iw = Math.max(1, Math.round(sw * 0.70));
   const ih = Math.max(1, Math.round(sh * 0.30));
   g.fillRect(ix, iy, iw, ih);
+  // V2 — sharp catch-light on the lit screen rect at full alpha only.
+  if (a >= 0.8) {
+    g.fillStyle(0xfff8e0, 0.65);
+    g.fillRect(ix, iy, Math.max(1, Math.round(iw * 0.35)), 1);
+  }
 
   // Card slot — slim brass strip on the floor-facing edge.
   g.fillStyle(0xcc8a44, a);
@@ -737,6 +812,12 @@ function drawChafingDish(
   // Brass dome.
   g.fillStyle(0xe8d066, a);
   g.fillEllipse(cx, topY + domeH, dishW, domeH * 2);
+  // V2 — upper-left rim glint on the dome reads as a polished metal lid.
+  g.fillStyle(0xfff8d0, a * 0.85);
+  g.fillCircle(
+    cx - dishW * 0.22, topY + domeH * 0.55,
+    Math.max(1, Math.round(Math.min(dishW, domeH) * 0.10)),
+  );
   // Small handle dot on top.
   g.fillStyle(0xfff0a8, a);
   g.fillCircle(cx, topY + Math.max(1, Math.round(domeH * 0.25)),
@@ -754,6 +835,12 @@ function drawChafingDishV(
   g.fillRect(leftX + domeW, cy - dishH / 2, baseW, dishH);
   g.fillStyle(0xe8d066, a);
   g.fillEllipse(leftX + domeW, cy, domeW * 2, dishH);
+  // V2 — rim glint on the dome.
+  g.fillStyle(0xfff8d0, a * 0.85);
+  g.fillCircle(
+    leftX + domeW * 0.55, cy - dishH * 0.22,
+    Math.max(1, Math.round(Math.min(dishH, domeW) * 0.10)),
+  );
   g.fillStyle(0xfff0a8, a);
   g.fillCircle(leftX + Math.max(1, Math.round(domeW * 0.25)), cy,
                Math.max(1, Math.round(Math.min(dishH, domeW) * 0.18)));
@@ -787,6 +874,16 @@ function drawSportsbookG(
     const panY  = facing === 'N' ? body.y + 1 : body.y + body.h - 1 - panH;
     g.fillRect(body.x + pad,             panY, panel, panH);
     g.fillRect(body.x + pad * 2 + panel, panY, panel, panH);
+    // V2 — gated CRT glow on each panel at strong alpha so the boards
+    // feel lit up. Ghost/non-functional skip this, keeping their signals
+    // clean.
+    if (a >= 0.8) {
+      g.fillStyle(0x4dcc88, 0.20);
+      for (let p = 0; p < 2; p++) {
+        const px = body.x + pad + p * (panel + pad);
+        g.fillRect(px, panY, panel, panH);
+      }
+    }
     // Slats on each panel — thin ivory horizontal lines.
     g.fillStyle(0xe8e8e0, a * 0.85);
     for (let p = 0; p < 2; p++) {
@@ -804,6 +901,11 @@ function drawSportsbookG(
     const panX  = facing === 'W' ? body.x + 1 : body.x + body.w - 1 - panW;
     g.fillRect(panX, body.y + pad,             panW, panel);
     g.fillRect(panX, body.y + pad * 2 + panel, panW, panel);
+    if (a >= 0.8) {
+      g.fillStyle(0x4dcc88, 0.20);
+      g.fillRect(panX, body.y + pad,             panW, panel);
+      g.fillRect(panX, body.y + pad * 2 + panel, panW, panel);
+    }
     g.fillStyle(0xe8e8e0, a * 0.85);
     for (let p = 0; p < 2; p++) {
       const py = body.y + pad + p * (panel + pad);
@@ -858,6 +960,19 @@ function drawKenoLoungeG(
   const innerH = h - 2 * (pad + felt);
   g.fillStyle(0x4d2a6e, a);
   g.fillRect(innerX, innerY, innerW, innerH);
+
+  // V2 — gold trim around the board + 1px felt vignette. Reads as a
+  // framed keno lounge display rather than a flat purple slab.
+  g.fillStyle(0xe8d066, a * 0.40);
+  g.fillRect(innerX - 1, innerY - 1, innerW + 2, 1);
+  g.fillRect(innerX - 1, innerY + innerH, innerW + 2, 1);
+  g.fillRect(innerX - 1, innerY - 1, 1, innerH + 2);
+  g.fillRect(innerX + innerW, innerY - 1, 1, innerH + 2);
+  g.fillStyle(GC.COL_SHADOW, a * 0.22);
+  g.fillRect(innerX, innerY, innerW, 1);
+  g.fillRect(innerX, innerY + innerH - 1, innerW, 1);
+  g.fillRect(innerX, innerY, 1, innerH);
+  g.fillRect(innerX + innerW - 1, innerY, 1, innerH);
 
   // 4×4 keno-board grid centred on the felt. Dots are gold; a few
   // randomised slots are brighter to read as "drawn numbers".
@@ -920,6 +1035,15 @@ function drawHighStakesG(
   const innerH = h - 2 * (pad + felt);
   g.fillStyle(0x6e1a1a, a);
   g.fillRect(innerX, innerY, innerW, innerH);
+
+  // V2 — deeper felt vignette on the premium table. Stronger than the
+  // standard table so the High-Stakes felt reads as more recessed and
+  // expensive at a glance.
+  g.fillStyle(GC.COL_SHADOW, a * 0.32);
+  g.fillRect(innerX, innerY, innerW, 1);
+  g.fillRect(innerX, innerY + innerH - 1, innerW, 1);
+  g.fillRect(innerX, innerY, 1, innerH);
+  g.fillRect(innerX + innerW - 1, innerY, 1, innerH);
 
   // Dealer band — gold-tinted on the facing side. Matches the small/large
   // table convention so player seats are read on the other 3 sides.
