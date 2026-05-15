@@ -15,10 +15,15 @@
 // All visual constants live in this file so adjusting the tilt only
 // requires editing one place.
 
-// Toggle the prototype. With false (default), GridScene and GuestSprites
-// fall back to their existing top-down code paths and produce identical
-// pixels to production. Production must keep this false.
-export const USE_OBLIQUE_PROTOTYPE = false;
+// Toggle the prototype. With false, GridScene and GuestSprites fall
+// back to their existing top-down code paths and produce identical
+// pixels to the V2 baseline.
+//
+// TEMPORARILY ENABLED IN PROD for an in-the-wild evaluation of the
+// oblique direction. Object art recipes are still axis-aligned, so
+// expect "top-down sprites on a tilted floor" until P3 ships angled
+// per-object recipes. Flip back to false to restore the V2 look.
+export const USE_OBLIQUE_PROTOTYPE = true;
 
 // Horizontal shear per row, in tile widths. 0.5 = each successive row
 // shifts right by half a tile.
