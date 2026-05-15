@@ -19,12 +19,14 @@ import { gameState } from '../../state/GameState';
 import { BG_DARK, UI_GOLD_DIM } from '../render/PaletteV2';
 import { drawFloor } from '../render/FloorRendererV2';
 import { drawWalls } from '../render/WallRendererV2';
+import { drawObjects } from '../render/ObjectRendererV2';
 import { CameraControllerV2 } from './CameraControllerV2';
 import { ZoomControlsV2 } from '../ui/ZoomControlsV2';
 
 export class PresentationSceneV2 extends Phaser.Scene {
   private gfxFloor!    : Phaser.GameObjects.Graphics;
   private gfxWalls!    : Phaser.GameObjects.Graphics;
+  private gfxObjects!  : Phaser.GameObjects.Graphics;
   private camera!      : CameraControllerV2;
   private debugLabel!  : Phaser.GameObjects.Text;
   private zoomControls?: ZoomControlsV2;
@@ -36,13 +38,16 @@ export class PresentationSceneV2 extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBackgroundColor(BG_DARK);
 
-    // Layer order: floor first (depth 0), walls on top (depth 1), debug
-    // label highest (depth 100). Walls overpaint the N/W edge wall-tile
+    // Layer order: floor (depth 0), walls (1), objects (2), debug label
+    // and zoom controls above. Walls overpaint the N/W edge wall-tile
     // placeholder fill from FloorRendererV2 — that's the intended hand-off
     // (floor paints WALL_PANEL flat strips at the border; walls overpaint
     // the visible N/W ones with the tall composition; S/E stay as flat).
-    this.gfxFloor = this.add.graphics().setDepth(0);
-    this.gfxWalls = this.add.graphics().setDepth(1);
+    // Objects depth-sort internally via ObjectRendererV2 — within the
+    // single gfxObjects Graphics, paint order is the depth order.
+    this.gfxFloor   = this.add.graphics().setDepth(0);
+    this.gfxWalls   = this.add.graphics().setDepth(1);
+    this.gfxObjects = this.add.graphics().setDepth(2);
 
     this.camera = new CameraControllerV2(this, () => this._redraw());
 
@@ -79,6 +84,7 @@ export class PresentationSceneV2 extends Phaser.Scene {
   private _redraw(): void {
     this.gfxFloor.clear();
     this.gfxWalls.clear();
+    this.gfxObjects.clear();
     drawFloor(
       this.gfxFloor,
       gameState.tiles,
@@ -88,6 +94,14 @@ export class PresentationSceneV2 extends Phaser.Scene {
     );
     drawWalls(
       this.gfxWalls,
+      this.camera.offsetX,
+      this.camera.offsetY,
+      this.camera.tileSize,
+    );
+    drawObjects(
+      this.gfxObjects,
+      gameState.placedObjs,
+      gameState.functionalIds,
       this.camera.offsetX,
       this.camera.offsetY,
       this.camera.tileSize,

@@ -49,9 +49,14 @@ export const SHADOW            = 0x06080c;
 export const FELT_GREEN        = 0x1a5a32;
 export const FELT_HIGH_STAKES  = 0x5a141a;
 
-// ── Slot machine screen glow ─────────────────────────────────────────────
-// Warm overlay painted on slot screens at strong alpha to suggest a lit
-// display; recipes pair this with a small bright pip for the catch-light.
+// ── Slot machine ─────────────────────────────────────────────────────────
+// SLOT_BODY: the warm gold/brass cabinet face. More saturated than the
+//   wood palette so a slot reads as a metal-housed machine, less bright
+//   than BRASS_HIGHLIGHT so the top + rim trim still pop. Added Phase 4.
+// SCREEN_DARK: dark inset for the slot screen, painted on the front face.
+//   SCREEN_GLOW overlays it at high alpha to suggest a lit display.
+export const SLOT_BODY         = 0xb89020;
+export const SCREEN_DARK       = 0x0e1115;
 export const SCREEN_GLOW       = 0xffb84a;
 
 // ── UI accents ───────────────────────────────────────────────────────────
