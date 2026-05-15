@@ -1,0 +1,72 @@
+// RendererFlag.ts — selects between the V1 and V2 renderers.
+//
+// Phase 0: not yet wired into main.ts. The module compiles and exports
+// its public surface so future phases (Phase 1+) can switch between the
+// legacy top-down GridScene and the new PresentationSceneV2 without
+// touching call sites.
+//
+// Resolution order in getRendererId():
+//   1. URL query parameter ?renderer=v1|v2 (wins over storage so a
+//      query can recover a stuck localStorage preference during dev).
+//   2. localStorage 'rendererV2' === 'v2'  → 'v2'; anything else → 'v1'.
+//   3. Default 'v1'.
+//
+// Storage reads/writes are wrapped in try/catch so private-mode browsers
+// and quota errors are silent — mirrors the pattern in GameState._writeSave
+// and SaveSlots.
+//
+// No Phaser. No gameState. Only window.location and localStorage.
+
+export type RendererId = 'v1' | 'v2';
+
+const STORAGE_KEY = 'rendererV2';
+
+export function getRendererId(): RendererId {
+  // 1. URL query parameter wins so devs can override a stuck preference
+  //    with ?renderer=v1.
+  const fromUrl = _readUrl();
+  if (fromUrl !== null) return fromUrl;
+  // 2. Persisted preference.
+  const fromStorage = _readStorage();
+  if (fromStorage !== null) return fromStorage;
+  // 3. Default: V1 stays the default until V2 has a usable floor/camera
+  //    shell. Flipped to 'v2' in a later phase, not Phase 0.
+  return 'v1';
+}
+
+export function setRendererId(id: RendererId): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, id);
+  } catch {
+    // Quota exceeded / private mode — caller doesn't get persistence,
+    // but getRendererId() still works for the current session if a
+    // ?renderer=… query is present.
+  }
+}
+
+// ── Internal helpers ──────────────────────────────────────────────────────
+
+// Returns 'v1' / 'v2' if ?renderer=v1|v2 is present, otherwise null.
+// Guards against non-browser environments where window/location are absent.
+function _readUrl(): RendererId | null {
+  try {
+    if (typeof window === 'undefined' || !window.location) return null;
+    const params = new URLSearchParams(window.location.search);
+    const v = params.get('renderer');
+    if (v === 'v1' || v === 'v2') return v;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Returns the persisted choice or null if absent / unreadable / invalid.
+function _readStorage(): RendererId | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw === 'v1' || raw === 'v2') return raw;
+    return null;
+  } catch {
+    return null;
+  }
+}
