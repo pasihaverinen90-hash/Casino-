@@ -23,12 +23,12 @@ export const SHEAR_Y_RATIO     = 0.42;
 // Recipes call wallVerticalOffset() / liftPoint() instead of multiplying
 // directly so a future tuning pass only touches this constant.
 //
-// 1.4 — chosen so a wall is ~3.3× as tall as a floor tile is deep
-// (1.4 / SHEAR_Y_RATIO). That gives enough vertical real-estate for
-// the V2 wall composition (wainscoting + panel + brass cap) and the
-// future wall-service facades (WC door, bar shelves, sportsbook
-// screens, signs above services). Tune here — never inside a recipe.
-export const WALL_HEIGHT_TILES = 1.4;
+// 1.6 — Phase 3.1 bump from 1.4. Wall : floor-tile-depth ratio is now
+// 1.6 / SHEAR_Y_RATIO ≈ 3.8, which reads as a proper room rather than
+// a "floor with rims" and gives wall-service facades (WC door, bar
+// shelves, sportsbook screens, signs above services) comfortable
+// vertical real-estate. Tune here — never inside a recipe.
+export const WALL_HEIGHT_TILES = 1.6;
 
 export interface Vec2 {
   x: number;

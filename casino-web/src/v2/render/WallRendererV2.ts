@@ -24,22 +24,31 @@
 //   • A small brass column at the NW corner unifies the two walls.
 //
 // Wall composition (bottom → top, fractions of wallVerticalOffset(ts)):
-//   • wainscoting band         — WOOD_MID            (~30%)
+//   • wainscoting band         — WOOD_MID            (~32%)
 //   • thin separator trim line — WALL_TRIM           (1px at ts ≥ 18)
 //   • upper panel              — WALL_PANEL          (remaining height)
-//   • brass cap rail           — BRASS               (5% of wall height, ≥1px)
+//   • brass cap rail           — BRASS               (6% of wall height, ≥1px)
 //   • brass highlight strip    — BRASS_HIGHLIGHT     (1px at ts ≥ 22)
 //
 // Per-tile vertical dividers are intentionally NOT drawn in Phase 3 — they
 // risk reading as a fence at small zoom. Phase 5 (wall services) and
 // Phase 11 (polish) can add them once the wall has actual facades to
 // separate.
+//
+// Phase 3.1 — corner refinement: the wood-column + brass-overhang corner
+// pillar drew too much attention (the wider brass capital sat above the
+// adjacent walls' brass cap rails, producing a small "T" artifact at the
+// top). It's now a subtle vertical shadow seam where the two walls meet:
+// 1px of SHADOW from floor to wall top, with no overhanging brass. The
+// walls' own brass cap rails naturally form an L at the corner top, which
+// is enough to read as a junction without a competing pillar.
 import Phaser from 'phaser';
 import * as GC from '../../logic/GameConstants';
 import * as Proj from './ProjectionV2';
 import {
-  WALL_PANEL, WOOD_MID, WOOD_DARK,
+  WALL_PANEL, WOOD_MID,
   WALL_TRIM, BRASS, BRASS_HIGHLIGHT,
+  SHADOW,
 } from './PaletteV2';
 
 // Detail thresholds — below these tile sizes the corresponding feature is
@@ -82,9 +91,10 @@ export function drawWalls(
     _paintWallSegment(g, bl, br, baseX, baseY, ts);
   }
 
-  // Corner column LAST so it visually merges the two walls into a
-  // single vertical pillar at the NW inside corner.
-  _paintCornerColumn(g, baseX, baseY, ts);
+  // Corner seam LAST so it sits on top of both walls. Phase 3.1 — a
+  // subtle vertical shadow line replaces the prior wood-column pillar so
+  // the corner reads as a quiet wall junction rather than an artifact.
+  _paintCornerSeam(g, baseX, baseY, ts);
 }
 
 // ── Wall segment ──────────────────────────────────────────────────────────
@@ -100,10 +110,12 @@ function _paintWallSegment(
 ): void {
   const wallPx       = Proj.wallVerticalOffset(ts);
   const detail       = ts >= 14;
-  const capPx        = Math.max(1, Math.round(wallPx * 0.05));
+  // Phase 3.1 — slightly more generous wainscoting (32%) and brass cap
+  // (6%) for a more substantial premium look at the taller wall height.
+  const capPx        = Math.max(1, Math.round(wallPx * 0.06));
   const separatorPx  = (detail && ts >= SEPARATOR_TS) ? 1 : 0;
   const highlightPx  = (detail && ts >= HIGHLIGHT_TS) ? 1 : 0;
-  const wainscotPx   = Math.round(wallPx * 0.30);
+  const wainscotPx   = Math.round(wallPx * 0.32);
   const panelPx      = wallPx - wainscotPx - capPx - separatorPx - highlightPx;
 
   const blS: Vec2 = { x: bl.x + baseX, y: bl.y + baseY };
@@ -154,32 +166,32 @@ function _band(
   g.fillPoints(quad, true);
 }
 
-// ── Corner column ─────────────────────────────────────────────────────────
+// ── Corner seam ───────────────────────────────────────────────────────────
 
-// A small brass-capped wood column at the inside NW corner where the
-// north and west walls meet. Painted on top of the wall segments so it
-// reads as a single pillar joining both walls.
-function _paintCornerColumn(
+// A thin vertical shadow line at the inside NW corner where the two walls
+// meet. Replaces the Phase 3 wood-column-with-brass-overhang treatment,
+// which had wider brass capital + base than the column body and produced
+// a small "T" artifact above the adjacent walls' brass cap rails.
+//
+// The seam is just dark — no brass overhang, no flaring base, no part
+// of it extends beyond the column footprint. The walls' own brass cap
+// rails naturally form an L at the corner top, which reads as a
+// junction without competing with the walls themselves. Width scales
+// with tile size so the seam stays a hairline (1–2px) at any zoom.
+function _paintCornerSeam(
   g: Phaser.GameObjects.Graphics,
   baseX: number, baseY: number, ts: number,
 ): void {
-  const corner = Proj.worldToScreen(1, 1, ts);
-  const cx     = corner.x + baseX;
-  const cy     = corner.y + baseY;
-  const wallPx = Proj.wallVerticalOffset(ts);
-  const w      = Math.max(2, Math.round(ts * 0.15));
-  const capPx  = Math.max(2, Math.round(wallPx * 0.06));
-  const halfW  = w / 2;
+  const corner   = Proj.worldToScreen(1, 1, ts);
+  const cx       = corner.x + baseX;
+  const cy       = corner.y + baseY;
+  const wallPx   = Proj.wallVerticalOffset(ts);
+  const seamW    = ts >= 24 ? 2 : 1;
+  // Stop the seam just below the brass cap rail so it doesn't notch the
+  // bright cap. The walls' caps then meet cleanly across the corner.
+  const capPx    = Math.max(1, Math.round(wallPx * 0.06));
+  const seamH    = wallPx - capPx;
 
-  // Wood column body.
-  g.fillStyle(WOOD_DARK, 1);
-  g.fillRect(cx - halfW, cy - wallPx, w, wallPx);
-
-  // Brass capital at the top (slightly wider than the column body).
-  g.fillStyle(BRASS, 1);
-  g.fillRect(cx - halfW - 1, cy - wallPx, w + 2, capPx);
-
-  // Brass base at the floor.
-  g.fillStyle(BRASS, 1);
-  g.fillRect(cx - halfW - 1, cy - capPx, w + 2, capPx);
+  g.fillStyle(SHADOW, 0.55);
+  g.fillRect(cx - seamW / 2, cy - seamH, seamW, seamH);
 }
