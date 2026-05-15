@@ -22,7 +22,13 @@ export const SHEAR_Y_RATIO     = 0.42;
 // Wall extrusion in tile units. wallVerticalOffset(ts) = ts * this.
 // Recipes call wallVerticalOffset() / liftPoint() instead of multiplying
 // directly so a future tuning pass only touches this constant.
-export const WALL_HEIGHT_TILES = 0.85;
+//
+// 1.4 — chosen so a wall is ~3.3× as tall as a floor tile is deep
+// (1.4 / SHEAR_Y_RATIO). That gives enough vertical real-estate for
+// the V2 wall composition (wainscoting + panel + brass cap) and the
+// future wall-service facades (WC door, bar shelves, sportsbook
+// screens, signs above services). Tune here — never inside a recipe.
+export const WALL_HEIGHT_TILES = 1.4;
 
 export interface Vec2 {
   x: number;

@@ -345,6 +345,10 @@ export const enum ValResult {
   FAIL_WRONG_ZONE, FAIL_COLLISION,
   FAIL_WALL_INVALID, FAIL_DOOR_BLOCKED, FAIL_NO_ACCESS,
   FAIL_LOCKED,
+  // Presentation V2 — wall services may only attach to the two visible
+  // walls (NORTH/top and WEST/left). SOUTH/EAST placements get this
+  // result. Appended; never reorder existing values.
+  FAIL_WALL_SIDE_NOT_VISIBLE,
 }
 
 // accessSides: how many open floor sides a placement requires.
@@ -550,6 +554,8 @@ export function valMessage(result: ValResult): string {
     case ValResult.FAIL_DOOR_BLOCKED:  return 'The entrance must not be blocked.';
     case ValResult.FAIL_NO_ACCESS:     return 'Needs at least one open approach.';
     case ValResult.FAIL_LOCKED:        return 'This object is locked.';
+    case ValResult.FAIL_WALL_SIDE_NOT_VISIBLE:
+      return 'Wall services can only be built on the north or west walls.';
   }
   return '';
 }

@@ -1188,7 +1188,20 @@ class GameState extends EventEmitter {
       const req = {
         type: saved.type, col: saved.col, row: saved.row, facing: saved.facing,
       };
-      if (PV.checkSpatial(req, this.tiles) !== GC.ValResult.VALID) continue;
+      const _v = PV.checkSpatial(req, this.tiles);
+      if (_v !== GC.ValResult.VALID) {
+        // Dev-only breadcrumb. Helps notice when a save load silently drops
+        // an object because validator rules tightened (e.g. V2 N/W-only
+        // wall services in Phase 3 retroactively rejects legacy S/E
+        // placements). Not surfaced in UI; no refund; no save mutation.
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[GameState load] Dropped saved object id=${saved.id} type=${saved.type} ` +
+          `at (${saved.col},${saved.row}) facing=${saved.facing}: ` +
+          `${GC.valMessage(_v) || 'invalid spatial placement'}`,
+        );
+        continue;
+      }
 
       const { w, h } = GC.dimsFor(saved.type, saved.facing);
       const fp  = PV.computeFootprint(saved.col, saved.row, w, h);
