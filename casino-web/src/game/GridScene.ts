@@ -8,6 +8,7 @@ import { uiBus }     from '../events/UIBus';
 import { paintObject, paintSeat, type WallSide } from './ObjectArt';
 import { GuestSprites } from './GuestSprites';
 import { time } from '../state/TimeController';
+import * as Proj from './Projection';
 
 // Fixed layout zone heights (px). CSS must match these values.
 export const HUD_H       = 56;
@@ -163,8 +164,18 @@ export class GridScene extends Phaser.Scene {
 
   /** Convert logical canvas position → grid tile, or null if out of bounds. */
   private _toTile(px: number, py: number): { col: number; row: number } | null {
-    const col = Math.floor((px - this.ox) / this.tileSize);
-    const row = Math.floor((py - GRID_AREA_Y - this.oy) / this.tileSize);
+    let col: number;
+    let row: number;
+    if (Proj.USE_OBLIQUE_PROTOTYPE) {
+      const sx = px - this.ox;
+      const sy = py - GRID_AREA_Y - this.oy;
+      const w  = Proj.screenToWorld(sx, sy, this.tileSize);
+      col = Math.floor(w.colFloat);
+      row = Math.floor(w.rowFloat);
+    } else {
+      col = Math.floor((px - this.ox) / this.tileSize);
+      row = Math.floor((py - GRID_AREA_Y - this.oy) / this.tileSize);
+    }
     if (col < 0 || col >= GC.GRID_COLS || row < 0 || row >= GC.GRID_ROWS) return null;
     return { col, row };
   }
@@ -360,13 +371,22 @@ export class GridScene extends Phaser.Scene {
 
     if (newTs === oldTs) return;
 
-    // Zoom toward cursor: keep the tile under cursor fixed
-    const col = (mx - this.ox)               / oldTs;
-    const row = (my - GRID_AREA_Y - this.oy) / oldTs;
-
-    this.tileSize = newTs;
-    this.ox = mx              - col * newTs;
-    this.oy = (my - GRID_AREA_Y) - row * newTs;
+    // Zoom toward cursor: keep the tile under the cursor fixed.
+    if (Proj.USE_OBLIQUE_PROTOTYPE) {
+      const sxOld = mx - this.ox;
+      const syOld = my - GRID_AREA_Y - this.oy;
+      const w0    = Proj.screenToWorld(sxOld, syOld, oldTs);
+      this.tileSize = newTs;
+      const sNew  = Proj.worldToScreen(w0.colFloat, w0.rowFloat, newTs);
+      this.ox = mx              - sNew.x;
+      this.oy = (my - GRID_AREA_Y) - sNew.y;
+    } else {
+      const col = (mx - this.ox)               / oldTs;
+      const row = (my - GRID_AREA_Y - this.oy) / oldTs;
+      this.tileSize = newTs;
+      this.ox = mx              - col * newTs;
+      this.oy = (my - GRID_AREA_Y) - row * newTs;
+    }
 
     this._clampOffset();
     this._redraw();
@@ -375,9 +395,17 @@ export class GridScene extends Phaser.Scene {
   // ── Pan clamping ───────────────────────────────────────────────────────────
 
   private _clampOffset(): void {
-    const ts     = this.tileSize;
-    const gridW  = GC.GRID_COLS * ts;
-    const gridH  = GC.GRID_ROWS * ts;
+    const ts = this.tileSize;
+    let gridW: number;
+    let gridH: number;
+    if (Proj.USE_OBLIQUE_PROTOTYPE) {
+      const b = Proj.projectedBounds(GC.GRID_COLS, GC.GRID_ROWS, ts);
+      gridW = b.width;
+      gridH = b.height;
+    } else {
+      gridW = GC.GRID_COLS * ts;
+      gridH = GC.GRID_ROWS * ts;
+    }
     const viewW  = this.scale.width;
     const viewH  = this._gridAreaH;
     const padX   = viewW * 0.5;
@@ -433,15 +461,24 @@ export class GridScene extends Phaser.Scene {
         if (xa !== xb) return xa - xb;
         return a.index - b.index;
       });
+    // Local projection helper. Branches once on the feature flag and
+    // is used by every per-object site below so the oblique path stays
+    // consistent without duplicating the call shape.
+    const projPos = (col: number, row: number): { x: number; y: number } =>
+      Proj.USE_OBLIQUE_PROTOTYPE
+        ? Proj.worldToScreen(col, row, ts)
+        : { x: col * ts, y: row * ts };
+
     const usedIds = new Set<string>();
     for (const { obj } of placedOrder) {
       const isFunc = gameState.functionalIds.has(obj.id);
       const alpha  = isFunc ? 1 : 0.45;
       const def    = GC.getDef(obj.type);
       const wallSide = def.is_wall ? this._detectWallSide(obj) : null;
+      const op = projPos(obj.col, obj.row);
       paintObject(
         g, obj.type,
-        baseX + obj.col * ts, baseY + obj.row * ts,
+        baseX + op.x, baseY + op.y,
         obj.w * ts, obj.h * ts,
         alpha,
         wallSide,
@@ -462,7 +499,8 @@ export class GridScene extends Phaser.Scene {
           const len = Math.hypot(dx, dy);
           const dxN = len > 0 ? dx / len : 0;
           const dyN = len > 0 ? dy / len : 0;
-          paintSeat(g, baseX + s.x * ts, baseY + s.y * ts, ts, alpha, dxN, dyN);
+          const sp = projPos(s.x, s.y);
+          paintSeat(g, baseX + sp.x, baseY + sp.y, ts, alpha, dxN, dyN);
         }
       }
 
@@ -471,7 +509,7 @@ export class GridScene extends Phaser.Scene {
       if (!isFunc) {
         const m = Math.max(2, Math.round(ts * 0.18));
         g.fillStyle(0xff5050, 0.85);
-        g.fillRect(baseX + obj.col * ts + 1, baseY + obj.row * ts + 1, m, m);
+        g.fillRect(baseX + op.x + 1, baseY + op.y + 1, m, m);
       }
 
       // Wall services keep a small letter label so they're unambiguous.
@@ -489,10 +527,9 @@ export class GridScene extends Phaser.Scene {
         txt.setVisible(visible);
         txt.setAlpha(isFunc ? 0.95 : 0.55);
         if (visible) {
-          const cx = baseX + (obj.col + obj.w / 2) * ts;
-          const cy = baseY + (obj.row + obj.h / 2) * ts;
+          const lp = projPos(obj.col + obj.w / 2, obj.row + obj.h / 2);
           txt.setOrigin(0.5, 0.5);
-          txt.setPosition(cx, cy);
+          txt.setPosition(baseX + lp.x, baseY + lp.y);
         }
       }
     }
@@ -510,33 +547,52 @@ export class GridScene extends Phaser.Scene {
     if (this.placing && this.ghostCol >= 0) {
       const { w, h } = GC.dimsFor(this.placeType as GC.ObjType, this.placeFacing);
       const a   = this._placeAnchor(this.ghostCol, this.ghostRow);
-      const gx  = baseX + a.col * ts;
-      const gy  = baseY + a.row * ts;
+      const gp  = projPos(a.col, a.row);
+      const gx  = baseX + gp.x;
+      const gy  = baseY + gp.y;
 
       paintObject(
         g, this.placeType as GC.ObjType, gx, gy, w * ts, h * ts,
         0.6, null, this.placeFacing, this.placeVar,
       );
 
-      // Color overlay
-      g.fillStyle(this.ghostOk ? 0x33e64d : 0xe63333, 0.28);
-      g.fillRect(gx, gy, w * ts, h * ts);
-
-      // Outline frame
-      g.lineStyle(2, this.ghostOk ? 0x33e64d : 0xe63333, 1);
-      g.strokeRect(gx + 1, gy + 1, w * ts - 2, h * ts - 2);
+      const tint = this.ghostOk ? 0x33e64d : 0xe63333;
+      if (Proj.USE_OBLIQUE_PROTOTYPE) {
+        // Project the footprint quad so the ghost overlay matches the
+        // sheared floor underneath.
+        const quad = Proj.footprintQuad(a.col, a.row, w, h, ts);
+        const points = quad.map(p => ({ x: baseX + p.x, y: baseY + p.y }));
+        g.fillStyle(tint, 0.28);
+        g.fillPoints(points, true);
+        g.lineStyle(2, tint, 1);
+        g.strokePoints(points, true);
+        // Clear the line style so downstream strokeCircle calls don't
+        // inherit the ghost colour.
+        g.lineStyle(0, 0, 0);
+      } else {
+        g.fillStyle(tint, 0.28);
+        g.fillRect(gx, gy, w * ts, h * ts);
+        g.lineStyle(2, tint, 1);
+        g.strokeRect(gx + 1, gy + 1, w * ts - 2, h * ts - 2);
+      }
 
       // Seat / use markers — small dots on the tiles guests will target.
       // Helps the player see which side of a table will host players, and
       // confirms which slot tile is the chair.
-      this._drawGhostSeats(g, gx, gy, ts);
+      this._drawGhostSeats(g, gx, gy, ts, baseX, baseY);
     }
 
     // 4. Demolish overlay
     if (this.demolishing) {
+      g.fillStyle(0xff3333, 0.32);
       for (const obj of gameState.placedObjs) {
-        g.fillStyle(0xff3333, 0.32);
-        g.fillRect(baseX + obj.col * ts, baseY + obj.row * ts, obj.w * ts - 1, obj.h * ts - 1);
+        if (Proj.USE_OBLIQUE_PROTOTYPE) {
+          const quad = Proj.footprintQuad(obj.col, obj.row, obj.w, obj.h, ts);
+          const points = quad.map(p => ({ x: baseX + p.x, y: baseY + p.y }));
+          g.fillPoints(points, true);
+        } else {
+          g.fillRect(baseX + obj.col * ts, baseY + obj.row * ts, obj.w * ts - 1, obj.h * ts - 1);
+        }
       }
     }
   }
@@ -557,6 +613,10 @@ export class GridScene extends Phaser.Scene {
     col: number, row: number,
     baseX: number, baseY: number, ts: number,
   ): void {
+    if (Proj.USE_OBLIQUE_PROTOTYPE) {
+      this._paintTileOblique(g, t, col, row, baseX, baseY, ts);
+      return;
+    }
     const x = baseX + col * ts;
     const y = baseY + row * ts;
     const w = ts - 1;
@@ -623,6 +683,54 @@ export class GridScene extends Phaser.Scene {
     }
   }
 
+  // P2 oblique prototype tile painter. Draws each tile as a projected
+  // parallelogram via Proj.tileQuad. Keeps the same colour palette as
+  // the top-down path so the prototype reads as the existing casino
+  // viewed at an angle. Detail overlays (carpet alt, gold motif) are
+  // simplified — they paint as a flat overlay on the parallelogram
+  // rather than the precise inset rectangles used in top-down. This is
+  // intentional: the prototype's job is to prove the projection feels
+  // right, not to ship the final art.
+  private _paintTileOblique(
+    g: Phaser.GameObjects.Graphics,
+    t: GC.Tile,
+    col: number, row: number,
+    baseX: number, baseY: number, ts: number,
+  ): void {
+    const quad = Proj.tileQuad(col, row, ts);
+    const points = quad.map(p => ({ x: baseX + p.x, y: baseY + p.y }));
+    const detail = ts >= 14;
+
+    let baseColor: number;
+    if (t.tile_type === GC.TileType.WALL)         baseColor = GC.COL_WALL;
+    else if (t.tile_type === GC.TileType.BLOCKED) baseColor = GC.COL_BLOCKED;
+    else if (t.tile_type === GC.TileType.LOBBY)   baseColor = GC.COL_LOBBY_BASE;
+    else                                          baseColor = GC.COL_FLOOR;
+
+    g.fillStyle(baseColor, 1);
+    g.fillPoints(points, true);
+
+    if (!detail) return;
+    if (t.tile_type === GC.TileType.FLOOR) {
+      const altGroup = (((col >> 1) + (row >> 1)) & 1) === 0;
+      if (altGroup) {
+        g.fillStyle(GC.COL_FLOOR_ALT, 0.42);
+        g.fillPoints(points, true);
+      }
+      if ((col & 3) === 2 && (row & 3) === 2) {
+        g.fillStyle(GC.COL_CARPET_ACCENT, 0.55);
+        g.fillPoints(points, true);
+      }
+    } else if (t.tile_type === GC.TileType.LOBBY) {
+      // Gold accent on the projected parallelogram. Single overlay pass
+      // — the precise top/bottom stripe pattern from top-down doesn't
+      // translate cleanly to a sheared quad, so the prototype uses one
+      // soft wash for readability.
+      g.fillStyle(GC.COL_LOBBY_ALT, 0.18);
+      g.fillPoints(points, true);
+    }
+  }
+
   private _setCursor(cursor: string): void {
     this.sys.game.canvas.style.cursor = cursor;
   }
@@ -631,15 +739,31 @@ export class GridScene extends Phaser.Scene {
   // the chair tile inside the footprint; for tables it's the open-floor
   // tiles around the 3 player sides. Wall services don't need this — the
   // door cutout already communicates the use side.
+  //
+  // baseX/baseY are the canvas-pixel origin of the grid (this.ox /
+  // this.oy + GRID_AREA_Y in _redraw). They're passed in so the oblique
+  // path can project seat tiles directly via Proj.worldToScreen rather
+  // than offsetting from the ghost top-left in a way that only works in
+  // top-down.
   private _drawGhostSeats(
-    g: Phaser.GameObjects.Graphics, gx: number, gy: number, ts: number,
+    g: Phaser.GameObjects.Graphics,
+    gx: number, gy: number, ts: number,
+    baseX: number, baseY: number,
   ): void {
     const t = this.placeType as GC.ObjType;
     const a = this._placeAnchor(this.ghostCol, this.ghostRow);
+    const seatScreenTL = (col: number, row: number): { x: number; y: number } => {
+      if (Proj.USE_OBLIQUE_PROTOTYPE) {
+        const p = Proj.worldToScreen(col, row, ts);
+        return { x: baseX + p.x, y: baseY + p.y };
+      }
+      return { x: gx + (col - a.col) * ts, y: gy + (row - a.row) * ts };
+    };
     if (t === GC.ObjType.SLOT_MACHINE) {
       const { seat } = GC.slotParts(a.col, a.row, this.placeFacing);
-      const cx = gx + (seat.x - a.col + 0.5) * ts;
-      const cy = gy + (seat.y - a.row + 0.5) * ts;
+      const tl = seatScreenTL(seat.x, seat.y);
+      const cx = tl.x + ts / 2;
+      const cy = tl.y + ts / 2;
       g.lineStyle(2, 0xffffff, 0.7);
       g.strokeCircle(cx, cy, Math.max(2, ts * 0.18));
       return;
@@ -653,14 +777,13 @@ export class GridScene extends Phaser.Scene {
     const tCx = a.col + w / 2;
     const tCy = a.row + h / 2;
     const seat = (col: number, row: number) => {
-      const px = gx + (col - a.col) * ts;
-      const py = gy + (row - a.row) * ts;
+      const tl = seatScreenTL(col, row);
       const dx = tCx - (col + 0.5);
       const dy = tCy - (row + 0.5);
       const len = Math.hypot(dx, dy);
       const dxN = len > 0 ? dx / len : 0;
       const dyN = len > 0 ? dy / len : 0;
-      paintSeat(g, px, py, ts, 0.6, dxN, dyN);
+      paintSeat(g, tl.x, tl.y, ts, 0.6, dxN, dyN);
     };
     for (const side of playerSides) {
       if (side === 'N')      for (let c = 0; c < w; c++) seat(a.col + c, a.row - 1);

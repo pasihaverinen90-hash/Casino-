@@ -19,6 +19,7 @@ import * as OV from '../logic/OperationalValidator';
 import * as PV from '../logic/PlacementValidator';
 import { gameState } from '../state/GameState';
 import { findRoute } from './GuestRouter';
+import * as Proj from './Projection';
 
 type GuestState = 'to_target' | 'idle' | 'to_exit';
 
@@ -610,8 +611,21 @@ export class GuestSprites {
     const lean   = Math.max(0.6, ts * 0.07);
 
     for (const guest of this.guests) {
-      const x = baseX + guest.col * ts;
-      const y = baseY + guest.row * ts;
+      // P2 prototype — when the oblique flag is on, project the guest's
+      // (col, row) onto the sheared floor so they walk on the parallelogram
+      // tiles rather than floating above. The torso/head silhouettes stay
+      // axis-aligned (no per-guest 3D), which is acceptable for the
+      // prototype: position correctness is what proves the projection.
+      let x: number;
+      let y: number;
+      if (Proj.USE_OBLIQUE_PROTOTYPE) {
+        const p = Proj.worldToScreen(guest.col, guest.row, ts);
+        x = baseX + p.x;
+        y = baseY + p.y;
+      } else {
+        x = baseX + guest.col * ts;
+        y = baseY + guest.row * ts;
+      }
       const moving = guest.state !== 'idle';
       const bob    = moving ? Math.sin(guest.phase) * bobAmp : 0;
 
