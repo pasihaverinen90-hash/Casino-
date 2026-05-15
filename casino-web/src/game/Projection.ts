@@ -55,6 +55,27 @@ export function screenToWorld(
   return { colFloat, rowFloat };
 }
 
+// Centre of a single grid tile, projected to scene-local pixels. Equal
+// to worldToScreen(col + 0.5, row + 0.5, ts). Use this — never
+// (tileTopLeft.x + ts/2, tileTopLeft.y + ts/2) — when placing anything
+// at a tile centre in oblique mode: the shear makes the top-left + ts/2
+// trick land off-tile (P2.1 fix).
+export function tileCenter(
+  col: number, row: number, ts: number,
+): { x: number; y: number } {
+  return worldToScreen(col + 0.5, row + 0.5, ts);
+}
+
+// Centre of an arbitrary footprint at (col, row, w, h), projected to
+// scene-local pixels. Equal to worldToScreen(col + w/2, row + h/2, ts).
+// Use this for wall-service label anchors and any other "middle of the
+// footprint" placement in oblique mode.
+export function footprintCenter(
+  col: number, row: number, w: number, h: number, ts: number,
+): { x: number; y: number } {
+  return worldToScreen(col + w / 2, row + h / 2, ts);
+}
+
 // Four corners of a unit tile at (col, row) in clockwise order starting
 // from the top-left. Used to fill / stroke parallelogram tile shapes.
 export function tileQuad(

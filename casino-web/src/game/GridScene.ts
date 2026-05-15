@@ -461,13 +461,28 @@ export class GridScene extends Phaser.Scene {
         if (xa !== xb) return xa - xb;
         return a.index - b.index;
       });
-    // Local projection helper. Branches once on the feature flag and
-    // is used by every per-object site below so the oblique path stays
-    // consistent without duplicating the call shape.
+    // Local projection helpers. Each branches once on the feature flag
+    // so the oblique path stays consistent without duplicating call
+    // shapes per site.
+    //   projPos        — projected top-left of a (col, row) tile.
+    //   tileCenter     — projected centre of a tile (P2.1: do NOT use
+    //                    projPos + ts/2 in oblique; the shear makes that
+    //                    miss the true centre).
+    //   footprintCenter— projected centre of a (col, row, w, h) area.
     const projPos = (col: number, row: number): { x: number; y: number } =>
       Proj.USE_OBLIQUE_PROTOTYPE
         ? Proj.worldToScreen(col, row, ts)
         : { x: col * ts, y: row * ts };
+    const tileCenter = (col: number, row: number): { x: number; y: number } =>
+      Proj.USE_OBLIQUE_PROTOTYPE
+        ? Proj.tileCenter(col, row, ts)
+        : { x: (col + 0.5) * ts, y: (row + 0.5) * ts };
+    const footprintCenter = (
+      col: number, row: number, w: number, h: number,
+    ): { x: number; y: number } =>
+      Proj.USE_OBLIQUE_PROTOTYPE
+        ? Proj.footprintCenter(col, row, w, h, ts)
+        : { x: (col + w / 2) * ts, y: (row + h / 2) * ts };
 
     const usedIds = new Set<string>();
     for (const { obj } of placedOrder) {
@@ -499,8 +514,15 @@ export class GridScene extends Phaser.Scene {
           const len = Math.hypot(dx, dy);
           const dxN = len > 0 ? dx / len : 0;
           const dyN = len > 0 ? dy / len : 0;
-          const sp = projPos(s.x, s.y);
-          paintSeat(g, baseX + sp.x, baseY + sp.y, ts, alpha, dxN, dyN);
+          // P2.1 — seat dots land on the projected tile centre. paintSeat
+          // adds ts/2 to its (x, y) argument to find the circle centre,
+          // so we pass (centre − ts/2) and the circle ends up exactly at
+          // the projected centre in both projection modes.
+          const sc = tileCenter(s.x, s.y);
+          paintSeat(
+            g, baseX + sc.x - ts / 2, baseY + sc.y - ts / 2,
+            ts, alpha, dxN, dyN,
+          );
         }
       }
 
@@ -509,7 +531,16 @@ export class GridScene extends Phaser.Scene {
       if (!isFunc) {
         const m = Math.max(2, Math.round(ts * 0.18));
         g.fillStyle(0xff5050, 0.85);
-        g.fillRect(baseX + op.x + 1, baseY + op.y + 1, m, m);
+        if (Proj.USE_OBLIQUE_PROTOTYPE) {
+          // P2.1 — anchor on the projected top-right corner of the
+          // footprint so the pip lands on a stable parallelogram vertex
+          // regardless of row. Inset by m+1 so it sits just inside the
+          // corner rather than on top of the neighbour tile.
+          const tr = projPos(obj.col + obj.w, obj.row);
+          g.fillRect(baseX + tr.x - m - 1, baseY + tr.y + 1, m, m);
+        } else {
+          g.fillRect(baseX + op.x + 1, baseY + op.y + 1, m, m);
+        }
       }
 
       // Wall services keep a small letter label so they're unambiguous.
@@ -527,7 +558,10 @@ export class GridScene extends Phaser.Scene {
         txt.setVisible(visible);
         txt.setAlpha(isFunc ? 0.95 : 0.55);
         if (visible) {
-          const lp = projPos(obj.col + obj.w / 2, obj.row + obj.h / 2);
+          // P2.1 — wall labels anchor on the projected footprint centre.
+          // Behaviour is identical in top-down (centre math collapses to
+          // (col + w/2) * ts), but the explicit helper documents intent.
+          const lp = footprintCenter(obj.col, obj.row, obj.w, obj.h);
           txt.setOrigin(0.5, 0.5);
           txt.setPosition(baseX + lp.x, baseY + lp.y);
         }
@@ -752,20 +786,28 @@ export class GridScene extends Phaser.Scene {
   ): void {
     const t = this.placeType as GC.ObjType;
     const a = this._placeAnchor(this.ghostCol, this.ghostRow);
-    const seatScreenTL = (col: number, row: number): { x: number; y: number } => {
+    // P2.1 — return the *true* projected centre of a seat tile in
+    // scene-local pixels (already offset by baseX/baseY). Both the
+    // slot-chair stroke and the table-seat paintSeat call need the
+    // centre, not the top-left + ts/2 approximation that misses in
+    // oblique mode. In top-down mode the math collapses to the legacy
+    // value, so the production path is unchanged.
+    const seatScreenCenter = (col: number, row: number):
+        { x: number; y: number } => {
       if (Proj.USE_OBLIQUE_PROTOTYPE) {
-        const p = Proj.worldToScreen(col, row, ts);
+        const p = Proj.tileCenter(col, row, ts);
         return { x: baseX + p.x, y: baseY + p.y };
       }
-      return { x: gx + (col - a.col) * ts, y: gy + (row - a.row) * ts };
+      return {
+        x: gx + (col - a.col + 0.5) * ts,
+        y: gy + (row - a.row + 0.5) * ts,
+      };
     };
     if (t === GC.ObjType.SLOT_MACHINE) {
       const { seat } = GC.slotParts(a.col, a.row, this.placeFacing);
-      const tl = seatScreenTL(seat.x, seat.y);
-      const cx = tl.x + ts / 2;
-      const cy = tl.y + ts / 2;
+      const c = seatScreenCenter(seat.x, seat.y);
       g.lineStyle(2, 0xffffff, 0.7);
-      g.strokeCircle(cx, cy, Math.max(2, ts * 0.18));
+      g.strokeCircle(c.x, c.y, Math.max(2, ts * 0.18));
       return;
     }
     if (!GC.isTableLike(t)) return;
@@ -777,13 +819,16 @@ export class GridScene extends Phaser.Scene {
     const tCx = a.col + w / 2;
     const tCy = a.row + h / 2;
     const seat = (col: number, row: number) => {
-      const tl = seatScreenTL(col, row);
+      const c = seatScreenCenter(col, row);
       const dx = tCx - (col + 0.5);
       const dy = tCy - (row + 0.5);
       const len = Math.hypot(dx, dy);
       const dxN = len > 0 ? dx / len : 0;
       const dyN = len > 0 ? dy / len : 0;
-      paintSeat(g, tl.x, tl.y, ts, 0.6, dxN, dyN);
+      // paintSeat puts the cushion at (x + ts/2, y + ts/2). Subtracting
+      // ts/2 from the centre puts that cushion exactly on the projected
+      // tile centre.
+      paintSeat(g, c.x - ts / 2, c.y - ts / 2, ts, 0.6, dxN, dyN);
     };
     for (const side of playerSides) {
       if (side === 'N')      for (let c = 0; c < w; c++) seat(a.col + c, a.row - 1);
