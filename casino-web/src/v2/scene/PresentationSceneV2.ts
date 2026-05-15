@@ -20,12 +20,14 @@ import { BG_DARK, UI_GOLD_DIM } from '../render/PaletteV2';
 import { drawFloor } from '../render/FloorRendererV2';
 import { drawWalls } from '../render/WallRendererV2';
 import { CameraControllerV2 } from './CameraControllerV2';
+import { ZoomControlsV2 } from '../ui/ZoomControlsV2';
 
 export class PresentationSceneV2 extends Phaser.Scene {
-  private gfxFloor!  : Phaser.GameObjects.Graphics;
-  private gfxWalls!  : Phaser.GameObjects.Graphics;
-  private camera!    : CameraControllerV2;
-  private debugLabel!: Phaser.GameObjects.Text;
+  private gfxFloor!    : Phaser.GameObjects.Graphics;
+  private gfxWalls!    : Phaser.GameObjects.Graphics;
+  private camera!      : CameraControllerV2;
+  private debugLabel!  : Phaser.GameObjects.Text;
+  private zoomControls?: ZoomControlsV2;
 
   constructor() {
     super({ key: 'PresentationSceneV2' });
@@ -52,10 +54,23 @@ export class PresentationSceneV2 extends Phaser.Scene {
       color     : _hex(UI_GOLD_DIM),
     }).setDepth(100).setAlpha(0.7);
 
+    // V2-only zoom buttons (DOM overlay, bottom-right). Mounted only in
+    // this scene so V1 stays unchanged. _redraw() refreshes their
+    // disabled/grey state after every camera change.
+    this.zoomControls = new ZoomControlsV2(this.camera);
+
     gameState.on('state_changed', () => this._redraw());
     this.scale.on('resize', () => {
       this.camera.onResize();
       this._redraw();
+    });
+
+    // Tear down DOM + native listeners when the scene shuts down so a
+    // re-boot (e.g. tab refresh into different renderer) doesn't leak.
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.camera.destroy();
+      this.zoomControls?.destroy();
+      this.zoomControls = undefined;
     });
 
     this._redraw();
@@ -77,6 +92,9 @@ export class PresentationSceneV2 extends Phaser.Scene {
       this.camera.offsetY,
       this.camera.tileSize,
     );
+    // Refresh zoom-button disabled state after every camera change. Cheap
+    // (two style writes), no need to skip when no zoom change happened.
+    this.zoomControls?.refresh();
   }
 }
 

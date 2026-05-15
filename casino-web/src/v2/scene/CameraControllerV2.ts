@@ -15,18 +15,29 @@ import Phaser from 'phaser';
 import * as GC from '../../logic/GameConstants';
 import * as Proj from '../render/ProjectionV2';
 
-const TILE_DEFAULT = 28;
-const TILE_MIN     = 10;
-const TILE_MAX     = 64;
-const DRAG_THRESHOLD_PX = 6;
+// Phase 3.2 — discrete Hoyle-style zoom levels. Continuous wheel zoom
+// felt too "engine-y" for a management sim; users now snap between
+// authored levels via wheel or the on-screen zoom buttons.
+//
+//   0 → 20  far overview
+//   1 → 24  medium overview
+//   2 → 28  default play zoom (matches Phases 1–3.1 default)
+//   3 → 36  close detail zoom
+export const ZOOM_LEVELS         = [20, 24, 28, 36] as const;
+export const DEFAULT_ZOOM_INDEX  = 2;
+const DRAG_THRESHOLD_PX          = 6;
 
 export class CameraControllerV2 {
   offsetX  = 0;
   offsetY  = 0;
-  tileSize = TILE_DEFAULT;
+  // Explicit `number` type — without it, TS infers the literal type
+  // `28` from ZOOM_LEVELS[DEFAULT_ZOOM_INDEX] (the array is `as const`)
+  // and later assignments from other ZOOM_LEVELS entries fail typecheck.
+  tileSize : number = ZOOM_LEVELS[DEFAULT_ZOOM_INDEX];
 
-  private scene    : Phaser.Scene;
-  private onChange : () => void;
+  private scene     : Phaser.Scene;
+  private onChange  : () => void;
+  private zoomIndex = DEFAULT_ZOOM_INDEX;
 
   private dragStartX  = 0;
   private dragStartY  = 0;
@@ -97,10 +108,47 @@ export class CameraControllerV2 {
 
   // ── Zoom ──────────────────────────────────────────────────────────────────
 
+  canZoomIn(): boolean  { return this.zoomIndex < ZOOM_LEVELS.length - 1; }
+  canZoomOut(): boolean { return this.zoomIndex > 0; }
+
+  // Step one level closer (larger tileSize). If anchor coordinates are
+  // omitted, the canvas centre is used — that's the right anchor for
+  // button clicks, which should feel stable regardless of cursor position.
+  zoomIn(anchorX?: number, anchorY?: number): void {
+    if (!this.canZoomIn()) return;
+    this._applyZoom(this.zoomIndex + 1, anchorX, anchorY);
+  }
+
+  zoomOut(anchorX?: number, anchorY?: number): void {
+    if (!this.canZoomOut()) return;
+    this._applyZoom(this.zoomIndex - 1, anchorX, anchorY);
+  }
+
+  private _applyZoom(newIndex: number, anchorX?: number, anchorY?: number): void {
+    const oldTs = this.tileSize;
+    const newTs = ZOOM_LEVELS[newIndex];
+    if (newTs === oldTs) return;
+
+    const mx = anchorX ?? this.scene.scale.width  / 2;
+    const my = anchorY ?? this.scene.scale.height / 2;
+
+    // Anchor: keep the world coordinate under the cursor (or canvas centre)
+    // fixed across the zoom-level jump.
+    const worldBefore = Proj.screenToWorld(mx - this.offsetX, my - this.offsetY, oldTs);
+    this.zoomIndex = newIndex;
+    this.tileSize  = newTs;
+    const screenAfter = Proj.worldToScreen(worldBefore.colFloat, worldBefore.rowFloat, newTs);
+    this.offsetX = mx - screenAfter.x;
+    this.offsetY = my - screenAfter.y;
+
+    this._clamp();
+    this.onChange();
+  }
+
   private _onWheel(e: WheelEvent): void {
     e.preventDefault();
 
-    // Convert the browser event coordinates into Phaser logical pixels —
+    // Convert browser event coordinates into Phaser logical pixels —
     // accounts for any CSS scaling on the canvas (high-DPI etc.).
     const canvas = this.scene.sys.game.canvas;
     const rect   = canvas.getBoundingClientRect();
@@ -109,22 +157,8 @@ export class CameraControllerV2 {
     const mx = (e.clientX - rect.left) / scaleX;
     const my = (e.clientY - rect.top)  / scaleY;
 
-    const oldTs = this.tileSize;
-    const sign  = e.deltaY < 0 ? 1 : -1;
-    // Step scales with current size for a smooth zoom feel at all levels.
-    const step  = Math.max(1, Math.round(oldTs * 0.08));
-    const newTs = Math.max(TILE_MIN, Math.min(TILE_MAX, oldTs + sign * step));
-    if (newTs === oldTs) return;
-
-    // Anchor: keep the world coordinate under the cursor fixed.
-    const worldBefore = Proj.screenToWorld(mx - this.offsetX, my - this.offsetY, oldTs);
-    this.tileSize = newTs;
-    const screenAfter = Proj.worldToScreen(worldBefore.colFloat, worldBefore.rowFloat, newTs);
-    this.offsetX = mx - screenAfter.x;
-    this.offsetY = my - screenAfter.y;
-
-    this._clamp();
-    this.onChange();
+    if (e.deltaY < 0) this.zoomIn(mx, my);
+    else              this.zoomOut(mx, my);
   }
 
   // ── Framing helpers ───────────────────────────────────────────────────────

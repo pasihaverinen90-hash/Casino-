@@ -56,13 +56,24 @@ import {
 const SEPARATOR_TS = 18;   // wainscot/panel separator line
 const HIGHLIGHT_TS = 22;   // brass cap highlight strip
 
-// Indices into the inside-of-wall span. Wall tiles are at the grid
-// border (row=0 / col=0 etc.); the visible wall STANDS at the inside
-// edge (row=1 / col=1) and extends to the opposite inside edge.
-const N_COL_START = 0;
-const N_COL_END   = GC.GRID_COLS;   // exclusive in the loop below
-const W_ROW_START = 0;
-const W_ROW_END   = GC.GRID_ROWS;
+// Range of wall segments to paint along each visible wall.
+//
+// Phase 3.2 — fixes the NW corner "spike" that was visible in the
+// screenshot. Each wall stood at the inside edge (world row=1 for N,
+// world col=1 for W), but the loop covered every wall tile from col=0
+// (or row=0) to GRID_COLS-1 (or GRID_ROWS-1). The col=0 segment of the
+// north wall extended LEFT-AND-UP of the NW corner; the row=0 segment
+// of the west wall extended RIGHT-AND-UP. Both extensions had brass cap
+// rails that crossed above the corner and read as a small spike.
+//
+// Cutting the ranges to [1, GRID_COLS-2] / [1, GRID_ROWS-2] terminates
+// each wall exactly at the inside corner (worldToScreen(1, 1)) — no
+// extension past it. The walls' brass cap rails now meet at the corner
+// instead of crossing above it.
+const N_COL_START = 1;
+const N_COL_END   = GC.GRID_COLS - 1;   // exclusive in the loop below
+const W_ROW_START = 1;
+const W_ROW_END   = GC.GRID_ROWS - 1;
 
 interface Vec2 { x: number; y: number; }
 
