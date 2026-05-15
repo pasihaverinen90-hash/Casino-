@@ -1,26 +1,29 @@
-// PresentationSceneV2.ts — Phase 1 scaffold scene for the Presentation V2
-// renderer.
+// PresentationSceneV2.ts — Presentation V2 scene.
 //
-// Boots behind ?renderer=v2 (see state/RendererFlag.ts and main.ts). Paints
-// only a dark backdrop and a small "Presentation V2 Scaffold" label so the
-// canvas visibly proves V2 is active.
+// Phase 2 scope:
+//   • dark backdrop
+//   • projected casino floor via FloorRendererV2
+//   • pan + zoom camera via CameraControllerV2
+//   • small dev label so it's obvious V2 is active
 //
-// Intentionally NOT implemented yet:
-//   • floor / wall / object / guest rendering
-//   • placement input or ghost
-//   • camera pan/zoom
-//   • any gameState subscription
+// Still intentionally NOT implemented:
+//   • walls (Phase 3) — WALL tiles paint as a flat dark placeholder for now
+//   • objects, guests, placement, ghost, demolish, V2 UI
 //
-// Later phases will replace this body with the real layered renderer. The
-// HTML UI (TopHUD, BottomBar, BuildPanel, etc.) still mounts above this
-// scene exactly as it does over V1, because UI panels read gameState
-// directly and are scene-independent.
+// Subscribes to gameState 'state_changed' so the floor repaints if tiles
+// ever change (today they don't; the hook is there for correctness as
+// future phases lean on it). Pan/zoom triggers repaint via the camera's
+// onChange callback — no per-frame redraw, no animation.
 import Phaser from 'phaser';
-import { BG_DARK, UI_GOLD, UI_GOLD_DIM } from '../render/PaletteV2';
+import { gameState } from '../../state/GameState';
+import { BG_DARK, UI_GOLD_DIM } from '../render/PaletteV2';
+import { drawFloor } from '../render/FloorRendererV2';
+import { CameraControllerV2 } from './CameraControllerV2';
 
 export class PresentationSceneV2 extends Phaser.Scene {
-  private titleText!   : Phaser.GameObjects.Text;
-  private subtitleText!: Phaser.GameObjects.Text;
+  private gfxFloor!  : Phaser.GameObjects.Graphics;
+  private camera!    : CameraControllerV2;
+  private debugLabel!: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: 'PresentationSceneV2' });
@@ -29,34 +32,40 @@ export class PresentationSceneV2 extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBackgroundColor(BG_DARK);
 
-    this.titleText = this.add.text(0, 0, 'Presentation V2 Scaffold', {
-      fontFamily: 'monospace',
-      fontSize  : '22px',
-      color     : _hex(UI_GOLD),
-    }).setOrigin(0.5).setDepth(1);
+    this.gfxFloor = this.add.graphics();
 
-    this.subtitleText = this.add.text(0, 0, 'Phase 1 · renderer=v2', {
+    this.camera = new CameraControllerV2(this, () => this._redraw());
+
+    // Dev label — small, top-left, semi-transparent so it doesn't compete
+    // with the floor. Removed when V2 UI lands.
+    this.debugLabel = this.add.text(8, 4, 'Presentation V2 · Floor + Camera', {
       fontFamily: 'monospace',
-      fontSize  : '13px',
+      fontSize  : '11px',
       color     : _hex(UI_GOLD_DIM),
-    }).setOrigin(0.5).setDepth(1);
+    }).setDepth(100).setAlpha(0.7);
 
-    this._reposition();
-    this.scale.on('resize', () => this._reposition());
+    gameState.on('state_changed', () => this._redraw());
+    this.scale.on('resize', () => {
+      this.camera.onResize();
+      this._redraw();
+    });
+
+    this._redraw();
   }
 
-  // Centre labels on the canvas. HTML UI overlays the top/bottom strips, so
-  // we anchor on the geometric centre and accept partial overlap — the label
-  // is a developer cue, not a final layout.
-  private _reposition(): void {
-    const w = this.scale.width;
-    const h = this.scale.height;
-    this.titleText.setPosition(w / 2, h / 2 - 14);
-    this.subtitleText.setPosition(w / 2, h / 2 + 14);
+  private _redraw(): void {
+    this.gfxFloor.clear();
+    drawFloor(
+      this.gfxFloor,
+      gameState.tiles,
+      this.camera.offsetX,
+      this.camera.offsetY,
+      this.camera.tileSize,
+    );
   }
 }
 
-// 0xRRGGBB → '#rrggbb' for Phaser Text style (which expects a CSS string).
+// 0xRRGGBB → '#rrggbb' for Phaser Text style.
 function _hex(n: number): string {
   return '#' + n.toString(16).padStart(6, '0');
 }
