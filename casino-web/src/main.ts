@@ -1,6 +1,8 @@
 // main.ts — entry point. Bootstraps Phaser and all HTML UI components.
 import Phaser from 'phaser';
 import { GridScene } from './game/GridScene';
+import { PresentationSceneV2 } from './v2/scene/PresentationSceneV2';
+import { getRendererId } from './state/RendererFlag';
 import { uiBus }       from './events/UIBus';
 import { gameState }   from './state/GameState';
 import { time }       from './state/TimeController';
@@ -24,13 +26,23 @@ uiRoot.id    = 'ui-root';
 appEl.appendChild(uiRoot);
 
 // ── Phaser game (renders the grid canvas, fills the window) ───────────────
+// Renderer selection: Phase 1 wires both V1 (GridScene) and V2
+// (PresentationSceneV2) into the scene list. Phaser auto-starts the first
+// scene only, so putting the selected renderer first chooses which one
+// boots without altering the other's registration. Default stays 'v1';
+// ?renderer=v2 in the URL forces V2 (see state/RendererFlag.ts).
+const _rendererId = getRendererId();
+const _sceneList  = _rendererId === 'v2'
+  ? [PresentationSceneV2, GridScene]
+  : [GridScene, PresentationSceneV2];
+
 new Phaser.Game({
   type      : Phaser.AUTO,
   width     : window.innerWidth,
   height    : window.innerHeight,
   parent    : 'app',
   backgroundColor: '#0a0c14',
-  scene     : [GridScene],
+  scene     : _sceneList,
   input     : { touch: true, mouse: true },
   scale     : {
     mode      : Phaser.Scale.RESIZE,
