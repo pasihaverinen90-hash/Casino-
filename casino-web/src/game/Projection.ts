@@ -16,14 +16,15 @@
 // requires editing one place.
 
 // Toggle the prototype. With false, GridScene and GuestSprites fall
-// back to their existing top-down code paths and produce identical
-// pixels to the V2 baseline.
+// back to their existing top-down code paths — the stable V1 baseline.
 //
-// TEMPORARILY ENABLED IN PROD for an in-the-wild evaluation of the
-// oblique direction. Object art recipes are still axis-aligned, so
-// expect "top-down sprites on a tilted floor" until P3 ships angled
-// per-object recipes. Flip back to false to restore the V2 look.
-export const USE_OBLIQUE_PROTOTYPE = true;
+// DISABLED. This shear-oblique experiment is retired. It produced
+// alignment drift (seat markers, wall services, placement ghost) because
+// it tried to bend a top-down renderer toward a 2.5D look. The real
+// 2.5D renderer is being built fresh under casino-web/src/v2/ using
+// shallow dimetric projection with a separate vertical axis. Keep this
+// flag false until the V1 renderer is retired and this file is deleted.
+export const USE_OBLIQUE_PROTOTYPE = false;
 
 // Horizontal shear per row, in tile widths. 0.5 = each successive row
 // shifts right by half a tile.
