@@ -69,7 +69,7 @@ export function drawDealerBand(
   }
 
   const quad: Proj.Vec2[] = [a, b, c, d].map(p => {
-    const s = Proj.liftPoint(
+    const s = Proj.liftObjectPoint(
       Proj.worldToScreen(p.c, p.r, ts), rimHeightTiles, ts,
     );
     return { x: s.x + baseX, y: s.y + baseY };
@@ -95,7 +95,7 @@ export function drawTableCenterpiece(
   rimHeightTiles: number,
   isLarge: boolean,
 ): void {
-  const center = Proj.liftPoint(
+  const center = Proj.liftObjectPoint(
     Proj.footprintCenter(obj.col, obj.row, obj.w, obj.h, ts),
     rimHeightTiles, ts,
   );

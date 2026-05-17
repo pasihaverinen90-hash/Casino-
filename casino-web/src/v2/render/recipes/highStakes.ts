@@ -50,7 +50,7 @@ export function drawHighStakes(ctx: RecipeContext): void {
   g.strokePoints(felt, true);
 
   // Centrepiece: large brass disk + dark ring + inner pip.
-  const centre = Proj.liftPoint(
+  const centre = Proj.liftObjectPoint(
     Proj.footprintCenter(obj.col, obj.row, obj.w, obj.h, ts),
     HIGH_STAKES_RIM_HEIGHT_TILES, ts,
   );

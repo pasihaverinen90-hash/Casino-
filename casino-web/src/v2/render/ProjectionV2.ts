@@ -2,12 +2,15 @@
 // renderer.
 //
 // Shallow dimetric: a +col grid step on screen is (+ts, +ts*SHEAR_Y_RATIO);
-// a +row grid step is (-ts, +ts*SHEAR_Y_RATIO). The vertical axis used by
-// walls and tall objects is intentionally separate from the floor projection
-// — it is wallVerticalOffset(ts) screen-pixels per "tile of height", applied
-// via liftPoint(). Keeping height off the floor axes is what lets a single
-// recipe paint into the same projected footprint at any elevation without
-// the alignment drift the V1 shear prototype produced.
+// a +row grid step is (-ts, +ts*SHEAR_Y_RATIO). The vertical axis is
+// separate from the floor projection so wall/object recipes can paint
+// at any elevation without alignment drift.
+//
+// Two height systems live here, intentionally decoupled (see Phase 5.3):
+//   • Walls         — wallVerticalOffset(ts) / liftWallPoint
+//   • Floor objects — objectVerticalOffset(ts, h) / liftObjectPoint
+// The legacy liftPoint helper remains as a wall-based alias for
+// backwards compatibility but is no longer called by V2 internals.
 //
 // screenToWorld is the algebraic inverse of worldToScreen, so
 // screenToWorld(worldToScreen(c, r, ts), ts) round-trips to (c, r) within
@@ -30,11 +33,10 @@ export const SHEAR_Y_RATIO     = 0.42;
 // to occupy only the lower / middle portion while plain wall remains
 // visible above them — the Hoyle Casino Empire shape.
 //
-// Slot / table heights are intentionally left to their own per-recipe
-// constants. The liftPoint helper currently scales those by
-// wallVerticalOffset too (a historical quirk), so this bump grows
-// floor objects proportionally; wall-vs-floor-object scale stays
-// constant. Adjusting that coupling would need Phase 5.3.
+// Slot / table heights are governed by their own per-recipe constants
+// (SLOT_CABINET_HEIGHT_TILES, *_RIM_HEIGHT_TILES, etc.) and flow
+// through liftObjectPoint — they do NOT scale with WALL_HEIGHT_TILES.
+// Wall and floor-object vertical systems were decoupled in Phase 5.3.
 export const WALL_HEIGHT_TILES = 2.2;
 
 export interface Vec2 {
@@ -125,21 +127,69 @@ export function depthKey(col: number, row: number, w: number, h: number): number
   return (col + row) + (w + h) * 0.5;
 }
 
-// Per-tile vertical screen-pixel offset for "one tile of height". The
-// canonical wall/object height multiplier — every recipe and the wall
-// renderer must derive vertical extrusion from this, never from ts directly.
+// ── Height systems ───────────────────────────────────────────────────────
+//
+// Two independent vertical axes:
+//
+//   1. WALLS  — wallVerticalOffset(ts) = ts * WALL_HEIGHT_TILES.
+//      Used by WallRendererV2, wallShared (getWallSection top lift),
+//      and every wall-service recipe (via section.wallPx / facade
+//      helpers). The full wall span is ALWAYS this value; recipes
+//      that want only part of the wall use a FACADE_FRACTION.
+//
+//   2. FLOOR OBJECTS — objectVerticalOffset(ts, h) = ts * h.
+//      Used by slot, small/large table, keno, high-stakes via
+//      drawHelpers.liftQuad → liftObjectPoint. Per-recipe height
+//      constants (SLOT_CABINET_HEIGHT_TILES, *_RIM_HEIGHT_TILES,
+//      KENO_DISPLAY_HEIGHT_TILES, etc.) name "tiles" and now
+//      multiply by ts directly — they no longer ride the wall
+//      height. Tuning WALL_HEIGHT_TILES leaves floor objects alone.
+//
+// Wall and object lifts are deliberately separate so a future wall
+// retune cannot accidentally scale slot cabinets / table rims, and
+// vice versa.
+
+// Wall-only vertical offset. One "wall height" worth of screen pixels.
 export function wallVerticalOffset(ts: number): number {
   return ts * WALL_HEIGHT_TILES;
 }
 
-// Lift a projected point upward by `heightInTiles` of wall height. Used by
-// recipes that need a top-face anchor from a floor-level anchor without
-// re-deriving the offset.
-export function liftPoint(p: Vec2, heightInTiles: number, ts: number): Vec2 {
+// Floor-object vertical offset. heightInTiles is exactly that — tile
+// units. ts * h. No coupling to wall height.
+export function objectVerticalOffset(ts: number, heightInTiles: number): number {
+  return ts * heightInTiles;
+}
+
+// Lift a projected point by a floor-object height (tile units). The
+// canonical primitive for slot cabinets, table rims, keno displays, etc.
+export function liftObjectPoint(p: Vec2, heightInTiles: number, ts: number): Vec2 {
   return {
     x: p.x,
-    y: p.y - heightInTiles * wallVerticalOffset(ts),
+    y: p.y - objectVerticalOffset(ts, heightInTiles),
   };
+}
+
+// Lift a projected point by a fraction of wall height. Used by
+// wall-service recipes that want a wall-relative anchor (e.g. "60 % up
+// the wall"). For absolute wall heights use 1.0.
+export function liftWallPoint(p: Vec2, heightInWallUnits: number, ts: number): Vec2 {
+  return {
+    x: p.x,
+    y: p.y - heightInWallUnits * wallVerticalOffset(ts),
+  };
+}
+
+// LEGACY — Phase 0..5 helper that multiplied heightInTiles by
+// wallVerticalOffset(ts). This coupling caused floor objects to scale
+// with wall height. Kept here so external callers (tests, scratch
+// code) don't break, but new code should prefer liftObjectPoint
+// (for floor objects) or liftWallPoint (for wall-relative anchors).
+//
+// All V2 internal callers were migrated off liftPoint in Phase 5.3 —
+// drawHelpers.liftQuad, tableShared, and highStakes now use
+// liftObjectPoint.
+export function liftPoint(p: Vec2, heightInWallUnits: number, ts: number): Vec2 {
+  return liftWallPoint(p, heightInWallUnits, ts);
 }
 
 // Axis-aligned bounding box of the entire projected grid, including

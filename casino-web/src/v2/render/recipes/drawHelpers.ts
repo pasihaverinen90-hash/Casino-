@@ -15,13 +15,19 @@ export function offsetQuad(
   return quad.map(p => ({ x: p.x + dx, y: p.y + dy }));
 }
 
-// Lift every vertex of a quad upward by heightInTiles via the central
-// ProjectionV2.liftPoint helper — never multiply by ts directly.
+// Lift every vertex of a quad upward by heightInTiles. Used by FLOOR-
+// OBJECT recipes only (slot cabinets, table rims, keno display, etc.).
+// Calls liftObjectPoint so heightInTiles is genuinely tile units and
+// the lift is decoupled from WALL_HEIGHT_TILES.
+//
+// Wall-service recipes should NOT use liftQuad — they paint via
+// wallShared (section.wallPx / drawFacadeRect) which routes through
+// wallVerticalOffset(ts) instead.
 export function liftQuad(
   quad: readonly Proj.Vec2[],
   heightInTiles: number, ts: number,
 ): Proj.Vec2[] {
-  return quad.map(p => Proj.liftPoint(p, heightInTiles, ts));
+  return quad.map(p => Proj.liftObjectPoint(p, heightInTiles, ts));
 }
 
 // Fill a closed polygon defined by `quad` with the given colour / alpha.
