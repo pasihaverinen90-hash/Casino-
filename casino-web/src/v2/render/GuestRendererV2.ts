@@ -36,6 +36,10 @@ export function drawGuests(
   const lean   = Math.max(0.6, ts * 0.07);
 
   for (const guest of guests) {
+    // Guests hidden by the controller (e.g. mid-WC/Bar/Buffet service
+    // dwell) are skipped entirely — they still exist in the controller
+    // and re-appear at their visible-use anchor on exit.
+    if (guest.hidden) continue;
     const p  = Proj.worldToScreen(guest.col, guest.row, ts);
     const x  = p.x + baseX;
     const y  = p.y + baseY;

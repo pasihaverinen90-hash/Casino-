@@ -31,8 +31,13 @@ export interface GuestVisualV2 {
   // Walk-bob phase, advanced only while moving — keeps a paused
   // crowd visually still.
   phase       : number;
-  state       : 'walking' | 'idle' | 'leaving';
+  state       : 'walking' | 'idle' | 'leaving' | 'service';
   targetObjId?: string;
+  // V2 visual-only: when true the renderer skips this guest. Set during
+  // the 'inside' phase of WC/Bar/Buffet service usage so the guest
+  // appears to disappear into the facade. Position is unchanged while
+  // hidden; the guest reappears at its visible-use anchor on exit.
+  hidden?     : boolean;
 }
 
 interface InternalGuest extends GuestVisualV2 {
@@ -58,6 +63,30 @@ interface InternalGuest extends GuestVisualV2 {
   // so two V2 guests don't aim at the same chair. Cleared when the
   // guest re-picks or leaves.
   reservedKey : string | null;
+
+  // ── Wall-service visual sub-phase ──────────────────────────────────────
+  // Driven entirely by the controller; renderer reads only `hidden`.
+  //   'none'     — not currently using a wall service.
+  //   'entering' — linearly moving from the interaction tile centre
+  //                toward visibleUseAnchor (closer to the facade).
+  //   'inside'   — dwell timer counting down. hidden=true for WC/Bar/
+  //                Buffet so the guest appears to have entered the
+  //                facade; hidden=false for ATM/Cashier/Sportsbook
+  //                (visible standing-at-counter dwell).
+  //   'exiting'  — linearly moving from visibleUseAnchor back to the
+  //                interaction tile centre, then _chooseNextLeg.
+  servicePhase       : 'none' | 'entering' | 'inside' | 'exiting';
+  // Position the guest stands at while visible during service use —
+  // biased toward the wall facade (north-of-tile for N wall, west-of-
+  // tile for W wall). Null when not in service flow.
+  visibleUseAnchor   : { col: number; row: number } | null;
+  // Where the guest returns to before leaving service (the original
+  // route-end interaction tile centre). Routing resumes from here.
+  interactionAnchor  : { col: number; row: number } | null;
+  // Game-seconds remaining for the current servicePhase. Used during
+  // 'inside' to time the dwell; entering / exiting use distance-based
+  // termination instead.
+  phaseTimer         : number;
 }
 
 // Visible-crowd sizing — mirrors V1's MIN/MAX/ratio. Caps at 36 so
@@ -78,6 +107,23 @@ const DWELL_FALLBACK: [number, number] = [3, 6];
 
 // Distance (in tile units) at which a guest "arrives" at a target.
 const ARRIVE_EPSILON = 0.05;
+
+// ── Wall-service visual tuning ────────────────────────────────────────────
+// Tiles biased toward the wall when a guest stands at a wall service. The
+// guest still routes to the same interaction tile (logical, unchanged) —
+// the visual position is offset from the tile centre. Bias is fractional
+// tile units; 0.35 puts the guest just inside the north / west edge of
+// the interaction tile, in front of the painted facade.
+const WALL_SERVICE_BIAS = 0.35;
+
+// Set of wall services that hide guests during the inside dwell (the
+// guest visually enters and disappears). Other wall services (ATM,
+// Cashier, Sportsbook) stay visible at the wall-biased anchor.
+function _isHidingService(type: GC.ObjType): boolean {
+  return type === GC.ObjType.WC
+      || type === GC.ObjType.BAR
+      || type === GC.ObjType.BUFFET;
+}
 
 export class GuestVisualControllerV2 {
   private guests        : InternalGuest[] = [];
@@ -133,6 +179,19 @@ export class GuestVisualControllerV2 {
         this._releaseReservation(g);
         g.targetObjId = undefined;
         g.curKind     = null;
+        // If the guest was mid-service, snap back to a visible position
+        // and clear the service flow so they don't stay hidden forever.
+        if (g.state === 'service') {
+          const v = g.visibleUseAnchor;
+          if (v) {
+            g.col = v.col;
+            g.row = v.row;
+          }
+          g.servicePhase      = 'none';
+          g.visibleUseAnchor  = null;
+          g.interactionAnchor = null;
+          g.hidden            = false;
+        }
         // Lift the guest off the now-removed target tile and head for
         // a fresh leg next frame.
         g.state = 'idle';
@@ -199,6 +258,11 @@ export class GuestVisualControllerV2 {
       stuck       : 0,
       route       : findRoute(gameState.tiles, exit.col, exit.row, tCol, tRow) ?? [],
       reservedKey : key,
+      servicePhase      : 'none',
+      visibleUseAnchor  : null,
+      interactionAnchor : null,
+      phaseTimer        : 0,
+      hidden            : false,
     };
   }
 
@@ -248,6 +312,10 @@ export class GuestVisualControllerV2 {
     if (g.state === 'idle') {
       g.idleSec -= dt;
       if (g.idleSec <= 0) this._chooseNextLeg(g);
+      return;
+    }
+    if (g.state === 'service') {
+      this._stepServicePhase(g, dt);
       return;
     }
 
@@ -368,11 +436,141 @@ export class GuestVisualControllerV2 {
   }
 
   private _onArrive(g: InternalGuest): void {
-    if (g.state === 'walking') {
-      g.state   = 'idle';
-      g.idleSec = this._dwellFor(g.curKind);
+    if (g.state !== 'walking') {
+      // 'leaving' arrival is handled by the despawn check in update().
+      return;
     }
-    // 'leaving' arrival is handled by the despawn check in update().
+
+    // If the target is a wall service, branch into the visual service
+    // flow (enter → inside → exit) instead of the simple floor-object
+    // 'idle' dwell. The interaction tile / route are unchanged.
+    if (g.targetObjId != null && g.curKind != null) {
+      const obj = gameState.placedObjs.find(o => o.id === g.targetObjId);
+      if (obj && GC.getDef(obj.type).is_wall) {
+        const anchors = this._computeWallServiceAnchors(obj, g.tCol, g.tRow);
+        if (anchors) {
+          g.state             = 'service';
+          g.servicePhase      = 'entering';
+          g.visibleUseAnchor  = anchors.visible;
+          g.interactionAnchor = { col: g.tCol, row: g.tRow };
+          g.hidden            = false;
+          return;
+        }
+      }
+    }
+
+    // Floor object (or wall-service with an unknown wall side — safety
+    // fallback): plain idle dwell at the interaction tile.
+    g.state   = 'idle';
+    g.idleSec = this._dwellFor(g.curKind);
+  }
+
+  // Compute the wall-biased visible anchor for a wall service.
+  // The interaction tile (g.tCol, g.tRow) is the door-inward FLOOR tile
+  // immediately in front of the facade. Biasing toward the wall plane
+  // (north for top, west for left) by WALL_SERVICE_BIAS tiles puts the
+  // guest visibly closer to the facade than the tile centre.
+  private _computeWallServiceAnchors(
+    obj: GC.PlacedObj, tCol: number, tRow: number,
+  ): { visible: { col: number; row: number } } | null {
+    if (!GC.getDef(obj.type).is_wall) return null;
+    const wallDir = PV.detectWallDir(
+      obj.col, obj.row, obj.w, obj.h, gameState.tiles,
+    );
+    if (wallDir === 'top') {
+      return { visible: { col: tCol, row: tRow - WALL_SERVICE_BIAS } };
+    }
+    if (wallDir === 'left') {
+      return { visible: { col: tCol - WALL_SERVICE_BIAS, row: tRow } };
+    }
+    // Phase 3 placement rule rejects S/E, so this is a safety fallback.
+    return null;
+  }
+
+  // Visual service flow. Owns the entering → inside → exiting sub-state
+  // for wall-service users. Logical target tile is unchanged; this only
+  // tweaks visual position and the `hidden` flag.
+  private _stepServicePhase(g: InternalGuest, dt: number): void {
+    const v = g.visibleUseAnchor;
+    const a = g.interactionAnchor;
+    if (!v || !a) {
+      // Anchors got cleared (e.g. target vanished). Bail to a fresh leg.
+      g.servicePhase      = 'none';
+      g.visibleUseAnchor  = null;
+      g.interactionAnchor = null;
+      g.hidden            = false;
+      this._chooseNextLeg(g);
+      return;
+    }
+
+    if (g.servicePhase === 'entering') {
+      if (this._moveLinear(g, v.col, v.row, dt)) {
+        const hides = g.curKind != null && _isHidingService(g.curKind);
+        g.servicePhase = 'inside';
+        g.hidden       = hides;
+        g.phaseTimer   = this._dwellFor(g.curKind);
+      }
+      return;
+    }
+
+    if (g.servicePhase === 'inside') {
+      g.phaseTimer -= dt;
+      if (g.phaseTimer <= 0) {
+        // Reappear at the visible anchor (for hidden services) before
+        // the exit walk. Non-hidden services were already visible
+        // standing there.
+        if (g.hidden) {
+          g.col    = v.col;
+          g.row    = v.row;
+          g.hidden = false;
+        }
+        g.servicePhase = 'exiting';
+      }
+      return;
+    }
+
+    if (g.servicePhase === 'exiting') {
+      if (this._moveLinear(g, a.col, a.row, dt)) {
+        g.servicePhase      = 'none';
+        g.visibleUseAnchor  = null;
+        g.interactionAnchor = null;
+        g.hidden            = false;
+        this._chooseNextLeg(g);
+      }
+      return;
+    }
+  }
+
+  // Sub-tile linear move toward (targetCol, targetRow). Returns true on
+  // arrival (within one step). Used by the service flow's entering /
+  // exiting phases — bypasses the BFS route since the source and target
+  // are both inside the interaction tile.
+  private _moveLinear(
+    g: InternalGuest,
+    targetCol: number, targetRow: number,
+    dt: number,
+  ): boolean {
+    const dx   = targetCol - g.col;
+    const dy   = targetRow - g.row;
+    const dist = Math.hypot(dx, dy);
+    const step = WALK_TILES_PER_SEC * dt;
+    if (dist <= step) {
+      g.col = targetCol;
+      g.row = targetRow;
+      if (dist > 1e-4) {
+        g.dirX = dx / dist;
+        g.dirY = dy / dist;
+      }
+      return true;
+    }
+    const ux  = dx / dist;
+    const uy  = dy / dist;
+    g.col   += ux * step;
+    g.row   += uy * step;
+    g.dirX   = ux;
+    g.dirY   = uy;
+    g.phase += dt * BOB_RATE_RAD;
+    return false;
   }
 
   private _dwellFor(kind: GC.ObjType | null): number {
