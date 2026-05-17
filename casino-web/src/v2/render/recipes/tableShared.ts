@@ -111,27 +111,62 @@ export function drawTableCenterpiece(
 
   const variant = obj.variant ?? '';
   if (variant === 'roulette') {
-    // Inner dark disk + bright spindle pip → "wheel".
-    g.fillStyle(SHADOW, alpha * 0.7);
-    g.fillCircle(cx, cy, r * 0.62);
+    // Wheel: dark disk + four cardinal spoke marks + bright spindle.
+    g.fillStyle(SHADOW, alpha * 0.75);
+    g.fillCircle(cx, cy, r * 0.66);
+    if (ts >= 18) {
+      g.lineStyle(1, BRASS_HIGHLIGHT, alpha * 0.9);
+      const sk = r * 0.55;
+      g.beginPath();
+      g.moveTo(cx - sk, cy); g.lineTo(cx + sk, cy);
+      g.moveTo(cx, cy - sk); g.lineTo(cx, cy + sk);
+      g.strokePath();
+    }
     g.fillStyle(BRASS_HIGHLIGHT, alpha);
-    g.fillCircle(cx, cy, Math.max(1, r * 0.18));
+    g.fillCircle(cx, cy, Math.max(1, r * 0.20));
   } else if (variant === 'craps') {
-    // Two small white "dice" squares.
-    g.fillStyle(0xffffff, alpha * 0.85);
-    const ds = Math.max(2, r * 0.36);
-    g.fillRect(cx - ds - 1, cy - ds / 2, ds, ds);
-    g.fillRect(cx + 1,      cy - ds / 2, ds, ds);
+    // Dark pit stripe behind two small white dice.
+    g.fillStyle(SHADOW, alpha * 0.75);
+    g.fillRect(cx - r * 0.95, cy - r * 0.40, r * 1.90, r * 0.80);
+    const ds = Math.max(3, r * 0.42);
+    g.fillStyle(0xffffff, alpha * 0.90);
+    g.fillRect(cx - ds - 2, cy - ds / 2, ds, ds);
+    g.fillRect(cx + 2,      cy - ds / 2, ds, ds);
+    // Two pip dots so they read as dice rather than blank cubes.
+    if (ts >= 18) {
+      g.fillStyle(SHADOW, alpha);
+      const pr = Math.max(1, ds * 0.15);
+      g.fillCircle(cx - ds - 2 + ds * 0.5, cy, pr);
+      g.fillCircle(cx + 2     + ds * 0.5, cy, pr);
+    }
   } else if (variant === 'poker') {
-    // Concentric brass ring → "chip stack" feel.
+    // Chip-stack motif: concentric brass ring + a small offset stack.
     g.lineStyle(1, BRASS_HIGHLIGHT, alpha);
-    g.strokeCircle(cx, cy, r * 0.65);
+    g.strokeCircle(cx, cy, r * 0.66);
+    if (ts >= 18) {
+      const stackR = Math.max(2, r * 0.30);
+      const sx = cx + r * 0.42;
+      // Three thin stripes suggesting a stack of chips.
+      g.fillStyle(0xffffff, alpha * 0.85);
+      g.fillRect(sx - stackR, cy - stackR * 0.10, stackR * 2, Math.max(1, stackR * 0.18));
+      g.fillRect(sx - stackR, cy - stackR * 0.35, stackR * 2, Math.max(1, stackR * 0.18));
+      g.fillStyle(SHADOW, alpha * 0.85);
+      g.fillRect(sx - stackR, cy + stackR * 0.16, stackR * 2, Math.max(1, stackR * 0.18));
+    }
   } else if (variant === 'blackjack') {
-    // Brass arc across the centre → "shoe" direction hint.
+    // Brass arc ("shoe" cue) + small card rectangle inside.
     g.lineStyle(2, BRASS_HIGHLIGHT, alpha * 0.9);
     g.beginPath();
-    g.arc(cx, cy, r * 0.7, Math.PI * 0.15, Math.PI * 0.85);
+    g.arc(cx, cy, r * 0.74, Math.PI * 0.15, Math.PI * 0.85);
     g.strokePath();
+    if (ts >= 18) {
+      const cardW = Math.max(3, r * 0.55);
+      const cardH = Math.max(4, r * 0.40);
+      g.fillStyle(0xffffff, alpha * 0.85);
+      g.fillRect(cx - cardW / 2, cy + r * 0.08, cardW, cardH);
+      g.fillStyle(SHADOW, alpha);
+      g.fillRect(cx - cardW / 2, cy + r * 0.08, cardW, 1);
+    }
   }
   // Other variants (baccarat, high-roller, etc.) keep the default disk.
 }

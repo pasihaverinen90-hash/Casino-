@@ -27,17 +27,18 @@ export const SHEAR_Y_RATIO     = 0.42;
 // extent from wallVerticalOffset(ts) so a tuning pass only touches this
 // one constant.
 //
-// 2.2 — Phase 5.2 bump from 1.6. Walls now read as tall casino-room
-// surfaces (≈3.5–4.5 m at typical tile sizes) rather than knee-height
-// rims, giving wall-service facades (WC, Bar, Sportsbook, etc.) room
-// to occupy only the lower / middle portion while plain wall remains
-// visible above them — the Hoyle Casino Empire shape.
+// 3.0 — Phase 5.4 bump from 2.2. Walls represent exterior room walls;
+// nothing exists behind them, so a generous height is fine and reads
+// as a real casino room rather than a low rim. Wall-service facades
+// still occupy only the lower 55–75 % of this height (Phase 5.2
+// FACADE_FRACTIONs), leaving the upper wall as plain architecture
+// for future signs / lights.
 //
 // Slot / table heights are governed by their own per-recipe constants
 // (SLOT_CABINET_HEIGHT_TILES, *_RIM_HEIGHT_TILES, etc.) and flow
 // through liftObjectPoint — they do NOT scale with WALL_HEIGHT_TILES.
 // Wall and floor-object vertical systems were decoupled in Phase 5.3.
-export const WALL_HEIGHT_TILES = 2.2;
+export const WALL_HEIGHT_TILES = 3.0;
 
 export interface Vec2 {
   x: number;

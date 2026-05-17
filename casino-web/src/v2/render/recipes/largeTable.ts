@@ -16,8 +16,9 @@ import {
 
 // Per-recipe rim height. Slightly taller than the small table so the
 // premium tables feel more substantial without breaking the felt-on-top
-// silhouette convention.
-const LARGE_TABLE_RIM_HEIGHT_TILES = 0.20;
+// silhouette convention. Phase 5.4: 0.20 → 0.30 to give the larger
+// table noticeably more physical thickness vs. the small table.
+const LARGE_TABLE_RIM_HEIGHT_TILES = 0.30;
 
 export function drawLargeTable(ctx: RecipeContext): void {
   const { g, obj, baseX, baseY, ts, alpha } = ctx;

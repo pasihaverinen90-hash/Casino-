@@ -16,7 +16,10 @@ import {
   drawSoftShadow, drawStoolAtTileCenter,
 } from './drawHelpers';
 
-const HIGH_STAKES_RIM_HEIGHT_TILES = 0.25;
+// Phase 5.4 — taller rim than regular large tables so the premium
+// silhouette is unmistakable. Centrepiece + corner studs still carry
+// the visual differentiation beyond just height.
+const HIGH_STAKES_RIM_HEIGHT_TILES = 0.32;
 
 export function drawHighStakes(ctx: RecipeContext): void {
   const { g, obj, baseX, baseY, ts, alpha } = ctx;

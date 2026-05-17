@@ -15,15 +15,17 @@ import Phaser from 'phaser';
 import * as GC from '../../logic/GameConstants';
 import * as Proj from '../render/ProjectionV2';
 
-// Phase 3.2 — discrete Hoyle-style zoom levels. Continuous wheel zoom
-// felt too "engine-y" for a management sim; users now snap between
-// authored levels via wheel or the on-screen zoom buttons.
+// Discrete Hoyle-style zoom levels. Users snap between authored levels
+// via the wheel or the on-screen zoom buttons.
 //
-//   0 → 20  far overview
-//   1 → 24  medium overview
-//   2 → 28  default play zoom (matches Phases 1–3.1 default)
-//   3 → 36  close detail zoom
-export const ZOOM_LEVELS         = [20, 24, 28, 36] as const;
+// Phase 5.4 widened the spread so the far zoom shows the room shell
+// nearly end-to-end while the close zoom is meaningfully closer than
+// before:
+//   0 → 14  far overview     (was 20)
+//   1 → 22  medium overview  (was 24)
+//   2 → 28  default play zoom (matches Phases 1–5.3 default)
+//   3 → 46  close detail zoom (was 36)
+export const ZOOM_LEVELS         = [14, 22, 28, 46] as const;
 export const DEFAULT_ZOOM_INDEX  = 2;
 const DRAG_THRESHOLD_PX          = 6;
 

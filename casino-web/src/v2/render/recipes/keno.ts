@@ -15,7 +15,10 @@ import {
 } from './drawHelpers';
 import { feltColorForVariant, drawFeltRim } from './tableShared';
 
-const KENO_RIM_HEIGHT_TILES     = 0.20;
+// Phase 5.4 — slightly thicker rim so the keno table reads as
+// physical furniture; display height unchanged (still the dominant
+// silhouette cue vs. regular tables).
+const KENO_RIM_HEIGHT_TILES     = 0.28;
 const KENO_DISPLAY_HEIGHT_TILES = 0.50;
 
 export function drawKeno(ctx: RecipeContext): void {
