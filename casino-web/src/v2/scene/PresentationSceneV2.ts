@@ -16,12 +16,14 @@
 // onChange callback — no per-frame redraw, no animation.
 import Phaser from 'phaser';
 import { gameState } from '../../state/GameState';
+import { uiBus } from '../../events/UIBus';
 import { BG_DARK, UI_GOLD_DIM } from '../render/PaletteV2';
 import { drawFloor } from '../render/FloorRendererV2';
 import { drawWalls } from '../render/WallRendererV2';
 import { drawObjects } from '../render/ObjectRendererV2';
 import { CameraControllerV2 } from './CameraControllerV2';
 import { ZoomControlsV2 } from '../ui/ZoomControlsV2';
+import { V2PreviewNotice } from '../ui/V2PreviewNotice';
 
 export class PresentationSceneV2 extends Phaser.Scene {
   private gfxFloor!    : Phaser.GameObjects.Graphics;
@@ -30,6 +32,19 @@ export class PresentationSceneV2 extends Phaser.Scene {
   private camera!      : CameraControllerV2;
   private debugLabel!  : Phaser.GameObjects.Text;
   private zoomControls?: ZoomControlsV2;
+  private previewNotice?: V2PreviewNotice;
+  // Bound handler kept so we can uiBus.off() on shutdown without leaking
+  // listeners across renderer swaps.
+  private _onStartPlacement = (): void => {
+    // V2 has no placement input yet (Phase 4.1 guard). Toast the player
+    // and emit placement_cancelled so BuildPanel clears its highlight —
+    // otherwise a clicked item stays selected forever in V2.
+    gameState.emit(
+      'toast_requested',
+      'V2 preview does not support building yet. Use V1 to build for now.',
+    );
+    uiBus.emit('placement_cancelled');
+  };
 
   constructor() {
     super({ key: 'PresentationSceneV2' });
@@ -64,6 +79,16 @@ export class PresentationSceneV2 extends Phaser.Scene {
     // disabled/grey state after every camera change.
     this.zoomControls = new ZoomControlsV2(this.camera);
 
+    // V2-only preview notice (DOM overlay, top-centre). Temporary guard
+    // while V2 lacks placement input — delete this and its file in
+    // Phase 7 once V2 InputControllerV2 lands.
+    this.previewNotice = new V2PreviewNotice();
+
+    // Intercept start_placement so a BuildPanel click in V2 produces a
+    // clear toast instead of silent nothingness. Emitting placement_cancelled
+    // clears the BuildPanel highlight via its existing subscription.
+    uiBus.on('start_placement', this._onStartPlacement);
+
     gameState.on('state_changed', () => this._redraw());
     this.scale.on('resize', () => {
       this.camera.onResize();
@@ -76,6 +101,9 @@ export class PresentationSceneV2 extends Phaser.Scene {
       this.camera.destroy();
       this.zoomControls?.destroy();
       this.zoomControls = undefined;
+      this.previewNotice?.destroy();
+      this.previewNotice = undefined;
+      uiBus.off('start_placement', this._onStartPlacement);
     });
 
     this._redraw();
