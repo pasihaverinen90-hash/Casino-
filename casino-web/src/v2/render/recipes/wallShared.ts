@@ -10,11 +10,18 @@
 // All projection math goes through ProjectionV2. Vertical extrusion uses
 // wallVerticalOffset(ts) — no literal multipliers on ts for wall height.
 //
-// Section geometry follows the Phase 5 prompt: the bottom edge of the
-// section sits at the INSIDE edge of the object's footprint (the side
-// facing the room interior), not at the wall tile itself. So a N service
-// rises from `row + h`; a W service rises from `col + w`. The result
-// reads as a tall facade standing forward of the painted wall.
+// Section geometry: the bottom edge of the section sits on the SAME
+// projected plane as WallRendererV2's wall — for N this is world row=1
+// (i.e. obj.row, since N wall services have obj.row = 1 against the
+// north border); for W this is world col=1 (obj.col).
+//
+// Phase 5.1 fix: the original Phase 5 implementation anchored facades
+// at the *room-facing* edge (row + h / col + w), placing them one tile
+// in front of the wall — wall services looked like floating kiosks
+// instead of embedded facades. Anchoring at the wall-side edge
+// (obj.row / obj.col) makes the facade exactly overpaint the wall
+// segments WallRendererV2 paints for those tiles. When an object is
+// absent, the base wall paint shows through naturally.
 import Phaser from 'phaser';
 import * as GC from '../../../logic/GameConstants';
 import { detectWallDir } from '../../../logic/PlacementValidator';
@@ -58,11 +65,17 @@ export function getWallSection(
   let bottomAWorld: Proj.Vec2;
   let bottomBWorld: Proj.Vec2;
   if (side === 'N') {
-    bottomAWorld = Proj.worldToScreen(col,     row + h, ts);
-    bottomBWorld = Proj.worldToScreen(col + w, row + h, ts);
+    // North wall: facade bottom edge sits on the wall plane at world
+    // row = obj.row (matches WallRendererV2 painting at world row=1
+    // for the typical case). Span runs west-to-east along the wall.
+    bottomAWorld = Proj.worldToScreen(col,     row, ts);
+    bottomBWorld = Proj.worldToScreen(col + w, row, ts);
   } else {
-    bottomAWorld = Proj.worldToScreen(col + w, row + h, ts);
-    bottomBWorld = Proj.worldToScreen(col + w, row,     ts);
+    // West wall: facade bottom edge sits on the wall plane at world
+    // col = obj.col. Span runs front-to-back (larger row → smaller row)
+    // so bottomA stays the front (down-left on screen) corner.
+    bottomAWorld = Proj.worldToScreen(col, row + h, ts);
+    bottomBWorld = Proj.worldToScreen(col, row,     ts);
   }
 
   const bottomA: Proj.Vec2 = { x: bottomAWorld.x + baseX, y: bottomAWorld.y + baseY };
