@@ -10,7 +10,7 @@
 // the renderer query parameter and reloads via window.location.
 
 const NOTICE_PRIMARY   = 'V2 visual preview — build in V1 for now';
-const NOTICE_SECONDARY = 'Placement, ghost, guests and demolish are coming in later phases.';
+const NOTICE_SECONDARY = 'Placement, ghost and demolish are coming in later phases.';
 
 export class V2PreviewNotice {
   private container: HTMLElement;

@@ -21,18 +21,22 @@ import { BG_DARK, UI_GOLD_DIM } from '../render/PaletteV2';
 import { drawFloor } from '../render/FloorRendererV2';
 import { drawWalls } from '../render/WallRendererV2';
 import { drawObjects } from '../render/ObjectRendererV2';
+import { drawGuests } from '../render/GuestRendererV2';
 import { CameraControllerV2 } from './CameraControllerV2';
+import { GuestVisualControllerV2 } from '../guests/GuestVisualControllerV2';
 import { ZoomControlsV2 } from '../ui/ZoomControlsV2';
 import { V2PreviewNotice } from '../ui/V2PreviewNotice';
 
 export class PresentationSceneV2 extends Phaser.Scene {
-  private gfxFloor!    : Phaser.GameObjects.Graphics;
-  private gfxWalls!    : Phaser.GameObjects.Graphics;
-  private gfxObjects!  : Phaser.GameObjects.Graphics;
-  private camera!      : CameraControllerV2;
-  private debugLabel!  : Phaser.GameObjects.Text;
-  private zoomControls?: ZoomControlsV2;
-  private previewNotice?: V2PreviewNotice;
+  private gfxFloor!       : Phaser.GameObjects.Graphics;
+  private gfxWalls!       : Phaser.GameObjects.Graphics;
+  private gfxObjects!     : Phaser.GameObjects.Graphics;
+  private gfxGuests!      : Phaser.GameObjects.Graphics;
+  private camera!         : CameraControllerV2;
+  private guestController!: GuestVisualControllerV2;
+  private debugLabel!     : Phaser.GameObjects.Text;
+  private zoomControls?   : ZoomControlsV2;
+  private previewNotice?  : V2PreviewNotice;
   // Bound handler kept so we can uiBus.off() on shutdown without leaking
   // listeners across renderer swaps.
   private _onStartPlacement = (): void => {
@@ -63,8 +67,13 @@ export class PresentationSceneV2 extends Phaser.Scene {
     this.gfxFloor   = this.add.graphics().setDepth(0);
     this.gfxWalls   = this.add.graphics().setDepth(1);
     this.gfxObjects = this.add.graphics().setDepth(2);
+    // Guests get their own layer above objects so Phase 6 doesn't have
+    // to interleave per-guest/per-object depth. True interleaved depth
+    // sort is a Phase 11 polish item.
+    this.gfxGuests  = this.add.graphics().setDepth(3);
 
-    this.camera = new CameraControllerV2(this, () => this._redraw());
+    this.camera          = new CameraControllerV2(this, () => this._redraw());
+    this.guestController = new GuestVisualControllerV2();
 
     // Dev label — small, top-left, semi-transparent so it doesn't compete
     // with the floor. Removed when V2 UI lands.
@@ -89,7 +98,12 @@ export class PresentationSceneV2 extends Phaser.Scene {
     // clears the BuildPanel highlight via its existing subscription.
     uiBus.on('start_placement', this._onStartPlacement);
 
-    gameState.on('state_changed', () => this._redraw());
+    gameState.on('state_changed', () => {
+      this._redraw();
+      // A placement / demolish may have removed the object a guest is
+      // walking to. Let the controller re-pick on its next step.
+      this.guestController.refreshTargets();
+    });
     this.scale.on('resize', () => {
       this.camera.onResize();
       this._redraw();
@@ -99,6 +113,7 @@ export class PresentationSceneV2 extends Phaser.Scene {
     // re-boot (e.g. tab refresh into different renderer) doesn't leak.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.camera.destroy();
+      this.guestController.destroy();
       this.zoomControls?.destroy();
       this.zoomControls = undefined;
       this.previewNotice?.destroy();
@@ -107,6 +122,22 @@ export class PresentationSceneV2 extends Phaser.Scene {
     });
 
     this._redraw();
+  }
+
+  // Per-frame Phaser hook. Floor/walls/objects are event-driven (see
+  // _redraw), but guests need a fresh paint every frame as they move
+  // and as the camera pans / zooms. The guest layer is cheap (~36
+  // sprites max) so clearing + repainting every frame is fine.
+  update(_time: number, delta: number): void {
+    this.guestController.update(delta);
+    this.gfxGuests.clear();
+    drawGuests(
+      this.gfxGuests,
+      this.guestController.getGuests(),
+      this.camera.offsetX,
+      this.camera.offsetY,
+      this.camera.tileSize,
+    );
   }
 
   private _redraw(): void {
