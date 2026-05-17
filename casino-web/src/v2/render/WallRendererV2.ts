@@ -24,10 +24,10 @@
 //   • A small brass column at the NW corner unifies the two walls.
 //
 // Wall composition (bottom → top, fractions of wallVerticalOffset(ts)):
-//   • wainscoting band         — WOOD_MID            (~32%)
+//   • wainscoting band         — WOOD_MID            (~28%)
 //   • thin separator trim line — WALL_TRIM           (1px at ts ≥ 18)
 //   • upper panel              — WALL_PANEL          (remaining height)
-//   • brass cap rail           — BRASS               (6% of wall height, ≥1px)
+//   • brass cap rail           — BRASS               (4% of wall height, ≥1px)
 //   • brass highlight strip    — BRASS_HIGHLIGHT     (1px at ts ≥ 22)
 //
 // Per-tile vertical dividers are intentionally NOT drawn in Phase 3 — they
@@ -121,12 +121,14 @@ function _paintWallSegment(
 ): void {
   const wallPx       = Proj.wallVerticalOffset(ts);
   const detail       = ts >= 14;
-  // Phase 3.1 — slightly more generous wainscoting (32%) and brass cap
-  // (6%) for a more substantial premium look at the taller wall height.
-  const capPx        = Math.max(1, Math.round(wallPx * 0.06));
+  // Phase 5.2 retune for the taller (WALL_HEIGHT_TILES = 2.2) wall:
+  // wainscot drops to 28 % (lower band, ~25–30 % of wall as the room
+  // shell rule requires) and brass cap shrinks to 4 % so it stays a
+  // visible trim line without dominating the tall dark panel above it.
+  const capPx        = Math.max(1, Math.round(wallPx * 0.04));
   const separatorPx  = (detail && ts >= SEPARATOR_TS) ? 1 : 0;
   const highlightPx  = (detail && ts >= HIGHLIGHT_TS) ? 1 : 0;
-  const wainscotPx   = Math.round(wallPx * 0.32);
+  const wainscotPx   = Math.round(wallPx * 0.28);
   const panelPx      = wallPx - wainscotPx - capPx - separatorPx - highlightPx;
 
   const blS: Vec2 = { x: bl.x + baseX, y: bl.y + baseY };

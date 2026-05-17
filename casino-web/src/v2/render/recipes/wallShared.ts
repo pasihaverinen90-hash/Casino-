@@ -100,15 +100,25 @@ export function fillWallQuad(
   g.fillPoints([section.bottomA, section.bottomB, section.topB, section.topA], true);
 }
 
-// Dark wall-panel base. Wall recipes call this first so any leftover
-// WallRendererV2 wall behind the section is hidden by the recipe's own
-// composition.
+// Dark wall-panel base inside the recipe's facade band. Wall recipes
+// call this first so any leftover WallRendererV2 wall behind the
+// facade is hidden by the recipe's own composition.
+//
+// Phase 5.2: `facadeFraction` lets recipes void only the lower
+// facade slice (e.g. 0.6) instead of the whole wall section, leaving
+// the upper wall paint from WallRendererV2 visible above. Defaults to
+// 1.0 for callers that still want the full void.
 export function drawWallVoid(
   g: Phaser.GameObjects.Graphics,
   section: WallSection,
   alpha: number,
+  facadeFraction = 1.0,
 ): void {
-  fillWallQuad(g, section, WALL_PANEL, alpha);
+  if (facadeFraction >= 1.0) {
+    fillWallQuad(g, section, WALL_PANEL, alpha);
+    return;
+  }
+  drawInsetRectOnWall(g, section, 0, 1, 0, facadeFraction, WALL_PANEL, alpha);
 }
 
 // Horizontal band across the full section width, between two pixel
@@ -160,6 +170,49 @@ export function drawInsetRectOnWall(
   ];
   g.fillStyle(color, alpha);
   g.fillPoints(quad, true);
+}
+
+// ── Facade-fraction helpers ──────────────────────────────────────────────
+//
+// Wall services in Phase 5.2 don't fill the whole wall — they paint into
+// a lower facade slice (typically 50–80 % of wall height). These helpers
+// let recipes keep their internal y-fractions in [0, 1] of the facade,
+// converted on the fly to wall y-fractions. The recipe just declares
+// one constant (FACADE_FRACTION) and uses the *Facade variants below.
+
+// Drop-in for drawInsetRectOnWall when the recipe is working in facade
+// coordinates. y1 / y2 are 0..1 of the facade, x1 / x2 are 0..1 along
+// the wall section width as before.
+export function drawFacadeRect(
+  g: Phaser.GameObjects.Graphics,
+  section: WallSection,
+  x1: number, x2: number,
+  facadeY1: number, facadeY2: number,
+  facadeFraction: number,
+  color: number, alpha: number,
+): void {
+  drawInsetRectOnWall(
+    g, section, x1, x2,
+    facadeY1 * facadeFraction, facadeY2 * facadeFraction,
+    color, alpha,
+  );
+}
+
+// A point centred horizontally and lifted to facadeYFraction up the
+// facade. Equivalent to wallCenter(section, facadeYFraction * facadeFraction).
+export function facadeCenter(
+  section: WallSection,
+  facadeFraction: number,
+  facadeYFraction: number,
+): Proj.Vec2 {
+  return wallCenter(section, facadeYFraction * facadeFraction);
+}
+
+// Convenience: pixel height of the facade in scene-local screen pixels.
+// Useful for recipes that paint absolute-pixel bands (e.g. SCREEN_GLOW
+// strips) via drawWallBand.
+export function facadePx(section: WallSection, facadeFraction: number): number {
+  return section.wallPx * facadeFraction;
 }
 
 // Hairline brass frame around the wall section, with a darker inner trim.

@@ -19,16 +19,23 @@
 // "shallow Hoyle" angle. One place to tune the tilt for the whole renderer.
 export const SHEAR_Y_RATIO     = 0.42;
 
-// Wall extrusion in tile units. wallVerticalOffset(ts) = ts * this.
-// Recipes call wallVerticalOffset() / liftPoint() instead of multiplying
-// directly so a future tuning pass only touches this constant.
+// Wall height — the architectural room wall. wallVerticalOffset(ts) =
+// ts * this. Wall recipes and the wall renderer derive every vertical
+// extent from wallVerticalOffset(ts) so a tuning pass only touches this
+// one constant.
 //
-// 1.6 — Phase 3.1 bump from 1.4. Wall : floor-tile-depth ratio is now
-// 1.6 / SHEAR_Y_RATIO ≈ 3.8, which reads as a proper room rather than
-// a "floor with rims" and gives wall-service facades (WC door, bar
-// shelves, sportsbook screens, signs above services) comfortable
-// vertical real-estate. Tune here — never inside a recipe.
-export const WALL_HEIGHT_TILES = 1.6;
+// 2.2 — Phase 5.2 bump from 1.6. Walls now read as tall casino-room
+// surfaces (≈3.5–4.5 m at typical tile sizes) rather than knee-height
+// rims, giving wall-service facades (WC, Bar, Sportsbook, etc.) room
+// to occupy only the lower / middle portion while plain wall remains
+// visible above them — the Hoyle Casino Empire shape.
+//
+// Slot / table heights are intentionally left to their own per-recipe
+// constants. The liftPoint helper currently scales those by
+// wallVerticalOffset too (a historical quirk), so this bump grows
+// floor objects proportionally; wall-vs-floor-object scale stays
+// constant. Adjusting that coupling would need Phase 5.3.
+export const WALL_HEIGHT_TILES = 2.2;
 
 export interface Vec2 {
   x: number;
