@@ -130,6 +130,7 @@ export class PresentationSceneV2 extends Phaser.Scene {
       this.gfxObjects,
       gameState.placedObjs,
       gameState.functionalIds,
+      gameState.tiles,
       this.camera.offsetX,
       this.camera.offsetY,
       this.camera.tileSize,

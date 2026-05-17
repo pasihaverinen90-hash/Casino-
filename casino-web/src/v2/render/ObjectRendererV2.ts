@@ -19,11 +19,20 @@ import type { RecipeContext } from './recipes/RecipeContext';
 import { drawSlot } from './recipes/slot';
 import { drawSmallTable } from './recipes/smallTable';
 import { drawLargeTable } from './recipes/largeTable';
+import { drawKeno } from './recipes/keno';
+import { drawHighStakes } from './recipes/highStakes';
+import { drawWC } from './recipes/wc';
+import { drawCashier } from './recipes/cashier';
+import { drawATM } from './recipes/atm';
+import { drawBar } from './recipes/bar';
+import { drawBuffet } from './recipes/buffet';
+import { drawSportsbook } from './recipes/sportsbook';
 
 export function drawObjects(
   g: Phaser.GameObjects.Graphics,
   placedObjs: readonly GC.PlacedObj[],
   functionalIds: ReadonlySet<string>,
+  tiles: readonly GC.Tile[],
   baseX: number, baseY: number, ts: number,
 ): void {
   if (placedObjs.length === 0) return;
@@ -46,18 +55,28 @@ export function drawObjects(
     // signal is consistent across renderers while V1 is still in tree.
     const alpha = isFunctional ? 1.0 : 0.45;
     const ctx: RecipeContext = {
-      g, obj, baseX, baseY, ts, alpha, isFunctional,
+      g, obj, tiles, baseX, baseY, ts, alpha, isFunctional,
     };
     _dispatch(ctx);
   }
 }
 
-// Per-type dispatch. Unknown types skip silently — Phase 5 expands.
+// Per-type dispatch. After Phase 5 every ObjType in OBJ_DEFS has a recipe;
+// the default case stays as a safety net for any future ObjType added
+// before its recipe exists.
 function _dispatch(ctx: RecipeContext): void {
   switch (ctx.obj.type) {
-    case GC.ObjType.SLOT_MACHINE: drawSlot(ctx);       return;
-    case GC.ObjType.SMALL_TABLE:  drawSmallTable(ctx); return;
-    case GC.ObjType.LARGE_TABLE:  drawLargeTable(ctx); return;
-    default:                                            return;
+    case GC.ObjType.SLOT_MACHINE:      drawSlot       (ctx); return;
+    case GC.ObjType.SMALL_TABLE:       drawSmallTable (ctx); return;
+    case GC.ObjType.LARGE_TABLE:       drawLargeTable (ctx); return;
+    case GC.ObjType.KENO_LOUNGE:       drawKeno       (ctx); return;
+    case GC.ObjType.HIGH_STAKES_TABLE: drawHighStakes (ctx); return;
+    case GC.ObjType.WC:                drawWC         (ctx); return;
+    case GC.ObjType.CASHIER:           drawCashier    (ctx); return;
+    case GC.ObjType.ATM:               drawATM        (ctx); return;
+    case GC.ObjType.BAR:               drawBar        (ctx); return;
+    case GC.ObjType.BUFFET:            drawBuffet     (ctx); return;
+    case GC.ObjType.SPORTSBOOK:        drawSportsbook (ctx); return;
+    default:                                                  return;
   }
 }
