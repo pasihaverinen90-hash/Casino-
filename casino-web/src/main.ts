@@ -21,6 +21,7 @@ import { TopHUDV2 }    from './v2/ui/TopHUDV2';
 import { BottomBarV2 } from './v2/ui/BottomBarV2';
 import { SummaryCardV2 } from './v2/ui/SummaryCardV2';
 import { BuildPanelV2 } from './v2/ui/BuildPanelV2';
+import { HotelPanelV2 } from './v2/ui/HotelPanelV2';
 import * as Slots      from './state/SaveSlots';
 // V2 UI styles. Scoped under .v2-* class selectors so loading them in
 // V1 mode is harmless (no .v2-* roots exist in V1).
@@ -78,7 +79,13 @@ new GoalCompletePopup(uiRoot);
 
 const goalsPanel = new GoalsPanel(uiRoot);
 const statsPanel = new StatsPanel(uiRoot);
-const hotelPanel = new HotelPanel(uiRoot);
+// HotelPanel: V2 (premium right-side hotel/rooms panel) when renderer=v2,
+// else V1. Both classes expose `open / close`. Same uiBus / gameState
+// contract — V2 just restyles + reformats; gameplay actions still go
+// through gameState.buyRooms / gameState.upgradeQuality.
+const hotelPanel: { open(): void; close(): void } = _v2Ui
+  ? new HotelPanelV2(uiRoot)
+  : new HotelPanel(uiRoot);
 // Build sidebar's X button routes through BottomBar.closeAll so the Build
 // button highlight is cleared and `_closeAll` runs (which emits
 // exit_placement and hides any other panels). V2 path uses the premium
