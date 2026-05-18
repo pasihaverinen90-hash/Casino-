@@ -11,6 +11,7 @@ import { GoalCompletePopup } from './ui/GoalCompletePopup';
 import { StartScreen } from './ui/StartScreen';
 import { openActiveGoalDetail } from './v2/ui/openActiveGoalDetail';
 import { openReturnToMenuModal } from './v2/ui/returnToMenuModal';
+import { wireKeyboardShortcuts } from './bootstrap/keyboardShortcuts';
 import { TopHUDV2 }    from './v2/ui/TopHUDV2';
 import { BottomBarV2 } from './v2/ui/BottomBarV2';
 import { BuildPanelV2 } from './v2/ui/BuildPanelV2';
@@ -119,107 +120,10 @@ function _bottomBarCallbacks(): {
 // handler). Coordinator owns the logic; this just adapts the shape.
 function _closeAll(): void { coordinator.closeAll(); }
 
-// ── Keyboard shortcuts ────────────────────────────────────────────────────
-// B = Build       H = Hotel       S = Stats       G = Goals
-// Space = pause   1 = 1×          2 = 2×          4 = 4×
-// Escape = close all     R = rotate ghost (handled in InputControllerV2)
-
-document.addEventListener('keydown', e => {
-  // Don't fire while typing inside an input field
-  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-  // Ignore shortcuts until the start screen has been dismissed.
-  if (!started) return;
-
-  // Hidden dev/test shortcut: Ctrl+Shift+1/2/3 grants cash for faster
-  // progression testing in production. Use e.code (layout-independent) —
-  // Shift maps '1' → '!' on US keyboards, so e.key would miss the digit.
-  // Handled before the speed switch so Ctrl+Shift+1 doesn't fall through
-  // to "set speed 1×".
-  if (e.ctrlKey && e.shiftKey) {
-    // Ctrl+Shift+R prints the live Rating V2 category breakdown for tuning.
-    // Handled here (and returned early) so it doesn't fall through to the
-    // single-key 'R' rotation. InputControllerV2's keydown-R listener also
-    // skips rotation when both modifiers are held.
-    if (e.code === 'KeyR') {
-      e.preventDefault();
-      gameState.debugRatingBreakdown();
-      return;
-    }
-    // Ctrl+Shift+C — Random Challenges V1 manual trigger. Starts Slot
-    // Machine Promotion if no challenge is active; otherwise toasts a
-    // "already active" message handled inside GameState.
-    if (e.code === 'KeyC') {
-      e.preventDefault();
-      gameState.debugStartSlotPromotionChallenge();
-      return;
-    }
-    let amount = 0;
-    if      (e.code === 'Digit1') amount = 10_000;
-    else if (e.code === 'Digit2') amount = 50_000;
-    else if (e.code === 'Digit3') amount = 250_000;
-    if (amount > 0) {
-      e.preventDefault();
-      gameState.debugAddCash(amount);
-      return;
-    }
-  }
-
-  switch (e.key) {
-    case 'Escape':
-      _closeAll();
-      bottomBar.closeAll();
-      break;
-
-    case 'b':
-    case 'B':
-      hotelPanel.close(); statsPanel.close();
-      bottomBar.pressButton('build');          // toggles via existing button logic
-      break;
-
-    case 'h':
-    case 'H':
-      buildPanel.close(); statsPanel.close();
-      bottomBar.pressButton('hotel');
-      break;
-
-    case 's':
-    case 'S':
-      buildPanel.close(); hotelPanel.close();
-      bottomBar.pressButton('stats');
-      break;
-
-    case 'd':
-    case 'D':
-      bottomBar.pressDemolish();
-      break;
-
-    case 'g':
-    case 'G': {
-      // G now opens Stats → Goals tab directly (V1 GoalsPanel retired).
-      // Close any other panel first so pressButton('stats') always opens
-      // rather than toggling Stats closed if it was already active.
-      _closeAll();
-      bottomBar.closeAll();
-      bottomBar.pressButton('stats');
-      statsPanel.setTab(2);
-      break;
-    }
-
-    case ' ':
-      e.preventDefault();
-      time.togglePause();
-      break;
-
-    case '1':
-      time.setSpeed(1);
-      break;
-
-    case '2':
-      time.setSpeed(2);
-      break;
-
-    case '4':
-      time.setSpeed(4);
-      break;
-  }
+// Keyboard shortcuts — B / H / S / G / D / Esc / Space / 1 / 2 / 4 plus
+// Ctrl+Shift dev shortcuts. R rotation lives inside InputControllerV2.
+wireKeyboardShortcuts({
+  isStarted  : () => started,
+  coordinator,
+  bottomBar,
 });
