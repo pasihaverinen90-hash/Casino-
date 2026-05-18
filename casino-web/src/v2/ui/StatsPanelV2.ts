@@ -43,6 +43,7 @@ export class StatsPanelV2 {
   private paneToday: HTMLElement;
   private paneHist : HTMLElement;
   private paneGoals: HTMLElement;
+  private body!    : HTMLElement;
   private currentTab = 0;
 
   // RIGHT NOW rows
@@ -198,8 +199,18 @@ export class StatsPanelV2 {
     this.paneGoals.appendChild(goalsList);
 
     body.append(this.paneToday, this.paneHist, this.paneGoals);
-    this.el.append(header, tabs, body);
+
+    // Pin header + tabs by wrapping them in a non-scrolling top container.
+    // Without this, tall body content (charts + many rows) could push the
+    // header out of the visible area when overflow rules race with flex
+    // shrinking — the wrapper gives a hard split: top stays, body scrolls.
+    const top = document.createElement('div');
+    top.className = 'v2-stats-top';
+    top.append(header, tabs);
+
+    this.el.append(top, body);
     parent.appendChild(this.el);
+    this.body = body;
 
     // Same contract as V1: only repaint while visible.
     gameState.on('state_changed', () => {
@@ -233,6 +244,9 @@ export class StatsPanelV2 {
     this.paneToday.style.display = idx === 0 ? '' : 'none';
     this.paneHist .style.display = idx === 1 ? '' : 'none';
     this.paneGoals.style.display = idx === 2 ? '' : 'none';
+    // Reset scroll so the player always lands at the top of the active
+    // tab — keeps the section headers visible immediately under the tabs.
+    if (this.body) this.body.scrollTop = 0;
     // Canvas widths read offsetWidth → must be measured while the parent
     // is visible. Defer the redraw to the next frame so layout has settled.
     if (idx === 1) requestAnimationFrame(() => this._redrawCharts());

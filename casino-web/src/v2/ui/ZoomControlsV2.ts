@@ -17,15 +17,13 @@
 // buttons into a styled overlay then.
 import type { CameraControllerV2 } from '../scene/CameraControllerV2';
 
-// Anchored bottom-left in Phase 8E.1: SummaryCardV2 was removed, and
-// StatsPanelV2 now occupies the bottom-right band (right:0, width up to
-// 420px). Anchoring to the left edge — with enough offset to clear the
-// BuildPanelV2/HotelPanelV2 sidebars when open — keeps the buttons
-// reachable whether any side panel is open or closed.
-//   BuildPanelV2:  left:0, width:300
-//   HotelPanelV2:  left:0, width:320
-//   → 340px clears either with an 8–20px gap.
-const ZOOM_LEFT_PX = 340;
+// Phase 8E.2: anchored bottom-right above the V2 bottom nav. The buttons
+// hide entirely whenever any of the large V2 panels (Build / Hotel /
+// Stats) is open — main.ts toggles a `v2-panel-open` class on uiRoot,
+// and the matching CSS rule sets `display: none` on this container.
+// That dodges the per-panel collision math we tried in earlier patches.
+const ZOOM_RIGHT_PX  = 24;
+const ZOOM_BOTTOM_PX = 96;
 
 export class ZoomControlsV2 {
   private camera   : CameraControllerV2;
@@ -42,8 +40,8 @@ export class ZoomControlsV2 {
     // to V2 controls too. Inline cssText is the source of truth for now.
     this.container.style.cssText = [
       'position: absolute',
-      `left: ${ZOOM_LEFT_PX}px`,
-      'bottom: 88px',          // above V2 BottomBar (72px) + 16px breathing room.
+      `right: ${ZOOM_RIGHT_PX}px`,
+      `bottom: ${ZOOM_BOTTOM_PX}px`,
       'display: flex',
       'gap: 6px',
       'z-index: 50',
