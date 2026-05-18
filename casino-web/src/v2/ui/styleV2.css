@@ -673,11 +673,12 @@
 }
 
 /* Goal + Challenge tickers — inset away from the BuildPanelV2 sidebar
- * (left) and SummaryCardV2 (right) so they read whether the sidebar is
- * open or closed. Same V1 stacking (challenge above goal). */
+ * (left) so they read whether the sidebar is open or closed, and pulled
+ * in from the right so they don't span the full width of the screen.
+ * Same V1 stacking (challenge above goal). */
 .v2-root .goal-ticker {
   left: 316px;             /* 300px sidebar + 16px gap */
-  right: 252px;            /* 220px summary card + 16 right + 16 gap */
+  right: 252px;            /* leaves the right edge breathing room */
   bottom: 80px;            /* above 72px bottom nav + 8px breathing */
   height: 32px;
   background: var(--v2-bg-glass);

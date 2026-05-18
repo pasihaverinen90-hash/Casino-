@@ -2,7 +2,7 @@
 // Lets the user pick one of 3 save slots (continue or new game).
 import { gameState } from '../state/GameState';
 import * as Slots from '../state/SaveSlots';
-import { fmtCash } from './TopHUD';
+import { fmtCash } from './format';
 
 export class StartScreen {
   private el: HTMLElement;

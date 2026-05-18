@@ -3,8 +3,6 @@ import { gameState } from '../state/GameState';
 import { fmtClock, time } from '../state/TimeController';
 import { fmtCash } from './format';
 
-export { fmtCash };
-
 export class TopHUD {
   private lblRating: HTMLElement;
   private lblGuests: HTMLElement;

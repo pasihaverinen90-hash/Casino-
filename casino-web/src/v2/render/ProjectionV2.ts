@@ -9,8 +9,6 @@
 // Two height systems live here, intentionally decoupled (see Phase 5.3):
 //   • Walls         — wallVerticalOffset(ts) / liftWallPoint
 //   • Floor objects — objectVerticalOffset(ts, h) / liftObjectPoint
-// The legacy liftPoint helper remains as a wall-based alias for
-// backwards compatibility but is no longer called by V2 internals.
 //
 // screenToWorld is the algebraic inverse of worldToScreen, so
 // screenToWorld(worldToScreen(c, r, ts), ts) round-trips to (c, r) within
@@ -178,19 +176,6 @@ export function liftWallPoint(p: Vec2, heightInWallUnits: number, ts: number): V
     x: p.x,
     y: p.y - heightInWallUnits * wallVerticalOffset(ts),
   };
-}
-
-// LEGACY — Phase 0..5 helper that multiplied heightInTiles by
-// wallVerticalOffset(ts). This coupling caused floor objects to scale
-// with wall height. Kept here so external callers (tests, scratch
-// code) don't break, but new code should prefer liftObjectPoint
-// (for floor objects) or liftWallPoint (for wall-relative anchors).
-//
-// All V2 internal callers were migrated off liftPoint in Phase 5.3 —
-// drawHelpers.liftQuad, tableShared, and highStakes now use
-// liftObjectPoint.
-export function liftPoint(p: Vec2, heightInWallUnits: number, ts: number): Vec2 {
-  return liftWallPoint(p, heightInWallUnits, ts);
 }
 
 // Axis-aligned bounding box of the entire projected grid, including
