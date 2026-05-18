@@ -6,6 +6,7 @@
 // fades — especially important for Comfort Check's five-service list.
 import * as GC from '../logic/GameConstants';
 import { gameState } from '../state/GameState';
+import { openObjectiveDetail, section, listSection } from './objectiveDetail';
 
 export class ChallengeTicker {
   private el      : HTMLElement;
@@ -49,54 +50,22 @@ export class ChallengeTicker {
     const c = gameState.activeChallenge;
     const b = gameState.activeBoost;
     if (c) {
-      this._openModal(this._challengeTitle(c.id), this._challengeBody(c));
+      openObjectiveDetail(this._parent, this._challengeTitle(c.id), this._challengeBody(c));
     } else if (b) {
-      this._openModal(this._boostTitle(b.id), this._boostBody(b));
+      openObjectiveDetail(this._parent, this._boostTitle(b.id), this._boostBody(b));
     }
   }
 
-  // ── Modal infra ─────────────────────────────────────────────────────────
-  // Mirrors the project's _confirmReturnToMenu pattern in main.ts — same
-  // overlay / card / title / btn classes so the look matches every other
-  // modal in the game.
-
-  private _openModal(titleText: string, body: HTMLElement): void {
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay interactive';
-
-    const card = document.createElement('div');
-    card.className = 'modal-card';
-
-    const title = document.createElement('div');
-    title.className   = 'modal-title';
-    title.textContent = titleText;
-    card.appendChild(title);
-
-    body.classList.add('modal-body', 'event-details');
-    card.appendChild(body);
-
-    const btnClose = document.createElement('button');
-    btnClose.className   = 'modal-btn';
-    btnClose.textContent = 'Close';
-    btnClose.onclick     = () => overlay.remove();
-    card.appendChild(btnClose);
-
-    // Click outside the card closes — convenience only; clicking the card
-    // itself does not close.
-    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-
-    overlay.appendChild(card);
-    this._parent.appendChild(overlay);
-  }
-
   // ── Body builders ───────────────────────────────────────────────────────
+  // Shared section/listSection helpers live in objectiveDetail.ts so the
+  // V2 active-goal detail flow can render the same panel shape.
 
   private _challengeBody(c: GC.ActiveChallenge): HTMLElement {
     const left = Math.max(0, c.deadlineDay - gameState.dayNumber);
     const root = document.createElement('div');
-    root.appendChild(this._section('Objective', this._objectiveText(c.id)));
+    root.appendChild(section('Objective', this._objectiveText(c.id)));
     if (c.id === 'comfort_check') {
-      root.appendChild(this._listSection('Required services', [
+      root.appendChild(listSection('Required services', [
         '2 functional WC',
         '2 functional Cashiers',
         '1 functional ATM',
@@ -104,52 +73,22 @@ export class ChallengeTicker {
         '1 functional Buffet',
       ]));
     }
-    root.appendChild(this._section('Progress', `${c.progress} / ${c.target} ${this._unit(c.id)}`));
-    root.appendChild(this._section('Deadline', `${left} ${this._dayWord(left)} left`));
+    root.appendChild(section('Progress', `${c.progress} / ${c.target} ${this._unit(c.id)}`));
+    root.appendChild(section('Deadline', `${left} ${this._dayWord(left)} left`));
     const effect = this._effectText(c.id);
-    if (effect) root.appendChild(this._section('Effect during event', effect));
-    root.appendChild(this._section('Reward', this._rewardText(c.id)));
-    root.appendChild(this._section('Failure', 'No penalty.'));
+    if (effect) root.appendChild(section('Effect during event', effect));
+    root.appendChild(section('Reward', this._rewardText(c.id)));
+    root.appendChild(section('Failure', 'No penalty.'));
     return root;
   }
 
   private _boostBody(b: GC.ActiveBoost): HTMLElement {
     const left = Math.max(0, b.expiresDay - gameState.dayNumber);
     const root = document.createElement('div');
-    root.appendChild(this._section('Effect', this._boostEffectText(b)));
-    root.appendChild(this._section('Duration', `${left} ${this._dayWord(left)} left`));
-    root.appendChild(this._section('Source', this._boostSourceText(b.id)));
+    root.appendChild(section('Effect', this._boostEffectText(b)));
+    root.appendChild(section('Duration', `${left} ${this._dayWord(left)} left`));
+    root.appendChild(section('Source', this._boostSourceText(b.id)));
     return root;
-  }
-
-  private _section(label: string, text: string): HTMLElement {
-    const sec = document.createElement('div');
-    sec.className = 'event-section';
-    const l = document.createElement('div');
-    l.className = 'event-section-label';
-    l.textContent = label;
-    const t = document.createElement('div');
-    t.className = 'event-section-text';
-    t.textContent = text;
-    sec.append(l, t);
-    return sec;
-  }
-
-  private _listSection(label: string, items: string[]): HTMLElement {
-    const sec = document.createElement('div');
-    sec.className = 'event-section';
-    const l = document.createElement('div');
-    l.className = 'event-section-label';
-    l.textContent = label;
-    const ul = document.createElement('ul');
-    ul.className = 'event-section-list';
-    for (const i of items) {
-      const li = document.createElement('li');
-      li.textContent = i;
-      ul.appendChild(li);
-    }
-    sec.append(l, ul);
-    return sec;
   }
 
   // ── Per-id text ─────────────────────────────────────────────────────────
