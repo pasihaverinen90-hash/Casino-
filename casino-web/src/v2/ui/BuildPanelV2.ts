@@ -17,7 +17,6 @@
 import * as GC from '../../logic/GameConstants';
 import { gameState } from '../../state/GameState';
 import { uiBus } from '../../events/UIBus';
-import { paintThumb } from '../../game/ObjectArt';
 
 interface BuildCategoryV2 {
   id    : GC.BuildCategoryId;
@@ -56,8 +55,6 @@ const ITEMS_BY_CATEGORY: Record<GC.BuildCategoryId, GC.ObjType[]> = (() => {
   for (const t of ITEM_TYPES) out[GC.getDef(t).category].push(t);
   return out;
 })();
-
-const THUMB_PX = 48;
 
 export class BuildPanelV2 {
   private el          : HTMLElement;
@@ -186,15 +183,9 @@ export class BuildPanelV2 {
     b.dataset['type'] = String(t);
     b.onclick         = () => this._onItemClick(t, def);
 
-    // Thumbnail — reuse V1's paintThumb (Canvas2D, top-down). It reads
-    // fine at 48×48 and avoids designing V2 sprites in this phase.
-    const thumb = document.createElement('canvas');
-    thumb.className = 'v2-build-item-thumb';
-    thumb.width  = THUMB_PX;
-    thumb.height = THUMB_PX;
-    const ctx = thumb.getContext('2d');
-    if (ctx) paintThumb(ctx, t, THUMB_PX, THUMB_PX);
-
+    // Phase 10B.1: thumbnails removed. Final sprite art will land in a
+    // later phase; until then the build cards read better as clean text.
+    // Category icons in the 2×2 grid above are still rendered.
     const meta = document.createElement('div');
     meta.className = 'v2-build-item-meta';
 
@@ -206,7 +197,7 @@ export class BuildPanelV2 {
     sub.className = 'v2-build-item-sub';
 
     meta.append(name, sub);
-    b.append(thumb, meta);
+    b.appendChild(meta);
     return b;
   }
 
