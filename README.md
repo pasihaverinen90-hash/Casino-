@@ -59,7 +59,7 @@ The project ships two presentation renderers side-by-side. Gameplay, save data, 
 |---|---|---|
 | **V2** | `?renderer=v2` | Presentation V2: shallow-dimetric scene with tall N/W walls, premium casino UI shell (TopHUDV2, BottomBarV2, BuildPanelV2, HotelPanelV2, StatsPanelV2, in-HUD zoom). |
 | **V1** | `?renderer=v1` | Legacy top-down renderer with the original HTML panels. Stays around as a fallback until V2 is fully soaked in. |
-| default | (no query) | Currently controlled by [`state/RendererFlag.ts`](casino-web/src/state/RendererFlag.ts) — V1 today. Phase 10A will flip the default to V2; V1 will remain reachable via `?renderer=v1` until it's retired in a later cleanup phase. |
+| default | (no query) | Boots V2. V1 remains available via `?renderer=v1` until it's retired in a later cleanup phase. The default is controlled by [`state/RendererFlag.ts`](casino-web/src/state/RendererFlag.ts). |
 
 Resolution order: **URL parameter > localStorage (`rendererV2` key) > default**. The URL wins so a sticky persisted preference can always be recovered with `?renderer=v1`.
 
@@ -261,9 +261,9 @@ Vite's `base` is set to `/Casino-hotel/` so asset paths resolve under the repo's
 
 ## Near-term technical plan
 
-1. **Phase 9C (this update).** README / docs sync.
-2. **Phase 10A.** Flip the default renderer to V2 while keeping V1 reachable via `?renderer=v1`.
-3. **Phase 10B.** Full V2 smoke + balancing pass with V2 as default.
+1. **Phase 9C.** README / docs sync. *Done.*
+2. **Phase 10A.** Default renderer is now V2 with V1 reachable via `?renderer=v1`. *Done.*
+3. **Phase 10B (next).** Full V2 smoke + balancing pass with V2 as default.
 4. **Phase 10C/D.** Retire V1: delete `game/GridScene.ts`, `GuestSprites.ts`, `Projection.ts`, the V1 panels in `ui/`, and the V1-only sections of `style.css`. Re-host `paintThumb` out of `game/ObjectArt.ts` so V2 BuildPanel keeps its thumbnails.
 5. **Phase 11+.** Art / sprite polish, StartScreen redesign, theme / material / chapter system on top of stable V2.
 

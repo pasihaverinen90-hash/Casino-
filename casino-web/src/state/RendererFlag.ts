@@ -5,9 +5,9 @@
 // Resolution order in getRendererId():
 //   1. URL query parameter ?renderer=v1|v2 (wins over storage so a
 //      query can recover a stuck localStorage preference during dev).
-//   2. localStorage 'rendererV2' === 'v2'  → 'v2'; anything else → 'v1'.
-//   3. Default 'v1' (V1 remains the default fallback until the project
-//      explicitly flips it).
+//   2. localStorage 'rendererV2' === 'v1' or 'v2' → that value.
+//   3. Default 'v2'. V1 remains available as a fallback via
+//      ?renderer=v1 until V1 is retired in a later cleanup phase.
 //
 // Storage reads/writes are wrapped in try/catch so private-mode browsers
 // and quota errors are silent — mirrors the pattern in GameState._writeSave
@@ -27,9 +27,9 @@ export function getRendererId(): RendererId {
   // 2. Persisted preference.
   const fromStorage = _readStorage();
   if (fromStorage !== null) return fromStorage;
-  // 3. Default: V1 stays the default until V2 has a usable floor/camera
-  //    shell. Flipped to 'v2' in a later phase, not Phase 0.
-  return 'v1';
+  // 3. Default — V2 is now the default. V1 stays reachable via
+  //    ?renderer=v1 until it's retired in a later cleanup phase.
+  return 'v2';
 }
 
 export function setRendererId(id: RendererId): void {
