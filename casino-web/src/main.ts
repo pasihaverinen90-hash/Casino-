@@ -16,6 +16,7 @@ import { BottomBarV2 } from './v2/ui/BottomBarV2';
 import { BuildPanelV2 } from './v2/ui/BuildPanelV2';
 import { HotelPanelV2 } from './v2/ui/HotelPanelV2';
 import { StatsPanelV2 } from './v2/ui/StatsPanelV2';
+import { V2PanelCoordinator } from './v2/ui/V2PanelCoordinator';
 import * as Slots      from './state/SaveSlots';
 // V2 UI styles — scoped under .v2-* class selectors and .v2-root overrides.
 import './v2/ui/styleV2.css';
@@ -85,47 +86,25 @@ const startScreen = new StartScreen(uiRoot, () => {
 startScreen.show();
 
 const bottomBar = new BottomBarV2(uiRoot, _bottomBarCallbacks());
+const coordinator = new V2PanelCoordinator({ buildPanel, hotelPanel, statsPanel, bottomBar });
 
 function _bottomBarCallbacks(): {
   onBuild: () => void; onHotel: () => void; onStats: () => void;
   onDemolish: (active: boolean) => void;
   onSave: () => void; onMenu: () => void; onCloseAll: () => void;
 } { return {
-  onBuild: () => {
-    hotelPanel.close(); statsPanel.close();
-    uiBus.emit('toggle_demolish', false);
-    buildPanel.open();
-  },
-  onHotel: () => {
-    buildPanel.close(); statsPanel.close();
-    uiBus.emit('toggle_demolish', false);
-    hotelPanel.open();
-  },
-  onStats: () => {
-    buildPanel.close(); hotelPanel.close();
-    uiBus.emit('toggle_demolish', false);
-    statsPanel.open();
-  },
-  onDemolish: (active: boolean) => {
-    if (active) {
-      // Demolish takes the floor — close every overlay so the player can
-      // click anywhere on the grid, and drop any in-progress placement.
-      buildPanel.close(); hotelPanel.close(); statsPanel.close();
-      uiBus.emit('exit_placement');
-      uiBus.emit('toggle_demolish', true);
-    } else {
-      uiBus.emit('toggle_demolish', false);
-    }
-  },
-  onSave: () => {
+  onBuild   : () => coordinator.openBuild(),
+  onHotel   : () => coordinator.openHotel(),
+  onStats   : () => coordinator.openStats(),
+  onDemolish: (active: boolean) => (active ? coordinator.enterDemolish() : coordinator.exitDemolish()),
+  onSave    : () => {
     if (gameState.save()) gameState.emit('toast_requested', '✓ Game saved');
   },
-  onMenu: () => {
-    _closeAll();
-    bottomBar.closeAll();
+  onMenu    : () => {
+    coordinator.closeAllAndClearBar();
     _confirmReturnToMenu();
   },
-  onCloseAll: _closeAll,
+  onCloseAll: () => coordinator.closeAll(),
 }; }
 
 function _confirmReturnToMenu(): void {
@@ -207,13 +186,10 @@ function _openActiveGoalDetailV2(): void {
   openObjectiveDetail(uiRoot, `Goal ${idx + 1}`, body);
 }
 
-function _closeAll(): void {
-  buildPanel.close();
-  hotelPanel.close();
-  statsPanel.close();
-  uiBus.emit('exit_placement');
-  uiBus.emit('toggle_demolish', false);
-}
+// Thin shim around coordinator.closeAll for callers that take a bare
+// function reference (BuildPanelV2's X-button hook, the keyboard
+// handler). Coordinator owns the logic; this just adapts the shape.
+function _closeAll(): void { coordinator.closeAll(); }
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────
 // B = Build       H = Hotel       S = Stats       G = Goals
