@@ -9,8 +9,8 @@
 // No gameState access. No Phaser imports. The "Open V1" link rewrites
 // the renderer query parameter and reloads via window.location.
 
-const NOTICE_PRIMARY   = 'V2 visual preview — build in V1 for now';
-const NOTICE_SECONDARY = 'Placement, ghost and demolish are coming in later phases.';
+const NOTICE_PRIMARY   = 'Presentation V2 preview';
+const NOTICE_SECONDARY = 'UI shell and final polish still in progress.';
 
 export class V2PreviewNotice {
   private container: HTMLElement;

@@ -61,6 +61,13 @@ export function drawObjects(
   }
 }
 
+// Public single-object draw used by both drawObjects and the placement
+// ghost in GhostRendererV2. The recipe paints into the caller's
+// Graphics; alpha/isFunctional in ctx drive dim/bright variations.
+export function drawObject(ctx: RecipeContext): void {
+  _dispatch(ctx);
+}
+
 // Per-type dispatch. After Phase 5 every ObjType in OBJ_DEFS has a recipe;
 // the default case stays as a safety net for any future ObjType added
 // before its recipe exists.

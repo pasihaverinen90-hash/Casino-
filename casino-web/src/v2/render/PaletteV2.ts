@@ -70,3 +70,11 @@ export const UI_GOLD_DIM       = 0x8a6a2e;
 // Dark surround behind the projected floor — slightly bluer than the
 // wall panels so the room reads as lit warmer than its surroundings.
 export const BG_DARK           = 0x0a0a14;
+
+// ── Placement / demolish / selection overlays ────────────────────────────
+// Bright green for a valid placement ghost; bright red for an invalid
+// ghost and for demolish overlay/hover. Same hues V1 GridScene used so
+// the green/red signal reads identically across renderers while V1 is
+// still in tree.
+export const GHOST_OK          = 0x33e64d;
+export const GHOST_BAD         = 0xe63333;

@@ -256,6 +256,86 @@ export class GuestVisualControllerV2 {
     this.reservedTiles.clear();
   }
 
+  // Visual-only displacement: when a V2 placement is about to commit,
+  // any guest standing on a soon-to-be-blocked tile is gently moved
+  // to a nearby walkable tile and forced to re-pick a target. Never
+  // mutates gameState — this only nudges the controller's own guests.
+  //
+  // Always succeeds (best-effort) — if no safe tile is found within
+  // a small BFS radius, the guest is sent to the lobby exit so it
+  // visibly leaves. Placement is never blocked by guests.
+  displaceGuestsFromTiles(blocked: readonly GC.Vec2[]): void {
+    if (blocked.length === 0) return;
+    const keys = new Set<string>();
+    for (const t of blocked) keys.add(this._tileKey(t.x, t.y));
+
+    for (const g of this.guests) {
+      const gc = Math.floor(g.col);
+      const gr = Math.floor(g.row);
+      if (!keys.has(this._tileKey(gc, gr))) continue;
+      // Snap to a nearby safe tile if possible, otherwise force-leave.
+      const safe = this._findSafeTileNear(gc, gr, keys);
+      if (safe) {
+        g.col   = safe.x + 0.5;
+        g.row   = safe.y + 0.5;
+        g.route = [];
+        g.stuck = 0;
+        this._releaseReservation(g);
+        // Also break any in-progress service flow so a guest hidden
+        // inside a wall service that's about to be replaced reappears.
+        g.servicePhase      = 'none';
+        g.visibleUseAnchor  = null;
+        g.interactionAnchor = null;
+        g.hidden            = false;
+        this._chooseNextLeg(g);
+      } else {
+        this._releaseReservation(g);
+        g.state             = 'leaving';
+        g.tCol              = g.exitCol;
+        g.tRow              = g.exitRow;
+        g.curKind           = null;
+        g.targetObjId       = undefined;
+        g.servicePhase      = 'none';
+        g.visibleUseAnchor  = null;
+        g.interactionAnchor = null;
+        g.hidden            = false;
+        g.route = findRoute(gameState.tiles, g.col, g.row, g.tCol, g.tRow) ?? [];
+        g.stuck = 0;
+      }
+    }
+  }
+
+  // Small BFS outward from (sc, sr) to find an unblocked walkable
+  // tile. Excludes `blocked` (the upcoming placement footprint) and
+  // anything PV.isWalkable rejects.
+  private _findSafeTileNear(
+    sc: number, sr: number, blocked: Set<string>,
+  ): GC.Vec2 | null {
+    const visited = new Set<string>();
+    visited.add(this._tileKey(sc, sr));
+    const queue: GC.Vec2[] = [{ x: sc, y: sr }];
+    let head = 0;
+    while (head < queue.length) {
+      const cur = queue[head++];
+      if (cur.x !== sc || cur.y !== sr) {
+        const k = this._tileKey(cur.x, cur.y);
+        if (!blocked.has(k) && PV.isWalkable(gameState.tiles, cur.x, cur.y)) {
+          return cur;
+        }
+      }
+      for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]] as const) {
+        const nx = cur.x + dx;
+        const ny = cur.y + dy;
+        if (nx < 0 || nx >= GC.GRID_COLS || ny < 0 || ny >= GC.GRID_ROWS) continue;
+        const k = this._tileKey(nx, ny);
+        if (visited.has(k)) continue;
+        visited.add(k);
+        queue.push({ x: nx, y: ny });
+      }
+    }
+    return null;
+  }
+
   // ── Reservations ──────────────────────────────────────────────────────────
 
   private _tileKey(x: number, y: number): string {

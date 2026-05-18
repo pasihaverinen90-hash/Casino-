@@ -1,28 +1,33 @@
 // PresentationSceneV2.ts — Presentation V2 scene.
 //
-// Phase 2 scope:
-//   • dark backdrop
-//   • projected casino floor via FloorRendererV2
-//   • pan + zoom camera via CameraControllerV2
-//   • small dev label so it's obvious V2 is active
+// Phase 7: V2 is now functionally interactive. Placement, demolish,
+// rotation, hover, and selection are wired via InputControllerV2 which
+// consumes the same uiBus event contracts as V1 GridScene. Validation
+// goes through PlacementValidator and commit through gameState.tryPlace
+// / gameState.demolish — V2 does not duplicate any gameplay rules.
 //
-// Still intentionally NOT implemented:
-//   • walls (Phase 3) — WALL tiles paint as a flat dark placeholder for now
-//   • objects, guests, placement, ghost, demolish, V2 UI
-//
-// Subscribes to gameState 'state_changed' so the floor repaints if tiles
-// ever change (today they don't; the hook is there for correctness as
-// future phases lean on it). Pan/zoom triggers repaint via the camera's
-// onChange callback — no per-frame redraw, no animation.
+// Layer order:
+//   0  floor
+//   1  walls
+//   2  objects
+//   3  guests       (per-frame redraw)
+//   10 ghost
+//   11 demolish
+//   12 selection
+//   100 debug label
+//   DOM zoomControls + previewNotice (overlay)
 import Phaser from 'phaser';
 import { gameState } from '../../state/GameState';
-import { uiBus } from '../../events/UIBus';
 import { BG_DARK, UI_GOLD_DIM } from '../render/PaletteV2';
 import { drawFloor } from '../render/FloorRendererV2';
 import { drawWalls } from '../render/WallRendererV2';
 import { drawObjects } from '../render/ObjectRendererV2';
 import { drawGuests } from '../render/GuestRendererV2';
+import { drawGhost } from '../render/GhostRendererV2';
+import { drawDemolish } from '../render/DemolishRendererV2';
+import { drawSelection } from '../render/SelectionRendererV2';
 import { CameraControllerV2 } from './CameraControllerV2';
+import { InputControllerV2 } from './InputControllerV2';
 import { GuestVisualControllerV2 } from '../guests/GuestVisualControllerV2';
 import { ZoomControlsV2 } from '../ui/ZoomControlsV2';
 import { V2PreviewNotice } from '../ui/V2PreviewNotice';
@@ -32,23 +37,15 @@ export class PresentationSceneV2 extends Phaser.Scene {
   private gfxWalls!       : Phaser.GameObjects.Graphics;
   private gfxObjects!     : Phaser.GameObjects.Graphics;
   private gfxGuests!      : Phaser.GameObjects.Graphics;
+  private gfxGhost!       : Phaser.GameObjects.Graphics;
+  private gfxDemolish!    : Phaser.GameObjects.Graphics;
+  private gfxSelection!   : Phaser.GameObjects.Graphics;
   private camera!         : CameraControllerV2;
   private guestController!: GuestVisualControllerV2;
+  private inputController!: InputControllerV2;
   private debugLabel!     : Phaser.GameObjects.Text;
   private zoomControls?   : ZoomControlsV2;
   private previewNotice?  : V2PreviewNotice;
-  // Bound handler kept so we can uiBus.off() on shutdown without leaking
-  // listeners across renderer swaps.
-  private _onStartPlacement = (): void => {
-    // V2 has no placement input yet (Phase 4.1 guard). Toast the player
-    // and emit placement_cancelled so BuildPanel clears its highlight —
-    // otherwise a clicked item stays selected forever in V2.
-    gameState.emit(
-      'toast_requested',
-      'V2 preview does not support building yet. Use V1 to build for now.',
-    );
-    uiBus.emit('placement_cancelled');
-  };
 
   constructor() {
     super({ key: 'PresentationSceneV2' });
@@ -57,51 +54,35 @@ export class PresentationSceneV2 extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBackgroundColor(BG_DARK);
 
-    // Layer order: floor (depth 0), walls (1), objects (2), debug label
-    // and zoom controls above. Walls overpaint the N/W edge wall-tile
-    // placeholder fill from FloorRendererV2 — that's the intended hand-off
-    // (floor paints WALL_PANEL flat strips at the border; walls overpaint
-    // the visible N/W ones with the tall composition; S/E stay as flat).
-    // Objects depth-sort internally via ObjectRendererV2 — within the
-    // single gfxObjects Graphics, paint order is the depth order.
-    this.gfxFloor   = this.add.graphics().setDepth(0);
-    this.gfxWalls   = this.add.graphics().setDepth(1);
-    this.gfxObjects = this.add.graphics().setDepth(2);
-    // Guests get their own layer above objects so Phase 6 doesn't have
-    // to interleave per-guest/per-object depth. True interleaved depth
-    // sort is a Phase 11 polish item.
-    this.gfxGuests  = this.add.graphics().setDepth(3);
+    this.gfxFloor     = this.add.graphics().setDepth(0);
+    this.gfxWalls     = this.add.graphics().setDepth(1);
+    this.gfxObjects   = this.add.graphics().setDepth(2);
+    this.gfxGuests    = this.add.graphics().setDepth(3);
+    this.gfxGhost     = this.add.graphics().setDepth(10);
+    this.gfxDemolish  = this.add.graphics().setDepth(11);
+    this.gfxSelection = this.add.graphics().setDepth(12);
 
     this.camera          = new CameraControllerV2(this, () => this._redraw());
     this.guestController = new GuestVisualControllerV2();
+    // InputControllerV2 owns placement/demolish/hover state. On any
+    // change (ghost moved, demolish toggled, hover changed, R pressed)
+    // it calls _redrawOverlays so dynamic layers re-paint without
+    // redrawing the entire scene.
+    this.inputController = new InputControllerV2(
+      this, this.camera, this.guestController, () => this._redrawOverlays(),
+    );
 
-    // Dev label — small, top-left, semi-transparent so it doesn't compete
-    // with the floor. Removed when V2 UI lands.
-    this.debugLabel = this.add.text(8, 4, 'Presentation V2 · Floor + Walls', {
+    this.debugLabel = this.add.text(8, 4, 'Presentation V2', {
       fontFamily: 'monospace',
       fontSize  : '11px',
       color     : _hex(UI_GOLD_DIM),
     }).setDepth(100).setAlpha(0.7);
 
-    // V2-only zoom buttons (DOM overlay, bottom-right). Mounted only in
-    // this scene so V1 stays unchanged. _redraw() refreshes their
-    // disabled/grey state after every camera change.
-    this.zoomControls = new ZoomControlsV2(this.camera);
-
-    // V2-only preview notice (DOM overlay, top-centre). Temporary guard
-    // while V2 lacks placement input — delete this and its file in
-    // Phase 7 once V2 InputControllerV2 lands.
+    this.zoomControls  = new ZoomControlsV2(this.camera);
     this.previewNotice = new V2PreviewNotice();
-
-    // Intercept start_placement so a BuildPanel click in V2 produces a
-    // clear toast instead of silent nothingness. Emitting placement_cancelled
-    // clears the BuildPanel highlight via its existing subscription.
-    uiBus.on('start_placement', this._onStartPlacement);
 
     gameState.on('state_changed', () => {
       this._redraw();
-      // A placement / demolish may have removed the object a guest is
-      // walking to. Let the controller re-pick on its next step.
       this.guestController.refreshTargets();
     });
     this.scale.on('resize', () => {
@@ -109,25 +90,22 @@ export class PresentationSceneV2 extends Phaser.Scene {
       this._redraw();
     });
 
-    // Tear down DOM + native listeners when the scene shuts down so a
-    // re-boot (e.g. tab refresh into different renderer) doesn't leak.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.inputController.destroy();
       this.camera.destroy();
       this.guestController.destroy();
       this.zoomControls?.destroy();
       this.zoomControls = undefined;
       this.previewNotice?.destroy();
       this.previewNotice = undefined;
-      uiBus.off('start_placement', this._onStartPlacement);
     });
 
     this._redraw();
   }
 
-  // Per-frame Phaser hook. Floor/walls/objects are event-driven (see
-  // _redraw), but guests need a fresh paint every frame as they move
-  // and as the camera pans / zooms. The guest layer is cheap (~36
-  // sprites max) so clearing + repainting every frame is fine.
+  // Per-frame Phaser hook. Guests redraw every frame; ghost/demolish/
+  // selection layers refresh on input-driven changes via
+  // _redrawOverlays so we don't repaint them every frame for no reason.
   update(_time: number, delta: number): void {
     this.guestController.update(delta);
     this.gfxGuests.clear();
@@ -140,6 +118,9 @@ export class PresentationSceneV2 extends Phaser.Scene {
     );
   }
 
+  // Full repaint — static layers (floor/walls/objects) + overlay
+  // refresh + zoom-button state. Called on camera change, gameState
+  // change, and resize.
   private _redraw(): void {
     this.gfxFloor.clear();
     this.gfxWalls.clear();
@@ -166,9 +147,51 @@ export class PresentationSceneV2 extends Phaser.Scene {
       this.camera.offsetY,
       this.camera.tileSize,
     );
-    // Refresh zoom-button disabled state after every camera change. Cheap
-    // (two style writes), no need to skip when no zoom change happened.
+    this._redrawOverlays();
     this.zoomControls?.refresh();
+  }
+
+  // Overlay-only refresh — ghost, demolish, selection. Called from the
+  // InputControllerV2 onChange callback (pointer moves, R, Esc,
+  // start/exit placement, demolish toggle, hover change).
+  private _redrawOverlays(): void {
+    this.gfxGhost.clear();
+    this.gfxDemolish.clear();
+    this.gfxSelection.clear();
+
+    if (this.inputController.isDemolishing()) {
+      drawDemolish(
+        this.gfxDemolish,
+        gameState.placedObjs,
+        this.inputController.getHoveredObjId(),
+        this.camera.offsetX,
+        this.camera.offsetY,
+        this.camera.tileSize,
+      );
+    } else {
+      drawGhost(
+        this.gfxGhost,
+        this.inputController.getGhost(),
+        gameState.tiles,
+        this.camera.offsetX,
+        this.camera.offsetY,
+        this.camera.tileSize,
+      );
+      // Plain hover outline when not placing and not demolishing.
+      const hoveredId = !this.inputController.getGhost()
+        ? this.inputController.getHoveredObjId()
+        : null;
+      const hovered = hoveredId
+        ? gameState.placedObjs.find(o => o.id === hoveredId) ?? null
+        : null;
+      drawSelection(
+        this.gfxSelection,
+        hovered,
+        this.camera.offsetX,
+        this.camera.offsetY,
+        this.camera.tileSize,
+      );
+    }
   }
 }
 
