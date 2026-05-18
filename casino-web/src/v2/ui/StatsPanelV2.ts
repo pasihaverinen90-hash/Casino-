@@ -234,6 +234,13 @@ export class StatsPanelV2 {
     this.el.classList.add('hidden');
   }
 
+  // Public tab switcher (Phase 10D): lets the global 'G' keyboard shortcut
+  // open the Goals tab directly now that the V1 GoalsPanel is gone.
+  // 0 = Today · 1 = History · 2 = Goals.
+  setTab(idx: 0 | 1 | 2): void {
+    this._showTab(idx);
+  }
+
   // ── Private ─────────────────────────────────────────────────────────────
 
   private _showTab(idx: number): void {

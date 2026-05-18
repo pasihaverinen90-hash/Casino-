@@ -5,7 +5,6 @@ import { uiBus }       from './events/UIBus';
 import { gameState }   from './state/GameState';
 import { time }       from './state/TimeController';
 import { GoalTicker }  from './ui/GoalTicker';
-import { GoalsPanel }  from './ui/GoalsPanel';
 import { Toast }       from './ui/Toast';
 import { ChallengeTicker } from './ui/ChallengeTicker';
 import { GoalCompletePopup } from './ui/GoalCompletePopup';
@@ -54,7 +53,6 @@ new Toast(uiRoot);
 new ChallengeTicker(uiRoot);
 new GoalCompletePopup(uiRoot);
 
-const goalsPanel = new GoalsPanel(uiRoot);
 const statsPanel = new StatsPanelV2(uiRoot);
 const hotelPanel = new HotelPanelV2(uiRoot);
 const buildPanel = new BuildPanelV2(uiRoot, () => bottomBar.closeAll(_closeAll));
@@ -94,17 +92,17 @@ function _bottomBarCallbacks(): {
   onSave: () => void; onMenu: () => void; onCloseAll: () => void;
 } { return {
   onBuild: () => {
-    hotelPanel.close(); statsPanel.close(); goalsPanel.close();
+    hotelPanel.close(); statsPanel.close();
     uiBus.emit('toggle_demolish', false);
     buildPanel.open();
   },
   onHotel: () => {
-    buildPanel.close(); statsPanel.close(); goalsPanel.close();
+    buildPanel.close(); statsPanel.close();
     uiBus.emit('toggle_demolish', false);
     hotelPanel.open();
   },
   onStats: () => {
-    buildPanel.close(); hotelPanel.close(); goalsPanel.close();
+    buildPanel.close(); hotelPanel.close();
     uiBus.emit('toggle_demolish', false);
     statsPanel.open();
   },
@@ -112,7 +110,7 @@ function _bottomBarCallbacks(): {
     if (active) {
       // Demolish takes the floor — close every overlay so the player can
       // click anywhere on the grid, and drop any in-progress placement.
-      buildPanel.close(); hotelPanel.close(); statsPanel.close(); goalsPanel.close();
+      buildPanel.close(); hotelPanel.close(); statsPanel.close();
       uiBus.emit('exit_placement');
       uiBus.emit('toggle_demolish', true);
     } else {
@@ -213,7 +211,6 @@ function _closeAll(): void {
   buildPanel.close();
   hotelPanel.close();
   statsPanel.close();
-  goalsPanel.close();
   uiBus.emit('exit_placement');
   uiBus.emit('toggle_demolish', false);
 }
@@ -271,19 +268,19 @@ document.addEventListener('keydown', e => {
 
     case 'b':
     case 'B':
-      hotelPanel.close(); statsPanel.close(); goalsPanel.close();
+      hotelPanel.close(); statsPanel.close();
       bottomBar.pressButton('build');          // toggles via existing button logic
       break;
 
     case 'h':
     case 'H':
-      buildPanel.close(); statsPanel.close(); goalsPanel.close();
+      buildPanel.close(); statsPanel.close();
       bottomBar.pressButton('hotel');
       break;
 
     case 's':
     case 'S':
-      buildPanel.close(); hotelPanel.close(); goalsPanel.close();
+      buildPanel.close(); hotelPanel.close();
       bottomBar.pressButton('stats');
       break;
 
@@ -293,11 +290,16 @@ document.addEventListener('keydown', e => {
       break;
 
     case 'g':
-    case 'G':
+    case 'G': {
+      // G now opens Stats → Goals tab directly (V1 GoalsPanel retired).
+      // Close any other panel first so pressButton('stats') always opens
+      // rather than toggling Stats closed if it was already active.
       _closeAll();
       bottomBar.closeAll();
-      goalsPanel.open();
+      bottomBar.pressButton('stats');
+      statsPanel.setTab(2);
       break;
+    }
 
     case ' ':
       e.preventDefault();
