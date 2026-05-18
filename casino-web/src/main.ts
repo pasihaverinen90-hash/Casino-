@@ -10,6 +10,7 @@ import { ChallengeTicker } from './ui/ChallengeTicker';
 import { GoalCompletePopup } from './ui/GoalCompletePopup';
 import { StartScreen } from './ui/StartScreen';
 import { openActiveGoalDetail } from './v2/ui/openActiveGoalDetail';
+import { openReturnToMenuModal } from './v2/ui/returnToMenuModal';
 import { TopHUDV2 }    from './v2/ui/TopHUDV2';
 import { BottomBarV2 } from './v2/ui/BottomBarV2';
 import { BuildPanelV2 } from './v2/ui/BuildPanelV2';
@@ -101,56 +102,17 @@ function _bottomBarCallbacks(): {
   },
   onMenu    : () => {
     coordinator.closeAllAndClearBar();
-    _confirmReturnToMenu();
+    openReturnToMenuModal({
+      parent   : uiRoot,
+      onConfirm: () => {
+        started = false;
+        gameState.clearActiveSlot();
+        startScreen.show();
+      },
+    });
   },
   onCloseAll: () => coordinator.closeAll(),
 }; }
-
-function _confirmReturnToMenu(): void {
-  // Pause while the modal is up; restore the player's prior speed on cancel.
-  const prevSpeed = time.speed;
-  time.setSpeed(0);
-
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay interactive';
-
-  const card = document.createElement('div');
-  card.className = 'modal-card';
-
-  const title = document.createElement('div');
-  title.className   = 'modal-title';
-  title.textContent = 'Return to Main Menu?';
-  card.appendChild(title);
-
-  const body = document.createElement('div');
-  body.className   = 'modal-body';
-  body.textContent = 'Unsaved progress will be lost.';
-  card.appendChild(body);
-
-  const btnGo = document.createElement('button');
-  btnGo.className   = 'modal-btn danger';
-  btnGo.textContent = 'Return to Menu';
-  btnGo.onclick     = () => {
-    overlay.remove();
-    started = false;
-    time.setSpeed(0);
-    gameState.clearActiveSlot();
-    startScreen.show();
-  };
-  card.appendChild(btnGo);
-
-  const btnCancel = document.createElement('button');
-  btnCancel.className   = 'modal-btn';
-  btnCancel.textContent = 'Cancel';
-  btnCancel.onclick     = () => {
-    overlay.remove();
-    time.setSpeed(prevSpeed);
-  };
-  card.appendChild(btnCancel);
-
-  overlay.appendChild(card);
-  uiRoot.appendChild(overlay);
-}
 
 // Thin shim around coordinator.closeAll for callers that take a bare
 // function reference (BuildPanelV2's X-button hook, the keyboard
