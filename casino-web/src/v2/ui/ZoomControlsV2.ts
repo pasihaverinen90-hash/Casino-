@@ -17,15 +17,15 @@
 // buttons into a styled overlay then.
 import type { CameraControllerV2 } from '../scene/CameraControllerV2';
 
-// Positioned to the LEFT of SummaryCardV2 so the two don't overlap
-// in the bottom-right corner. Keep these in sync with the matching
-// .v2-summary-card values in styleV2.css:
-//   width: 220px;
-//   right: 16px;
-const SUMMARY_CARD_WIDTH_PX = 220;
-const SUMMARY_CARD_RIGHT_PX = 16;
-const SUMMARY_CARD_GAP_PX   = 16;
-const ZOOM_RIGHT_PX = SUMMARY_CARD_WIDTH_PX + SUMMARY_CARD_RIGHT_PX + SUMMARY_CARD_GAP_PX;
+// Anchored bottom-left in Phase 8E.1: SummaryCardV2 was removed, and
+// StatsPanelV2 now occupies the bottom-right band (right:0, width up to
+// 420px). Anchoring to the left edge — with enough offset to clear the
+// BuildPanelV2/HotelPanelV2 sidebars when open — keeps the buttons
+// reachable whether any side panel is open or closed.
+//   BuildPanelV2:  left:0, width:300
+//   HotelPanelV2:  left:0, width:320
+//   → 340px clears either with an 8–20px gap.
+const ZOOM_LEFT_PX = 340;
 
 export class ZoomControlsV2 {
   private camera   : CameraControllerV2;
@@ -42,8 +42,8 @@ export class ZoomControlsV2 {
     // to V2 controls too. Inline cssText is the source of truth for now.
     this.container.style.cssText = [
       'position: absolute',
-      `right: ${ZOOM_RIGHT_PX}px`,
-      'bottom: 88px',          // aligns with SummaryCardV2's lower edge; above V1/V2 BottomBar.
+      `left: ${ZOOM_LEFT_PX}px`,
+      'bottom: 88px',          // above V2 BottomBar (72px) + 16px breathing room.
       'display: flex',
       'gap: 6px',
       'z-index: 50',

@@ -39,8 +39,10 @@ export class StatsPanelV2 {
   private titleEl : HTMLElement;
   private tabToday: HTMLButtonElement;
   private tabHist : HTMLButtonElement;
+  private tabGoals: HTMLButtonElement;
   private paneToday: HTMLElement;
   private paneHist : HTMLElement;
+  private paneGoals: HTMLElement;
   private currentTab = 0;
 
   // RIGHT NOW rows
@@ -115,7 +117,8 @@ export class StatsPanelV2 {
 
     this.tabToday = _tabBtn('Today',   true,  () => this._showTab(0));
     this.tabHist  = _tabBtn('History', false, () => this._showTab(1));
-    tabs.append(this.tabToday, this.tabHist);
+    this.tabGoals = _tabBtn('Goals',   false, () => this._showTab(2));
+    tabs.append(this.tabToday, this.tabHist, this.tabGoals);
 
     // ── Body (scrollable) ──────────────────────────────────────────────
     const body = document.createElement('div');
@@ -178,7 +181,12 @@ export class StatsPanelV2 {
     this.rBrkAtm    = _statRow(this.paneHist);
     this.rBrkHotel  = _statRow(this.paneHist);
 
-    this.paneHist.appendChild(_sectionLabel('GOALS'));
+    // Goals pane (split out of History in Phase 8E.1 — same data source).
+    this.paneGoals = document.createElement('div');
+    this.paneGoals.className = 'v2-stats-pane';
+    this.paneGoals.style.display = 'none';
+
+    this.paneGoals.appendChild(_sectionLabel('GOALS'));
     const goalsList = document.createElement('div');
     goalsList.className = 'v2-goals-list';
     for (let i = 0; i < GOAL_COUNT; i++) {
@@ -187,9 +195,9 @@ export class StatsPanelV2 {
       goalsList.appendChild(row);
       this.goalRows.push(row);
     }
-    this.paneHist.appendChild(goalsList);
+    this.paneGoals.appendChild(goalsList);
 
-    body.append(this.paneToday, this.paneHist);
+    body.append(this.paneToday, this.paneHist, this.paneGoals);
     this.el.append(header, tabs, body);
     parent.appendChild(this.el);
 
@@ -221,8 +229,10 @@ export class StatsPanelV2 {
     this.currentTab = idx;
     this.tabToday.classList.toggle('active', idx === 0);
     this.tabHist .classList.toggle('active', idx === 1);
+    this.tabGoals.classList.toggle('active', idx === 2);
     this.paneToday.style.display = idx === 0 ? '' : 'none';
     this.paneHist .style.display = idx === 1 ? '' : 'none';
+    this.paneGoals.style.display = idx === 2 ? '' : 'none';
     // Canvas widths read offsetWidth → must be measured while the parent
     // is visible. Defer the redraw to the next frame so layout has settled.
     if (idx === 1) requestAnimationFrame(() => this._redrawCharts());

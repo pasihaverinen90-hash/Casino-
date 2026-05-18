@@ -19,7 +19,6 @@ import { GoalCompletePopup } from './ui/GoalCompletePopup';
 import { StartScreen } from './ui/StartScreen';
 import { TopHUDV2 }    from './v2/ui/TopHUDV2';
 import { BottomBarV2 } from './v2/ui/BottomBarV2';
-import { SummaryCardV2 } from './v2/ui/SummaryCardV2';
 import { BuildPanelV2 } from './v2/ui/BuildPanelV2';
 import { HotelPanelV2 } from './v2/ui/HotelPanelV2';
 import { StatsPanelV2 } from './v2/ui/StatsPanelV2';
@@ -128,9 +127,6 @@ const startScreen = new StartScreen(uiRoot, () => {
   time.setSpeed(1);
 });
 startScreen.show();
-
-// Summary card (V2-only): bottom-right "Today" pill.
-if (_v2Ui) new SummaryCardV2(uiRoot);
 
 // Bottom navigation: V2 premium nav when renderer=v2, else V1 bar.
 // Both classes share the same callback shape and public methods

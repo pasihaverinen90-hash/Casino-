@@ -939,14 +939,15 @@
 .v2-stats-panel.hidden { display: none; }
 
 .v2-stats-header {
+  flex: 0 0 auto;          /* never collapse: stays visible above the scroll */
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  border-bottom: 1px solid rgba(160, 120, 32, 0.35);
+  border-bottom: 1px solid rgba(160, 120, 32, 0.45);
   background: linear-gradient(180deg,
-              rgba(20, 16, 26, 0.92) 0%,
-              rgba(16, 14, 22, 0.82) 100%);
+              rgba(24, 18, 28, 0.98) 0%,
+              rgba(16, 14, 22, 0.94) 100%);
 }
 .v2-stats-title {
   margin: 0;
@@ -956,35 +957,39 @@
   letter-spacing: 0.12em;
 }
 .v2-stats-close {
-  background: transparent;
-  border: 1px solid rgba(160, 120, 32, 0.45);
-  color: var(--v2-gold);
-  font-size: 16px;
-  font-weight: 600;
-  width: 26px;
-  height: 26px;
+  background: rgba(40, 30, 16, 0.6);
+  border: 1px solid var(--v2-brass);
+  color: var(--v2-brass-hi);
+  font-size: 18px;
+  font-weight: 700;
+  width: 30px;
+  height: 30px;
+  line-height: 1;
   border-radius: 4px;
   cursor: pointer;
-  transition: background-color 120ms, color 120ms;
+  transition: background-color 120ms, color 120ms, border-color 120ms;
 }
 .v2-stats-close:hover {
   background: var(--v2-bg-hover);
+  border-color: var(--v2-brass-hi);
   color: var(--v2-text-bright);
 }
 
 .v2-stats-tabs {
+  flex: 0 0 auto;          /* same: stays pinned to the top of the panel */
   display: flex;
   gap: 4px;
   padding: 10px 12px;
-  border-bottom: 1px solid rgba(160, 120, 32, 0.25);
+  border-bottom: 1px solid rgba(160, 120, 32, 0.30);
+  background: rgba(12, 10, 18, 0.78);
 }
 .v2-stats-tab {
   flex: 1 1 auto;
   padding: 8px 10px;
   background: var(--v2-bg-glass-2);
-  border: 1px solid rgba(160, 120, 32, 0.35);
+  border: 1px solid rgba(160, 120, 32, 0.40);
   border-radius: var(--v2-radius);
-  color: var(--v2-gold-dim);
+  color: var(--v2-gold);   /* readable when inactive; active overrides below */
   font-family: var(--v2-font);
   font-size: 11px;
   font-weight: 700;
