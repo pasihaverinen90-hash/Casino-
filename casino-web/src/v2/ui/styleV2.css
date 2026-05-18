@@ -413,3 +413,294 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
 }
+
+/* ── V2 buttons (used inside V2 modals + V2-root overrides) ────────── */
+.v2-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 100px;
+  padding: 9px 16px;
+  border-radius: var(--v2-radius);
+  border: 1px solid var(--v2-brass);
+  background: var(--v2-bg-glass-2);
+  color: var(--v2-gold);
+  font-family: var(--v2-font);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background-color 120ms, border-color 120ms, color 120ms;
+}
+.v2-btn:hover:not(:disabled) {
+  background: var(--v2-bg-hover);
+  border-color: var(--v2-brass-hi);
+  color: var(--v2-text-bright);
+}
+.v2-btn:disabled { opacity: 0.45; cursor: default; }
+
+.v2-btn-primary {
+  background: linear-gradient(180deg,
+              rgba(160, 120, 32, 0.62) 0%,
+              rgba(120, 80, 30, 0.72) 100%);
+  border-color: var(--v2-brass-hi);
+  color: var(--v2-text-bright);
+}
+.v2-btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg,
+              rgba(200, 150, 50, 0.78) 0%,
+              rgba(160, 110, 40, 0.85) 100%);
+  border-color: var(--v2-brass-hi);
+}
+
+.v2-btn-secondary {
+  background: var(--v2-bg-glass-2);
+  border-color: rgba(160, 120, 32, 0.45);
+  color: var(--v2-gold-dim);
+}
+.v2-btn-secondary:hover:not(:disabled) {
+  border-color: var(--v2-brass);
+  color: var(--v2-gold);
+}
+
+.v2-btn-danger {
+  background: rgba(180, 50, 50, 0.20);
+  border-color: rgba(220, 70, 70, 0.55);
+  color: #ff8888;
+}
+.v2-btn-danger:hover:not(:disabled) { background: rgba(220, 50, 50, 0.35); }
+
+/* ── V2 modal chrome (used by BuildPanelV2 variant picker) ─────────── */
+.v2-modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 4, 10, 0.78);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;            /* above TopHUD/BottomBar (40) + sidebar (35) */
+  font-family: var(--v2-font);
+}
+.v2-modal-card {
+  background: linear-gradient(180deg,
+              rgba(28, 22, 32, 0.96) 0%,
+              rgba(16, 14, 22, 0.96) 100%);
+  border: 1px solid var(--v2-brass);
+  border-radius: var(--v2-radius);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.72),
+    0 0 0 1px rgba(160, 120, 32, 0.18) inset;
+  padding: 16px 18px 18px;
+  min-width: 320px;
+  max-width: min(420px, 92vw);
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+  color: var(--v2-text-bright);
+}
+.v2-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid rgba(160, 120, 32, 0.35);
+}
+.v2-modal-title {
+  color: var(--v2-gold);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.v2-modal-close {
+  background: transparent;
+  border: 1px solid rgba(160, 120, 32, 0.45);
+  color: var(--v2-gold);
+  font-size: 16px;
+  font-weight: 600;
+  width: 26px;
+  height: 26px;
+  line-height: 1;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 120ms, color 120ms, border-color 120ms;
+}
+.v2-modal-close:hover {
+  background: var(--v2-bg-hover);
+  border-color: var(--v2-brass);
+  color: var(--v2-text-bright);
+}
+.v2-modal-body {
+  color: var(--v2-text-bright);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.v2-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* ── V2 variant grid (table variant picker cards) ─────────────────── */
+.v2-variant-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.v2-variant-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 12px 14px;
+  background: var(--v2-bg-glass-2);
+  border: 1px solid rgba(160, 120, 32, 0.40);
+  border-radius: var(--v2-radius);
+  color: var(--v2-text-bright);
+  font-family: var(--v2-font);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms, border-color 120ms, box-shadow 120ms;
+}
+.v2-variant-card:hover {
+  background: var(--v2-bg-hover);
+  border-color: var(--v2-brass-hi);
+  box-shadow: 0 0 0 1px rgba(232, 196, 98, 0.30) inset;
+}
+.v2-variant-name {
+  color: var(--v2-text-bright);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.v2-variant-meta {
+  color: var(--v2-gold-dim);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+/* ── V2-root overrides for shared V1 chrome ────────────────────────── */
+/* uiRoot gets the .v2-root class when renderer=v2 (see main.ts). Scoping
+ * under that ancestor leaves V1 visuals untouched on the V1 path. These
+ * restyle the V1 DOM produced by GoalCompletePopup, ChallengeTicker,
+ * Toast, GoalTicker, and the main.ts return-to-menu modal. */
+
+.v2-root .modal-overlay {
+  background: rgba(6, 4, 10, 0.78);
+  z-index: 60;
+}
+.v2-root .modal-card {
+  background: linear-gradient(180deg,
+              rgba(28, 22, 32, 0.96) 0%,
+              rgba(16, 14, 22, 0.96) 100%);
+  border: 1px solid var(--v2-brass);
+  border-radius: var(--v2-radius);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.72),
+    0 0 0 1px rgba(160, 120, 32, 0.18) inset;
+  padding: 18px 20px 20px;
+  color: var(--v2-text-bright);
+  font-family: var(--v2-font);
+  min-width: 300px;
+}
+.v2-root .modal-title {
+  color: var(--v2-gold);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(160, 120, 32, 0.35);
+}
+.v2-root .modal-body {
+  color: var(--v2-text-bright);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.v2-root .modal-btn {
+  background: var(--v2-bg-glass-2);
+  border: 1px solid var(--v2-brass);
+  color: var(--v2-gold);
+  border-radius: var(--v2-radius);
+  font-family: var(--v2-font);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 10px 14px;
+  transition: background-color 120ms, border-color 120ms, color 120ms;
+}
+.v2-root .modal-btn:hover {
+  background: var(--v2-bg-hover);
+  border-color: var(--v2-brass-hi);
+  color: var(--v2-text-bright);
+}
+.v2-root .modal-btn.danger {
+  background: rgba(180, 50, 50, 0.20);
+  border-color: rgba(220, 70, 70, 0.55);
+  color: #ff8888;
+}
+.v2-root .modal-btn.danger:hover { background: rgba(220, 50, 50, 0.35); }
+
+.v2-root .event-section-label { color: var(--v2-gold); }
+.v2-root .event-section-text  { color: var(--v2-text-bright); }
+.v2-root .event-section-list  { color: var(--v2-text-bright); }
+
+/* Toast: keep V1 position-centric layout, just restyle the surface so
+ * it reads as part of the V2 chrome. Shift below V2 TopHUD (56px). */
+.v2-root .toast {
+  top: 72px;
+  background: var(--v2-bg-glass);
+  border: 1px solid var(--v2-brass);
+  border-radius: var(--v2-radius);
+  color: var(--v2-text-bright);
+  font-family: var(--v2-font);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  box-shadow: var(--v2-shadow);
+}
+
+/* Goal + Challenge tickers — inset away from the BuildPanelV2 sidebar
+ * (left) and SummaryCardV2 (right) so they read whether the sidebar is
+ * open or closed. Same V1 stacking (challenge above goal). */
+.v2-root .goal-ticker {
+  left: 316px;             /* 300px sidebar + 16px gap */
+  right: 252px;            /* 220px summary card + 16 right + 16 gap */
+  bottom: 80px;            /* above 72px bottom nav + 8px breathing */
+  height: 32px;
+  background: var(--v2-bg-glass);
+  border: 1px solid var(--v2-brass);
+  border-radius: var(--v2-radius);
+  color: var(--v2-gold);
+  font-family: var(--v2-font);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  box-shadow: var(--v2-shadow);
+  padding: 0 14px;
+  z-index: 30;
+}
+.v2-root .goal-ticker:active { background: var(--v2-bg-hover); }
+
+.v2-root .challenge-ticker {
+  left: 316px;
+  right: 252px;
+  bottom: 120px;           /* stacked above goal-ticker (height 32 + 8 gap) */
+  height: 28px;
+  background: var(--v2-bg-glass);
+  border: 1px solid rgba(80, 200, 180, 0.50);
+  border-radius: var(--v2-radius);
+  color: #6cdac0;
+  font-family: var(--v2-font);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  box-shadow: var(--v2-shadow);
+  padding: 0 14px;
+  z-index: 30;
+}

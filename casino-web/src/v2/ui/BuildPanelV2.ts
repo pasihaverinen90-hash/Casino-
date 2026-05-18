@@ -269,39 +269,70 @@ export class BuildPanelV2 {
     }
   }
 
-  // Variant picker modal — reuses V1's .modal-overlay / .modal-card /
-  // .modal-btn classes so V2 doesn't have to redesign the modal in
-  // this phase. Same content shape as V1 BuildPanel._showVariantPicker.
+  // Variant picker modal — V2 chrome (.v2-modal-* / .v2-variant-* / .v2-btn-*).
+  // Same content shape as V1 BuildPanel._showVariantPicker: same payload,
+  // same uiBus emit, same selection-highlight behaviour. Pure CSS swap.
   private _showVariantPicker(t: GC.ObjType, variants: string[]): void {
     const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay interactive';
+    overlay.className = 'v2-modal-overlay interactive';
 
     const card = document.createElement('div');
-    card.className = 'modal-card';
+    card.className = 'v2-modal-card';
+    // Click on backdrop closes; click inside card does not bubble out.
+    card.onclick = (e) => e.stopPropagation();
+
+    const header = document.createElement('div');
+    header.className = 'v2-modal-header';
 
     const title = document.createElement('div');
-    title.className   = 'modal-title';
+    title.className   = 'v2-modal-title';
     title.textContent = 'Choose table type';
-    card.appendChild(title);
+
+    const btnX = document.createElement('button');
+    btnX.type        = 'button';
+    btnX.className   = 'v2-modal-close';
+    btnX.title       = 'Close';
+    btnX.textContent = '×';
+    btnX.onclick     = () => overlay.remove();
+
+    header.append(title, btnX);
+    card.appendChild(header);
+
+    const grid = document.createElement('div');
+    grid.className = 'v2-variant-grid';
 
     for (const v of variants) {
       const b = document.createElement('button');
-      b.className   = 'modal-btn';
-      b.textContent = v.charAt(0).toUpperCase() + v.slice(1);
+      b.type      = 'button';
+      b.className = 'v2-variant-card';
+
+      const nameEl = document.createElement('div');
+      nameEl.className   = 'v2-variant-name';
+      nameEl.textContent = v.charAt(0).toUpperCase() + v.slice(1);
+      b.appendChild(nameEl);
+
       b.onclick = () => {
         overlay.remove();
         uiBus.emit('start_placement', { type: t, variant: v });
         this._setSelected(t);
       };
-      card.appendChild(b);
+      grid.appendChild(b);
     }
+    card.appendChild(grid);
 
+    const actions = document.createElement('div');
+    actions.className = 'v2-modal-actions';
     const cancel = document.createElement('button');
-    cancel.className   = 'modal-btn';
+    cancel.type        = 'button';
+    cancel.className   = 'v2-btn v2-btn-secondary';
     cancel.textContent = 'Cancel';
-    cancel.style.color = '#888';
     cancel.onclick     = () => overlay.remove();
-    card.appendChild(cancel);
+    actions.appendChild(cancel);
+    card.appendChild(actions);
+
+    // Backdrop click = cancel. The card's onclick stops propagation so an
+    // inside-card click never closes the modal accidentally.
+    overlay.onclick = () => overlay.remove();
 
     overlay.appendChild(card);
     this.overlayHost.appendChild(overlay);

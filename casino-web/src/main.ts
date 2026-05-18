@@ -32,6 +32,12 @@ const uiRoot = document.createElement('div');
 uiRoot.id    = 'ui-root';
 appEl.appendChild(uiRoot);
 
+// V2 chrome opts in via a single ancestor class. Lets V2 styleV2.css scope
+// overrides for the shared V1 modal/toast/ticker classes (.modal-overlay,
+// .toast, .goal-ticker, .challenge-ticker, …) without rewriting those
+// components. V1 path leaves uiRoot unclassed so V1 visuals stay intact.
+if (getRendererId() === 'v2') uiRoot.classList.add('v2-root');
+
 // ── Phaser game (renders the grid canvas, fills the window) ───────────────
 // Renderer selection: Phase 1 wires both V1 (GridScene) and V2
 // (PresentationSceneV2) into the scene list. Phaser auto-starts the first
