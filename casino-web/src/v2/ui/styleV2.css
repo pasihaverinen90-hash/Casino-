@@ -110,6 +110,40 @@
   color: var(--v2-text-bright);
 }
 
+/* View group (zoom −/+ buttons inside TopHUDV2). Visually matches the
+ * speed group so the right cluster reads as: clock · view · speed. The
+ * inner buttons are populated by PresentationSceneV2's ZoomControlsV2. */
+.v2-view-group {
+  display: flex;
+  gap: 2px;
+  background: var(--v2-bg-glass-2);
+  border: 1px solid var(--v2-brass);
+  border-radius: var(--v2-radius);
+  overflow: hidden;
+}
+.v2-zoom-controls { display: contents; }
+.v2-view-btn {
+  background: transparent;
+  border: none;
+  color: var(--v2-gold);
+  font-family: var(--v2-font);
+  font-size: 16px;
+  font-weight: 700;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background-color 120ms, color 120ms, opacity 120ms;
+  min-width: 30px;
+  line-height: 1;
+}
+.v2-view-btn:hover:not(:disabled) {
+  background: var(--v2-bg-hover);
+  color: var(--v2-brass-hi);
+}
+.v2-view-btn:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
 .v2-clock {
   display: flex;
   align-items: center;
@@ -1145,10 +1179,3 @@
 }
 .v2-goal-summary.open .v2-goal-summary-meta { color: var(--v2-gold-dim); }
 
-/* ── Zoom controls visibility ───────────────────────────────────────
- * Phase 8E.2: hide the zoom buttons whenever a large V2 panel is open
- * (Build / Hotel / Stats). main.ts toggles `v2-panel-open` on uiRoot
- * via the BottomBarV2 onBuild/onHotel/onStats callbacks. The buttons
- * sit at right:24 / bottom:96 by default; this rule pulls them out of
- * layout when a panel covers their corner. */
-.v2-panel-open .v2-zoom-controls { display: none; }

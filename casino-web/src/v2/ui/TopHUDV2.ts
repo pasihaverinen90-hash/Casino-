@@ -54,6 +54,16 @@ export class TopHUDV2 {
     this.vClock.className = 'v2-clock';
     this.el.appendChild(this.vClock);
 
+    // View-control slot (zoom −/+). Owned by TopHUDV2 visually, but
+    // populated by PresentationSceneV2 because the buttons need a
+    // CameraControllerV2 reference that only the scene has. The scene
+    // looks this element up by id and appends its buttons here.
+    const viewGroup = document.createElement('div');
+    viewGroup.className = 'v2-view-group';
+    viewGroup.id        = 'v2-view-group';
+    viewGroup.title     = 'View — zoom out / in';
+    this.el.appendChild(viewGroup);
+
     // Speed segmented control.
     const speedGroup = document.createElement('div');
     speedGroup.className = 'v2-speed-group';

@@ -136,14 +136,6 @@ const bottomBar = _v2Ui
   ? new BottomBarV2(uiRoot, _bottomBarCallbacks())
   : new BottomBar(uiRoot, _bottomBarCallbacks());
 
-// V2 zoom-controls live in the Phaser scene and have no main.ts handle —
-// hiding them goes through a CSS class on uiRoot instead. Apply only in
-// V2 mode; V1 has no zoom controls and no `.v2-panel-open` rule.
-function _setPanelOpen(open: boolean): void {
-  if (!_v2Ui) return;
-  uiRoot.classList.toggle('v2-panel-open', open);
-}
-
 function _bottomBarCallbacks(): {
   onBuild: () => void; onHotel: () => void; onStats: () => void;
   onDemolish: (active: boolean) => void;
@@ -153,19 +145,16 @@ function _bottomBarCallbacks(): {
     hotelPanel.close(); statsPanel.close(); goalsPanel.close();
     uiBus.emit('toggle_demolish', false);
     buildPanel.open();
-    _setPanelOpen(true);
   },
   onHotel: () => {
     buildPanel.close(); statsPanel.close(); goalsPanel.close();
     uiBus.emit('toggle_demolish', false);
     hotelPanel.open();
-    _setPanelOpen(true);
   },
   onStats: () => {
     buildPanel.close(); hotelPanel.close(); goalsPanel.close();
     uiBus.emit('toggle_demolish', false);
     statsPanel.open();
-    _setPanelOpen(true);
   },
   onDemolish: (active: boolean) => {
     if (active) {
@@ -242,7 +231,6 @@ function _closeAll(): void {
   goalsPanel.close();
   uiBus.emit('exit_placement');
   uiBus.emit('toggle_demolish', false);
-  _setPanelOpen(false);
 }
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────

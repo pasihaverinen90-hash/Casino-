@@ -76,7 +76,11 @@ export class PresentationSceneV2 extends Phaser.Scene {
       color     : _hex(UI_GOLD_DIM),
     }).setDepth(100).setAlpha(0.7);
 
-    this.zoomControls  = new ZoomControlsV2(this.camera);
+    // Zoom buttons live inside the TopHUDV2 "view" slot (Phase 8E.3).
+    // Skip mounting if the slot is missing (e.g. running the scene
+    // without TopHUDV2 in a test harness); keyboard zoom still works.
+    const viewSlot = document.getElementById('v2-view-group');
+    if (viewSlot) this.zoomControls = new ZoomControlsV2(this.camera, viewSlot);
 
     gameState.on('state_changed', () => {
       this._redraw();
