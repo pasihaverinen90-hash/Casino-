@@ -9,8 +9,7 @@ import { Toast }       from './ui/Toast';
 import { ChallengeTicker } from './ui/ChallengeTicker';
 import { GoalCompletePopup } from './ui/GoalCompletePopup';
 import { StartScreen } from './ui/StartScreen';
-import * as GC from './logic/GameConstants';
-import { openObjectiveDetail, section, progressSection } from './ui/objectiveDetail';
+import { openActiveGoalDetail } from './v2/ui/openActiveGoalDetail';
 import { TopHUDV2 }    from './v2/ui/TopHUDV2';
 import { BottomBarV2 } from './v2/ui/BottomBarV2';
 import { BuildPanelV2 } from './v2/ui/BuildPanelV2';
@@ -60,7 +59,7 @@ const buildPanel = new BuildPanelV2(uiRoot, () => bottomBar.closeAll(_closeAll))
 
 // GoalTicker click opens the shared objective-detail modal for the
 // single active goal. StatsPanelV2 → Goals tab still hosts the full list.
-new GoalTicker(uiRoot, () => _openActiveGoalDetailV2());
+new GoalTicker(uiRoot, () => openActiveGoalDetail(uiRoot));
 
 // Migrate any pre-slot save into slot 1 the first time we boot.
 Slots.migrateLegacy();
@@ -151,39 +150,6 @@ function _confirmReturnToMenu(): void {
 
   overlay.appendChild(card);
   uiRoot.appendChild(overlay);
-}
-
-// Open the shared objective-detail modal for the active goal. Mirrors the
-// Challenge click behaviour — single-objective focus, same title +
-// sections + Close panel shape. StatsPanelV2 → Goals hosts the full list.
-function _openActiveGoalDetailV2(): void {
-  const idx = gameState.activeGoal;
-  if (idx >= 10) {
-    // All goals complete: show a small "all done" detail panel that still
-    // matches the modal shape rather than silently doing nothing.
-    const body = document.createElement('div');
-    body.appendChild(section('Status', 'All goals complete — Endless Mode unlocked.'));
-    openObjectiveDetail(uiRoot, 'Goals Complete', body);
-    return;
-  }
-
-  const done    = gameState.completedGoals[idx] === true;
-  const day     = gameState.goalCompletedDays[idx];
-  const reward  = GC.GOAL_REWARDS[idx];
-  const desc    = GC.GOAL_DESCS[idx];
-  const pct     = done ? 1 : gameState.getGoalProgress(idx);
-  const status  = done
-    ? (day != null ? `Completed — Day ${day}` : 'Completed')
-    : 'In progress';
-
-  const body = document.createElement('div');
-  body.appendChild(section('Goal',     `${idx + 1}. ${GC.GOAL_LABELS[idx]}`));
-  body.appendChild(section('Objective', desc));
-  body.appendChild(progressSection('Progress', pct, `${Math.round(pct * 100)}% complete`));
-  body.appendChild(section('Reward',   `+${reward.toLocaleString()} 💰`));
-  body.appendChild(section('Status',   status));
-
-  openObjectiveDetail(uiRoot, `Goal ${idx + 1}`, body);
 }
 
 // Thin shim around coordinator.closeAll for callers that take a bare
