@@ -1,15 +1,13 @@
-// RendererFlag.ts — selects between the V1 and V2 renderers.
-//
-// Phase 0: not yet wired into main.ts. The module compiles and exports
-// its public surface so future phases (Phase 1+) can switch between the
-// legacy top-down GridScene and the new PresentationSceneV2 without
-// touching call sites.
+// RendererFlag.ts — selects between V1 (GridScene) and V2
+// (PresentationSceneV2). Consumed by main.ts to pick which Phaser scene
+// boots first and which set of HTML UI components mounts.
 //
 // Resolution order in getRendererId():
 //   1. URL query parameter ?renderer=v1|v2 (wins over storage so a
 //      query can recover a stuck localStorage preference during dev).
 //   2. localStorage 'rendererV2' === 'v2'  → 'v2'; anything else → 'v1'.
-//   3. Default 'v1'.
+//   3. Default 'v1' (V1 remains the default fallback until the project
+//      explicitly flips it).
 //
 // Storage reads/writes are wrapped in try/catch so private-mode browsers
 // and quota errors are silent — mirrors the pattern in GameState._writeSave

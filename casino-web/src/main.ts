@@ -42,11 +42,11 @@ appEl.appendChild(uiRoot);
 if (getRendererId() === 'v2') uiRoot.classList.add('v2-root');
 
 // ── Phaser game (renders the grid canvas, fills the window) ───────────────
-// Renderer selection: Phase 1 wires both V1 (GridScene) and V2
-// (PresentationSceneV2) into the scene list. Phaser auto-starts the first
-// scene only, so putting the selected renderer first chooses which one
-// boots without altering the other's registration. Default stays 'v1';
-// ?renderer=v2 in the URL forces V2 (see state/RendererFlag.ts).
+// Both scene classes are registered so either renderer can be picked at
+// boot. Phaser auto-starts the first scene in the list, so the selected
+// renderer is placed first — RendererFlag picks the order. Default
+// renderer remains controlled by RendererFlag (currently V1; flip via
+// ?renderer=v2 in the URL or via localStorage).
 const _rendererId = getRendererId();
 const _sceneList  = _rendererId === 'v2'
   ? [PresentationSceneV2, GridScene]

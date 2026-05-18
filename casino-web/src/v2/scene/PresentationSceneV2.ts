@@ -14,11 +14,10 @@
 //   10 ghost
 //   11 demolish
 //   12 selection
-//   100 debug label
-//   DOM zoomControls + previewNotice (overlay)
+//   DOM zoom controls live inside TopHUDV2 (see ZoomControlsV2).
 import Phaser from 'phaser';
 import { gameState } from '../../state/GameState';
-import { BG_DARK, UI_GOLD_DIM } from '../render/PaletteV2';
+import { BG_DARK } from '../render/PaletteV2';
 import { drawFloor } from '../render/FloorRendererV2';
 import { drawWalls } from '../render/WallRendererV2';
 import { drawObjects } from '../render/ObjectRendererV2';
@@ -42,7 +41,6 @@ export class PresentationSceneV2 extends Phaser.Scene {
   private camera!         : CameraControllerV2;
   private guestController!: GuestVisualControllerV2;
   private inputController!: InputControllerV2;
-  private debugLabel!     : Phaser.GameObjects.Text;
   private zoomControls?   : ZoomControlsV2;
 
   constructor() {
@@ -69,12 +67,6 @@ export class PresentationSceneV2 extends Phaser.Scene {
     this.inputController = new InputControllerV2(
       this, this.camera, this.guestController, () => this._redrawOverlays(),
     );
-
-    this.debugLabel = this.add.text(8, 4, 'Presentation V2', {
-      fontFamily: 'monospace',
-      fontSize  : '11px',
-      color     : _hex(UI_GOLD_DIM),
-    }).setDepth(100).setAlpha(0.7);
 
     // Zoom buttons live inside the TopHUDV2 "view" slot (Phase 8E.3).
     // Skip mounting if the slot is missing (e.g. running the scene
@@ -192,9 +184,4 @@ export class PresentationSceneV2 extends Phaser.Scene {
       );
     }
   }
-}
-
-// 0xRRGGBB → '#rrggbb' for Phaser Text style.
-function _hex(n: number): string {
-  return '#' + n.toString(16).padStart(6, '0');
 }
