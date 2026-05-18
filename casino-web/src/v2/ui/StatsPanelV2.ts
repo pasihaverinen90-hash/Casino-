@@ -21,7 +21,7 @@
 // shortcuts or BottomBar callbacks.
 import * as GC from '../../logic/GameConstants';
 import { gameState } from '../../state/GameState';
-import { fmtCash, fmtInt, fmtPct, fmtRating } from '../../ui/format';
+import { fmtCash, fmtInt, fmtPct, fmtRating, fmtOccupancy } from '../../ui/format';
 
 const CHART_HEIGHT_PX = 120;
 const GOAL_COUNT      = 10;
@@ -269,7 +269,9 @@ export class StatsPanelV2 {
     _setRow(this.rWalkin, 'Walk-in',         fmtInt(s.walkin));
     _setRow(this.rHotelG, 'Hotel',           fmtInt(s.hotelGuests));
     _setRow(this.rCap,    'Casino capacity', fmtInt(s.capacity));
-    _setRow(this.rOcc,    'Hotel occupancy', fmtPct(s.occupancy));
+    // Match HotelPanelV2: show booked/total with a count-grounded percent
+    // instead of the underlying demand rate (which can disagree by 1–2 %).
+    _setRow(this.rOcc,    'Hotel occupancy', fmtOccupancy(s.bookedRooms, s.roomCount));
 
     if (!last) {
       this.yHeader.textContent = 'YESTERDAY';

@@ -274,6 +274,34 @@ export class InputControllerV2 {
     return { col: curCol, row: curRow };
   }
 
+  // Which buildable wall the cursor is currently nearest to, or null if
+  // outside the snap radius. Drives both the snap anchor and the
+  // auto-orient facing logic below so they always agree.
+  private _wallSnapSide(curCol: number, curRow: number): 'N' | 'W' | null {
+    const nearN = curRow <= WALL_SNAP_TILES;
+    const nearW = curCol <= WALL_SNAP_TILES;
+    if (nearN && (!nearW || curRow <= curCol)) return 'N';
+    if (nearW) return 'W';
+    return null;
+  }
+
+  // Wall-service auto-orient (Phase 10B). Wall services have no genuine
+  // "user-chosen" facing — the facing only controls the horiz/vert
+  // dimsFor flip and the door-tile axis, both of which must match the
+  // wall the service attaches to. Force the facing to match the snapped
+  // wall side so the player never has to press R for a valid placement.
+  // R is still wired (so the player can dodge a guest standing in the
+  // way etc.), but the next hover normalizes the facing back.
+  private _autoOrientForWall(curCol: number, curRow: number): void {
+    const def = GC.getDef(this.placeType);
+    if (!def.is_wall) return;
+    const side = this._wallSnapSide(curCol, curRow);
+    if      (side === 'N') this.placeFacing = 'S';
+    else if (side === 'W') this.placeFacing = 'E';
+    // Outside snap radius: leave the user's facing alone so the
+    // validator rejects cleanly with the existing wall-side toast.
+  }
+
   // Wall-service snap. The Phase 3 validator rule rejects S/E walls;
   // this snap is purely UX — when the cursor is near the N or W wall,
   // pin the perpendicular coordinate to row=1 / col=1 so the player
@@ -281,14 +309,9 @@ export class InputControllerV2 {
   // truth gate: a snap that produces an invalid anchor renders red and
   // tryPlace will refuse it.
   private _wallSnapAnchor(curCol: number, curRow: number): { col: number; row: number } {
-    const nearN = curRow <= WALL_SNAP_TILES;
-    const nearW = curCol <= WALL_SNAP_TILES;
-    if (nearN && (!nearW || curRow <= curCol)) {
-      return { col: curCol, row: 1 };
-    }
-    if (nearW) {
-      return { col: 1, row: curRow };
-    }
+    const side = this._wallSnapSide(curCol, curRow);
+    if (side === 'N') return { col: curCol, row: 1 };
+    if (side === 'W') return { col: 1,      row: curRow };
     // Out of snap radius — leave at cursor; validator will reject.
     return { col: curCol, row: curRow };
   }
@@ -310,6 +333,9 @@ export class InputControllerV2 {
 
   private _revalidateGhost(): void {
     if (this.cursorCol < 0) { this.ghost = null; return; }
+    // Normalize facing for wall services BEFORE computing the anchor,
+    // since dimsFor (used by _placeAnchor) depends on facing.
+    this._autoOrientForWall(this.cursorCol, this.cursorRow);
     const a = this._placeAnchor(this.cursorCol, this.cursorRow);
     const { w, h } = GC.dimsFor(this.placeType, this.placeFacing);
     const result = PV.validate(
@@ -368,6 +394,10 @@ export class InputControllerV2 {
   private _commitPlacement(
     ptr: Phaser.Input.Pointer, coord: { col: number; row: number },
   ): void {
+    // Same auto-orient applied during hover — also belt-and-suspenders for
+    // commits that fire without an intervening hover (e.g. tap right after
+    // start_placement with the cursor already over the wall).
+    this._autoOrientForWall(coord.col, coord.row);
     const a       = this._placeAnchor(coord.col, coord.row);
     const objType = this.placeType;
 

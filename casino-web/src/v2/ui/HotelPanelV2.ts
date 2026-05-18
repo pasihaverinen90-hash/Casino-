@@ -13,7 +13,7 @@
 //
 // Styling lives in styleV2.css under .v2-hotel-* class selectors.
 import { gameState } from '../../state/GameState';
-import { fmtCash } from '../../ui/format';
+import { fmtCash, fmtOccupancy } from '../../ui/format';
 
 interface RoomOption {
   rooms : number;
@@ -176,8 +176,10 @@ export class HotelPanelV2 {
 
     // ── Stat cards ──────────────────────────────────────────────────────
     this.statRooms.textContent   = String(gs.roomCount);
-    this.statOcc.textContent     =
-      `${gs.bookedRooms} / ${Math.max(1, gs.roomCount)}  ·  ${Math.round(gs.occupancyRate * 100)}%`;
+    // Shared formatter — count and percent are always grounded in
+    // bookedRooms / roomCount, never in the underlying demand rate.
+    // Keeps HotelPanelV2 + StatsPanelV2 visibly consistent.
+    this.statOcc.textContent     = fmtOccupancy(gs.bookedRooms, gs.roomCount);
     this.statQuality.textContent = `${_stars(gs.qualityLevel)}  L${gs.qualityLevel}`;
     this.statIncome.textContent  = `${fmtCash(gs.bookedRooms * 25)} 💰`;
 

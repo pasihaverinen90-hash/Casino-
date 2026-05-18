@@ -30,3 +30,20 @@ export function fmtPct(ratio: number): string {
 export function fmtRating(v: number): string {
   return v.toFixed(1);
 }
+
+// Hotel occupancy percent grounded in actual booked rooms vs total rooms.
+// Independent of the underlying demand `occupancyRate` (a 0..1 fraction
+// that can round to 99% while booked = floor(rooms * rate) only fills 11
+// of 12 rooms). Clamped 0..100 and rounded for compact display.
+export function occupancyPct(booked: number, roomCount: number): number {
+  if (!Number.isFinite(roomCount) || roomCount <= 0) return 0;
+  const pct = Math.round((booked / roomCount) * 100);
+  return Math.max(0, Math.min(100, pct));
+}
+
+// "B / R · P%" string used by both HotelPanelV2 and StatsPanelV2 so the
+// count and percent never disagree.
+export function fmtOccupancy(booked: number, roomCount: number): string {
+  if (roomCount <= 0) return '0 / 0 · 0%';
+  return `${booked} / ${roomCount} · ${occupancyPct(booked, roomCount)}%`;
+}

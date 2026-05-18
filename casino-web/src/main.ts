@@ -127,9 +127,11 @@ time.setSpeed(0);
 
 let started = false;
 const startScreen = new StartScreen(uiRoot, () => {
-  // Slot has been picked and gameState is populated. Reset clock and resume.
+  // Slot has been picked and gameState is populated. GameState owns the
+  // in-day clock: _newGame resets to 00:00 for fresh slots, _apply
+  // restores the saved minute for loaded ones — so main.ts only needs
+  // to resume the speed.
   started = true;
-  time.resetClock();
   time.setSpeed(1);
 });
 startScreen.show();

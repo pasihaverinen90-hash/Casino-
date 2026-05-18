@@ -56,10 +56,20 @@ class TimeController extends EventEmitter {
   // Reset the in-day clock — called when a slot is loaded / new game starts
   // so the player always sees 00:00 at the start of a session day.
   resetClock(): void {
-    this._gameMin    = 0;
-    this._quarterIdx = 0;
-    this._hourTicks  = 0;
-    this.emit('clock', 0);
+    this.setGameMin(0);
+  }
+
+  // Restore the in-day clock to a specific minute (0..MIN_PER_DAY).
+  // Used by GameState._apply so a loaded save resumes at the saved
+  // clock position instead of always restarting at 00:00. Derived
+  // _quarterIdx and _hourTicks are recomputed from min so subsequent
+  // tick events fire at the correct boundaries.
+  setGameMin(min: number): void {
+    const m = Math.max(0, Math.min(MIN_PER_DAY - 1, Math.floor(Number.isFinite(min) ? min : 0)));
+    this._gameMin    = m;
+    this._quarterIdx = Math.floor(m / MIN_PER_QUARTER);
+    this._hourTicks  = Math.floor(m / MIN_PER_HOUR);
+    this.emit('clock', this._quarterIdx);
   }
 
   // ── Internal tick ─────────────────────────────────────────────────────────

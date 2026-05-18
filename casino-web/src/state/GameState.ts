@@ -6,6 +6,7 @@ import * as PV from '../logic/PlacementValidator';
 import * as OV from '../logic/OperationalValidator';
 import { EventEmitter } from './EventEmitter';
 import * as Slots from './SaveSlots';
+import { time } from './TimeController';
 
 // ── Save schema ───────────────────────────────────────────────────────────
 // Bump SAVE_VERSION when the on-disk schema changes and add an entry to
@@ -44,6 +45,11 @@ interface SavePayload {
   // Campaign Challenge Schedule V1 — stable keys for scheduled entries that
   // have already fired. Defaults to [] in normalizeSave so old saves load.
   triggered_scheduled_challenges : string[];
+  // Phase 10B: in-day clock position in game-minutes (0..1439). Lets a
+  // loaded save resume at the exact saved HH:MM instead of always
+  // restarting at 00:00. Defaults to 0 in normalizeSave so legacy saves
+  // still load (and behave as before — start-of-day).
+  clock_min   : number;
   stats       : GC.DayStats[];
   ch_days     : number[];
   ch_guests   : number[];
@@ -153,6 +159,8 @@ function normalizeSave(d: any): SavePayload {
       Array.isArray(d.triggered_scheduled_challenges)
         ? d.triggered_scheduled_challenges.filter((x: unknown) => typeof x === 'string')
         : [],
+    clock_min   : typeof d.clock_min === 'number' && Number.isFinite(d.clock_min)
+                    ? d.clock_min : 0,
     stats       : Array.isArray(d.stats)     ? d.stats     : [],
     ch_days     : Array.isArray(d.ch_days)   ? d.ch_days   : [],
     ch_guests   : Array.isArray(d.ch_guests) ? d.ch_guests : [],
@@ -337,6 +345,9 @@ class GameState extends EventEmitter {
   // ── Init ───────────────────────────────────────────────────────────────────
 
   private _newGame(): void {
+    // Start every new game / new-game-in-slot at 00:00. _apply will
+    // override this with the saved clock when a slot is loaded.
+    time.resetClock();
     this.tiles = []; this.placedObjs = []; this._nextId = 0;
     this.cash = GC.STARTING_CASH; this.cumulativeIncome = 0;
     this.lastGuests = 0; this.prevCrowding = 0;
@@ -1128,6 +1139,7 @@ class GameState extends EventEmitter {
       active_challenge: this.activeChallenge,
       active_boost    : this.activeBoost,
       triggered_scheduled_challenges: this.triggeredScheduledChallenges,
+      clock_min: time.gameMin,
       stats: this.statsRecords,
       ch_days: this.chartDays, ch_guests: this.chartGuests,
       ch_rev: this.chartRevenue, ch_rating: this.chartRating,
@@ -1233,6 +1245,10 @@ class GameState extends EventEmitter {
     // If the loaded save already satisfies an in-flight Comfort Check, give
     // the player credit immediately rather than waiting for the next action.
     this._updateComfortCheckProgressAndMaybeComplete();
+
+    // Restore in-day clock LAST so it isn't clobbered by anything above
+    // that calls into TimeController. Legacy saves get 0 via normalizeSave.
+    time.setGameMin(d.clock_min);
   }
 
   private _tryLoad(key: string): boolean {
