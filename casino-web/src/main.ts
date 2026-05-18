@@ -1,17 +1,10 @@
 // main.ts — entry point. Bootstraps Phaser and all HTML UI components.
 import Phaser from 'phaser';
-import { GridScene } from './game/GridScene';
 import { PresentationSceneV2 } from './v2/scene/PresentationSceneV2';
-import { getRendererId } from './state/RendererFlag';
 import { uiBus }       from './events/UIBus';
 import { gameState }   from './state/GameState';
 import { time }       from './state/TimeController';
-import { TopHUD }      from './ui/TopHUD';
-import { BottomBar }   from './ui/BottomBar';
 import { GoalTicker }  from './ui/GoalTicker';
-import { BuildPanel }  from './ui/BuildPanel';
-import { HotelPanel }  from './ui/HotelPanel';
-import { StatsPanel }  from './ui/StatsPanel';
 import { GoalsPanel }  from './ui/GoalsPanel';
 import { Toast }       from './ui/Toast';
 import { ChallengeTicker } from './ui/ChallengeTicker';
@@ -25,8 +18,7 @@ import { BuildPanelV2 } from './v2/ui/BuildPanelV2';
 import { HotelPanelV2 } from './v2/ui/HotelPanelV2';
 import { StatsPanelV2 } from './v2/ui/StatsPanelV2';
 import * as Slots      from './state/SaveSlots';
-// V2 UI styles. Scoped under .v2-* class selectors so loading them in
-// V1 mode is harmless (no .v2-* roots exist in V1).
+// V2 UI styles — scoped under .v2-* class selectors and .v2-root overrides.
 import './v2/ui/styleV2.css';
 
 // ── DOM structure ─────────────────────────────────────────────────────────
@@ -35,30 +27,19 @@ const uiRoot = document.createElement('div');
 uiRoot.id    = 'ui-root';
 appEl.appendChild(uiRoot);
 
-// V2 chrome opts in via a single ancestor class. Lets V2 styleV2.css scope
-// overrides for the shared V1 modal/toast/ticker classes (.modal-overlay,
-// .toast, .goal-ticker, .challenge-ticker, …) without rewriting those
-// components. V1 path leaves uiRoot unclassed so V1 visuals stay intact.
-if (getRendererId() === 'v2') uiRoot.classList.add('v2-root');
+// V2 chrome class — applied unconditionally now that V1 is retired. Lets
+// styleV2.css scope overrides for the shared modal/toast/ticker classes
+// without rewriting those components.
+uiRoot.classList.add('v2-root');
 
 // ── Phaser game (renders the grid canvas, fills the window) ───────────────
-// Both scene classes are registered so either renderer can be picked at
-// boot. Phaser auto-starts the first scene in the list, so the selected
-// renderer is placed first — RendererFlag picks the order. Default
-// renderer remains controlled by RendererFlag (currently V1; flip via
-// ?renderer=v2 in the URL or via localStorage).
-const _rendererId = getRendererId();
-const _sceneList  = _rendererId === 'v2'
-  ? [PresentationSceneV2, GridScene]
-  : [GridScene, PresentationSceneV2];
-
 new Phaser.Game({
   type      : Phaser.AUTO,
   width     : window.innerWidth,
   height    : window.innerHeight,
   parent    : 'app',
   backgroundColor: '#0a0c14',
-  scene     : _sceneList,
+  scene     : [PresentationSceneV2],
   input     : { touch: true, mouse: true },
   scale     : {
     mode      : Phaser.Scale.RESIZE,
@@ -68,50 +49,19 @@ new Phaser.Game({
 });
 
 // ── HTML UI components ────────────────────────────────────────────────────
-// Top HUD: V2 (premium casino-sim shell) when renderer=v2, else V1.
-// Both classes expose `setClock(idx)` so the TimeController wiring
-// below doesn't need a branch.
-const _v2Ui = _rendererId === 'v2';
-const topHUD: { setClock: (i: number) => void } = _v2Ui
-  ? new TopHUDV2(uiRoot)
-  : new TopHUD(uiRoot);
+const topHUD = new TopHUDV2(uiRoot);
 new Toast(uiRoot);
 new ChallengeTicker(uiRoot);
 new GoalCompletePopup(uiRoot);
 
 const goalsPanel = new GoalsPanel(uiRoot);
-// StatsPanel: V2 (premium reports panel with tabs + mini charts) when
-// renderer=v2, else V1. Both classes expose `open / close`. Same
-// gameState.statsRecords / chart* / completedGoals reads — V2 just
-// restyles and renders compact V2 mini-charts inline.
-const statsPanel: { open(): void; close(): void } = _v2Ui
-  ? new StatsPanelV2(uiRoot)
-  : new StatsPanel(uiRoot);
-// HotelPanel: V2 (premium right-side hotel/rooms panel) when renderer=v2,
-// else V1. Both classes expose `open / close`. Same uiBus / gameState
-// contract — V2 just restyles + reformats; gameplay actions still go
-// through gameState.buyRooms / gameState.upgradeQuality.
-const hotelPanel: { open(): void; close(): void } = _v2Ui
-  ? new HotelPanelV2(uiRoot)
-  : new HotelPanel(uiRoot);
-// Build sidebar's X button routes through BottomBar.closeAll so the Build
-// button highlight is cleared and `_closeAll` runs (which emits
-// exit_placement and hides any other panels). V2 path uses the premium
-// BuildPanelV2 (left sidebar with 2×2 category grid); V1 keeps the
-// original BuildPanel. Both share the same public surface (open/close)
-// and the same uiBus 'start_placement' contract.
-const buildPanel: { open(): void; close(): void } = _v2Ui
-  ? new BuildPanelV2(uiRoot, () => bottomBar.closeAll(_closeAll))
-  : new BuildPanel  (uiRoot, () => bottomBar.closeAll(_closeAll));
+const statsPanel = new StatsPanelV2(uiRoot);
+const hotelPanel = new HotelPanelV2(uiRoot);
+const buildPanel = new BuildPanelV2(uiRoot, () => bottomBar.closeAll(_closeAll));
 
-// GoalTicker click — V1 opens the full GoalsPanel; V2 opens the shared
-// objective-detail modal for the single active goal (matches the look of
-// the Challenge detail panel and the StatsPanelV2 Goals tab still hosts
-// the full list).
-new GoalTicker(uiRoot, _v2Ui ? () => _openActiveGoalDetailV2() : () => {
-  _closeAll();
-  goalsPanel.open();
-});
+// GoalTicker click opens the shared objective-detail modal for the
+// single active goal. StatsPanelV2 → Goals tab still hosts the full list.
+new GoalTicker(uiRoot, () => _openActiveGoalDetailV2());
 
 // Migrate any pre-slot save into slot 1 the first time we boot.
 Slots.migrateLegacy();
@@ -136,13 +86,7 @@ const startScreen = new StartScreen(uiRoot, () => {
 });
 startScreen.show();
 
-// Bottom navigation: V2 premium nav when renderer=v2, else V1 bar.
-// Both classes share the same callback shape and public methods
-// (pressButton / pressDemolish / closeAll), so the keyboard shortcut
-// handlers below work for either renderer.
-const bottomBar = _v2Ui
-  ? new BottomBarV2(uiRoot, _bottomBarCallbacks())
-  : new BottomBar(uiRoot, _bottomBarCallbacks());
+const bottomBar = new BottomBarV2(uiRoot, _bottomBarCallbacks());
 
 function _bottomBarCallbacks(): {
   onBuild: () => void; onHotel: () => void; onStats: () => void;
@@ -232,10 +176,9 @@ function _confirmReturnToMenu(): void {
   uiRoot.appendChild(overlay);
 }
 
-// V2-only: open the shared objective-detail modal for the active goal.
-// Mirrors the Challenge click behaviour — single-objective focus, same
-// title + sections + Close panel shape — instead of opening the full
-// GoalsPanel. StatsPanelV2 → Goals still hosts the full list.
+// Open the shared objective-detail modal for the active goal. Mirrors the
+// Challenge click behaviour — single-objective focus, same title +
+// sections + Close panel shape. StatsPanelV2 → Goals hosts the full list.
 function _openActiveGoalDetailV2(): void {
   const idx = gameState.activeGoal;
   if (idx >= 10) {
@@ -278,7 +221,7 @@ function _closeAll(): void {
 // ── Keyboard shortcuts ────────────────────────────────────────────────────
 // B = Build       H = Hotel       S = Stats       G = Goals
 // Space = pause   1 = 1×          2 = 2×          4 = 4×
-// Escape = close all     R = rotate ghost (handled in GridScene)
+// Escape = close all     R = rotate ghost (handled in InputControllerV2)
 
 document.addEventListener('keydown', e => {
   // Don't fire while typing inside an input field
@@ -294,9 +237,8 @@ document.addEventListener('keydown', e => {
   if (e.ctrlKey && e.shiftKey) {
     // Ctrl+Shift+R prints the live Rating V2 category breakdown for tuning.
     // Handled here (and returned early) so it doesn't fall through to the
-    // single-key 'R' rotation. GridScene's keydown-R listener also skips
-    // rotation when both modifiers are held, since Phaser's keyboard plugin
-    // fires independently of this document-level handler.
+    // single-key 'R' rotation. InputControllerV2's keydown-R listener also
+    // skips rotation when both modifiers are held.
     if (e.code === 'KeyR') {
       e.preventDefault();
       gameState.debugRatingBreakdown();
@@ -375,10 +317,3 @@ document.addEventListener('keydown', e => {
       break;
   }
 });
-
-// ── Grid → sync BottomBar state ───────────────────────────────────────────
-// The Build sidebar is sticky during placement: after a successful place
-// we leave the sidebar open and the Build button highlighted so the player
-// can pick another item without re-opening the menu. GridScene clears its
-// own placement state — BuildPanel listens to `placement_confirmed` to
-// drop its selection highlight.
