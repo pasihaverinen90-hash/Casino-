@@ -219,52 +219,6 @@
 
 .v2-nav-aux { margin-left: auto; display: flex; gap: 8px; }
 
-/* ── Summary Card ──────────────────────────────────────────────────── */
-.v2-summary-card {
-  position: absolute;
-  right: 16px;
-  bottom: 88px;          /* sits above the V2 bottom nav (72px) + gap */
-  width: 220px;
-  padding: 12px 14px;
-  background: var(--v2-bg-glass);
-  border: 1px solid var(--v2-brass);
-  border-radius: var(--v2-radius);
-  box-shadow: var(--v2-shadow);
-  color: var(--v2-text-bright);
-  font-family: var(--v2-font);
-  font-size: 12px;
-  z-index: 35;
-  pointer-events: none;   /* visual only — no clicks */
-  user-select: none;
-}
-
-.v2-summary-title {
-  color: var(--v2-gold);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.10em;
-  text-transform: uppercase;
-  margin-bottom: 8px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid rgba(160, 120, 32, 0.35);
-}
-
-.v2-summary-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
-  padding: 3px 0;
-}
-.v2-summary-label { color: var(--v2-gold-dim); }
-.v2-summary-value {
-  color: var(--v2-text-bright);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.v2-summary-value.pos { color: #6ad985; }
-.v2-summary-value.neg { color: #e07070; }
-
 /* ── Build Panel (V2 sidebar) ──────────────────────────────────────── */
 .v2-build-panel {
   position: absolute;
