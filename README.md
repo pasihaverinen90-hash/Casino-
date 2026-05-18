@@ -23,12 +23,11 @@ Playable, in active development.
 - Random campaign events: Slot Promotion, Tourist Bus, Comfort Check.
 - 60-day history charts (revenue / guests / rating / occupancy).
 - Save / load to browser `localStorage` across 3 save slots.
-- Two presentation layers — see [Renderer modes](#renderer-modes).
+- Premium V2 presentation: shallow-dimetric scene with tall N/W walls and the V2 UI shell (TopHUDV2 with stats + clock + zoom + speed, BottomBarV2, BuildPanelV2, HotelPanelV2, StatsPanelV2 with Today/History/Goals tabs, shared modal/toast/ticker chrome).
 
 **Planned / in progress**
 - Final sprite / art polish.
 - StartScreen polish (currently intentionally old-style).
-- V1 renderer retirement once V2 has soaked in (V1 stays as fallback for now).
 - Hotel room visuals and floor-plan presentation.
 - Theme / material / chapter system (deferred until hotel design lands).
 - Sound, music, animations.
@@ -48,20 +47,6 @@ npm run dev           # Vite dev server on http://localhost:5173
 npm run build         # tsc --noEmit && vite build → casino-web/dist/
 npm run preview       # serve the production build
 ```
-
----
-
-## Renderer modes
-
-The project ships two presentation renderers side-by-side. Gameplay, save data, and validation are identical between them — only how the scene paints differs.
-
-| Mode | URL | Description |
-|---|---|---|
-| **V2** | `?renderer=v2` | Presentation V2: shallow-dimetric scene with tall N/W walls, premium casino UI shell (TopHUDV2, BottomBarV2, BuildPanelV2, HotelPanelV2, StatsPanelV2, in-HUD zoom). |
-| **V1** | `?renderer=v1` | Legacy top-down renderer with the original HTML panels. Stays around as a fallback until V2 is fully soaked in. |
-| default | (no query) | Boots V2. V1 remains available via `?renderer=v1` until it's retired in a later cleanup phase. The default is controlled by [`state/RendererFlag.ts`](casino-web/src/state/RendererFlag.ts). |
-
-Resolution order: **URL parameter > localStorage (`rendererV2` key) > default**. The URL wins so a sticky persisted preference can always be recovered with `?renderer=v1`.
 
 ---
 
@@ -87,7 +72,7 @@ Resolution order: **URL parameter > localStorage (`rendererV2` key) > default**.
 | `B` | Toggle Build panel |
 | `H` | Toggle Hotel panel |
 | `S` | Toggle Stats panel |
-| `G` | Open Goals panel (V1) — full goals list is also available via Stats → Goals in V2 |
+| `G` | Open Stats → Goals tab (full goals list) |
 | `D` | Toggle Demolish mode |
 | `Esc` | Close all panels / cancel placement |
 | `R` | Rotate the placement ghost |
@@ -164,7 +149,7 @@ Source: [`logic/GameConstants.ts`](casino-web/src/logic/GameConstants.ts) `GOAL_
 
 Endless-mode bonus on completing all 10: **+25,000 cash** (one-shot per save).
 
-The active goal lives in the bottom ticker; clicking it shows a single-objective detail card (V2) or opens the full Goals panel (V1). The full list is always available via Stats → Goals.
+The active goal lives in the bottom ticker; clicking it shows a single-objective detail card. The full list is always available via Stats → Goals.
 
 ---
 
@@ -194,26 +179,19 @@ casino-web/
 │   │   ├── GameState.ts            # singleton — owns state, daily tick, save/load
 │   │   ├── SaveSlots.ts            # 3-slot localStorage save plumbing
 │   │   ├── TimeController.ts       # clock, hour/day events, speed
-│   │   ├── EventEmitter.ts         # tiny pub/sub primitive
-│   │   └── RendererFlag.ts         # V1 / V2 selection
+│   │   └── EventEmitter.ts         # tiny pub/sub primitive
 │   ├── events/
 │   │   └── UIBus.ts                # cross-component UI event bus
-│   ├── game/                    # Legacy V1 renderer + shared helpers
-│   │   ├── GridScene.ts            # V1 Phaser scene (top-down)
-│   │   ├── GuestSprites.ts         # V1 guest sprites
-│   │   ├── GuestRouter.ts          # shared — guest routing logic
-│   │   ├── ObjectArt.ts            # shared — paintThumb used by V1 + V2 BuildPanels
-│   │   └── Projection.ts           # V1 only — disabled shear prototype, kept until V1 retirement
-│   ├── ui/                      # V1 / shared HTML UI components
-│   │   ├── TopHUD.ts, BottomBar.ts
-│   │   ├── BuildPanel.ts, HotelPanel.ts, StatsPanel.ts, GoalsPanel.ts
-│   │   ├── StartScreen.ts          # shared — opening slot picker
-│   │   ├── Toast.ts                # shared — auto-dismissing notifications
-│   │   ├── GoalTicker.ts           # shared — active-goal strip
-│   │   ├── ChallengeTicker.ts      # shared — active-event strip + detail modal
-│   │   ├── GoalCompletePopup.ts    # shared — goal completion overlay
+│   ├── game/                    # Shared (renderer-agnostic) helpers
+│   │   └── GuestRouter.ts          # shared — guest routing logic (used by V2)
+│   ├── ui/                      # Shared HTML UI components
+│   │   ├── StartScreen.ts          # opening slot picker
+│   │   ├── Toast.ts                # auto-dismissing notifications
+│   │   ├── GoalTicker.ts           # active-goal strip
+│   │   ├── ChallengeTicker.ts      # active-event strip + detail modal
+│   │   ├── GoalCompletePopup.ts    # goal completion overlay
 │   │   ├── objectiveDetail.ts      # shared modal helper (goal/challenge detail)
-│   │   └── format.ts               # shared — fmtCash / fmtPct / fmtRating
+│   │   └── format.ts               # fmtCash / fmtPct / fmtRating / fmtOccupancy
 │   ├── v2/
 │   │   ├── scene/
 │   │   │   ├── PresentationSceneV2.ts   # V2 Phaser scene
@@ -233,16 +211,16 @@ casino-web/
 │   │       ├── BuildPanelV2.ts, HotelPanelV2.ts, StatsPanelV2.ts
 │   │       ├── ZoomControlsV2.ts        # mounts inside TopHUDV2
 │   │       └── styleV2.css              # .v2-* scoped styles + .v2-root overrides
-│   └── style.css                # V1 + shared HTML styles
+│   └── style.css                # Base / shared HTML styles for the shared overlays
 ├── index.html
 ├── vite.config.ts               # base: '/Casino-hotel/' for GitHub Pages
 ├── tsconfig.json
 └── package.json
 ```
 
-Three-layer separation is preserved: `logic/` is pure (testable without UI), `state/` runs the simulation and persists, `ui/` + `game/` + `v2/` render and handle input. Components communicate through `events/UIBus.ts` and `state/EventEmitter` rather than direct references.
+Three-layer separation is preserved: `logic/` is pure (testable without UI), `state/` runs the simulation and persists, `ui/` + `v2/` render and handle input. Components communicate through `events/UIBus.ts` and `state/EventEmitter` rather than direct references.
 
-V2 reuses several shared UI components from `ui/`: `StartScreen`, `Toast`, `GoalTicker`, `ChallengeTicker`, `GoalCompletePopup`, and `objectiveDetail`. They pick up V2 styling automatically through `.v2-root <selector>` overrides in `styleV2.css`. V1 will be retired in a later cleanup phase; until then both renderers and both sets of panels stay shipped.
+V2 reuses the shared UI components in `ui/`: `StartScreen`, `Toast`, `GoalTicker`, `ChallengeTicker`, `GoalCompletePopup`, and `objectiveDetail`. They pick up V2 styling automatically through `.v2-root <selector>` overrides in `styleV2.css`.
 
 ---
 
@@ -261,11 +239,9 @@ Vite's `base` is set to `/Casino-hotel/` so asset paths resolve under the repo's
 
 ## Near-term technical plan
 
-1. **Phase 9C.** README / docs sync. *Done.*
-2. **Phase 10A.** Default renderer is now V2 with V1 reachable via `?renderer=v1`. *Done.*
-3. **Phase 10B (next).** Full V2 smoke + balancing pass with V2 as default.
-4. **Phase 10C/D.** Retire V1: delete `game/GridScene.ts`, `GuestSprites.ts`, `Projection.ts`, the V1 panels in `ui/`, and the V1-only sections of `style.css`. Re-host `paintThumb` out of `game/ObjectArt.ts` so V2 BuildPanel keeps its thumbnails.
-5. **Phase 11+.** Art / sprite polish, StartScreen redesign, theme / material / chapter system on top of stable V2.
+1. **Phase 9–10.** V2 default flip, V2 smoke-test bugfixes, V1 retirement. *Done.*
+2. **Phase 11 (next).** V2-only polish backlog — StartScreen redesign, shared-UI V2-native restyle (replace `.v2-root <V1-class>` overrides with native `.v2-*` rules), final sprite / art pass.
+3. **Later.** Hotel floor-plan visuals, theme / material / chapter system, sound / music / animations, mobile / touch polish, continued balancing.
 
 ---
 
@@ -273,22 +249,16 @@ Vite's `base` is set to `/Casino-hotel/` so asset paths resolve under the repo's
 
 A quick smoke test after each significant change.
 
-**V1 (`?renderer=v1`)**
-- Boots without console errors; StartScreen lists 3 slots.
-- Place a slot machine, small table, WC. Demolish one (50 % refund toast).
-- Buy 2 rooms; upgrade hotel quality once. Watch Stats update.
-- Save, refresh, continue — state preserved.
-
-**V2 (`?renderer=v2`)**
-- No "Presentation V2" canvas watermark.
+- Boots without console errors; StartScreen lists 3 slots; new game and load both work.
 - TopHUDV2 shows rating / guests / cash / clock / view (− +) / speed (⏸ 1× 2× 4×).
 - BottomBarV2 toggles Build / Hotel / Stats / Demolish; Save / Menu work.
 - BuildPanelV2 category buttons swap item lists; variant picker opens for tables; selection highlights during placement.
-- HotelPanelV2 buys rooms + upgrades quality; disables at max.
-- StatsPanelV2 tabs (Today / History / Goals) all show data; charts redraw on tab switch.
+- HotelPanelV2 buys rooms + upgrades quality; disables at max; occupancy display matches count.
+- StatsPanelV2 tabs (Today / History / Goals) all show data; charts redraw on tab switch; `G` opens Stats → Goals.
 - Active goal ticker click opens single-goal detail; active challenge ticker click opens challenge detail.
 - Pan / zoom work; − greys out at min zoom, + greys out at max.
-- N/W walls: WC / Bar / Cashier etc. place; south or east attempt rejects with a toast.
+- N/W walls: WC / Bar / Cashier etc. auto-orient and place; south or east attempt rejects with a toast.
+- Save → reload → continue restores objects, hotel, goals, and the in-day clock minute.
 
 ---
 
