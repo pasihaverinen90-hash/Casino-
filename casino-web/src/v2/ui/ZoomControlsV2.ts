@@ -17,6 +17,16 @@
 // buttons into a styled overlay then.
 import type { CameraControllerV2 } from '../scene/CameraControllerV2';
 
+// Positioned to the LEFT of SummaryCardV2 so the two don't overlap
+// in the bottom-right corner. Keep these in sync with the matching
+// .v2-summary-card values in styleV2.css:
+//   width: 220px;
+//   right: 16px;
+const SUMMARY_CARD_WIDTH_PX = 220;
+const SUMMARY_CARD_RIGHT_PX = 16;
+const SUMMARY_CARD_GAP_PX   = 16;
+const ZOOM_RIGHT_PX = SUMMARY_CARD_WIDTH_PX + SUMMARY_CARD_RIGHT_PX + SUMMARY_CARD_GAP_PX;
+
 export class ZoomControlsV2 {
   private camera   : CameraControllerV2;
   private container: HTMLElement;
@@ -32,8 +42,8 @@ export class ZoomControlsV2 {
     // to V2 controls too. Inline cssText is the source of truth for now.
     this.container.style.cssText = [
       'position: absolute',
-      'right: 12px',
-      'bottom: 88px',          // sits above the V1 BottomBar; harmless in V2-only context.
+      `right: ${ZOOM_RIGHT_PX}px`,
+      'bottom: 88px',          // aligns with SummaryCardV2's lower edge; above V1/V2 BottomBar.
       'display: flex',
       'gap: 6px',
       'z-index: 50',
