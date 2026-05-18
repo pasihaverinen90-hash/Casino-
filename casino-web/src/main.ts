@@ -22,6 +22,7 @@ import { BottomBarV2 } from './v2/ui/BottomBarV2';
 import { SummaryCardV2 } from './v2/ui/SummaryCardV2';
 import { BuildPanelV2 } from './v2/ui/BuildPanelV2';
 import { HotelPanelV2 } from './v2/ui/HotelPanelV2';
+import { StatsPanelV2 } from './v2/ui/StatsPanelV2';
 import * as Slots      from './state/SaveSlots';
 // V2 UI styles. Scoped under .v2-* class selectors so loading them in
 // V1 mode is harmless (no .v2-* roots exist in V1).
@@ -78,7 +79,13 @@ new ChallengeTicker(uiRoot);
 new GoalCompletePopup(uiRoot);
 
 const goalsPanel = new GoalsPanel(uiRoot);
-const statsPanel = new StatsPanel(uiRoot);
+// StatsPanel: V2 (premium reports panel with tabs + mini charts) when
+// renderer=v2, else V1. Both classes expose `open / close`. Same
+// gameState.statsRecords / chart* / completedGoals reads — V2 just
+// restyles and renders compact V2 mini-charts inline.
+const statsPanel: { open(): void; close(): void } = _v2Ui
+  ? new StatsPanelV2(uiRoot)
+  : new StatsPanel(uiRoot);
 // HotelPanel: V2 (premium right-side hotel/rooms panel) when renderer=v2,
 // else V1. Both classes expose `open / close`. Same uiBus / gameState
 // contract — V2 just restyles + reformats; gameplay actions still go
