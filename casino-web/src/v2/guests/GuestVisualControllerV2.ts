@@ -108,6 +108,53 @@ const DWELL_FALLBACK: [number, number] = [3, 6];
 // Distance (in tile units) at which a guest "arrives" at a target.
 const ARRIVE_EPSILON = 0.05;
 
+// ── V2 visual target weights ──────────────────────────────────────────────
+// V1's ObjDef.targetWeight is the simulation/economy weight — it sets WC
+// and BAR to 0 because V1 didn't want visible guests queueing for them.
+// V2 is purely visual, so we want guests to occasionally walk to every
+// functional service (including WC and BAR) for visual life. Local table
+// owned by this file; gameplay-side ObjDef is unchanged.
+//
+// Adjust here if a service feels over- or under-used. Missing entries
+// default to 0 (never selected) — added safety for future ObjTypes.
+const V2_VISUAL_WEIGHTS: { readonly [K in GC.ObjType]: number } = {
+  [GC.ObjType.SLOT_MACHINE]      : 4,
+  [GC.ObjType.SMALL_TABLE]       : 4,
+  [GC.ObjType.LARGE_TABLE]       : 4,
+  [GC.ObjType.KENO_LOUNGE]       : 3,
+  [GC.ObjType.HIGH_STAKES_TABLE] : 3,
+  [GC.ObjType.WC]                : 2,
+  [GC.ObjType.BAR]               : 3,
+  [GC.ObjType.BUFFET]            : 3,
+  [GC.ObjType.CASHIER]           : 1,
+  [GC.ObjType.ATM]               : 1,
+  [GC.ObjType.SPORTSBOOK]        : 2,
+};
+
+// File-local debug flag. Set to true while diagnosing target selection
+// to log selections and skip reasons. Keep false on commits — produces
+// no console output when off.
+const DEBUG_GUEST_TARGETS = false;
+
+// const enum can't be reverse-indexed at runtime, so name the types
+// manually for the debug log only. Off by default; tree-shaken out
+// of the production bundle when DEBUG_GUEST_TARGETS is false.
+function _typeName(t: GC.ObjType): string {
+  switch (t) {
+    case GC.ObjType.SLOT_MACHINE:      return 'SLOT_MACHINE';
+    case GC.ObjType.SMALL_TABLE:       return 'SMALL_TABLE';
+    case GC.ObjType.LARGE_TABLE:       return 'LARGE_TABLE';
+    case GC.ObjType.WC:                return 'WC';
+    case GC.ObjType.BAR:               return 'BAR';
+    case GC.ObjType.CASHIER:           return 'CASHIER';
+    case GC.ObjType.ATM:               return 'ATM';
+    case GC.ObjType.BUFFET:            return 'BUFFET';
+    case GC.ObjType.SPORTSBOOK:        return 'SPORTSBOOK';
+    case GC.ObjType.KENO_LOUNGE:       return 'KENO_LOUNGE';
+    case GC.ObjType.HIGH_STAKES_TABLE: return 'HIGH_STAKES_TABLE';
+  }
+}
+
 // ── Wall-service visual tuning ────────────────────────────────────────────
 // Tiles biased toward the wall when a guest stands at a wall service. The
 // guest still routes to the same interaction tile (logical, unchanged) —
@@ -274,32 +321,67 @@ export class GuestVisualControllerV2 {
     return { col: c + 0.5, row: r + 0.5 };
   }
 
-  // Usage-weighted attraction picker → an interaction tile. Skips
+  // V2 visual-weighted attraction picker → an interaction tile. Uses
+  // V2_VISUAL_WEIGHTS (not GC.ObjDef.targetWeight) so wall services
+  // like WC and BAR — which V1 deliberately excludes from its picker
+  // by setting targetWeight=0 — still get visual visits in V2. Skips
   // already-reserved tiles so V2 guests don't all aim at the same seat.
   private _pickInteractionTile(): { tile: GC.Vec2; obj: GC.PlacedObj } | null {
     interface Candidate { obj: GC.PlacedObj; weight: number; tiles: GC.Vec2[]; }
     const candidates: Candidate[] = [];
     let total = 0;
     for (const obj of gameState.placedObjs) {
-      if (!gameState.functionalIds.has(obj.id)) continue;
-      const weight = GC.getDef(obj.type).targetWeight;
-      if (weight <= 0) continue;
+      if (!gameState.functionalIds.has(obj.id)) {
+        if (DEBUG_GUEST_TARGETS) {
+          // eslint-disable-next-line no-console
+          console.log(`[V2 guests] skip ${obj.id} (${_typeName(obj.type)}): not functional`);
+        }
+        continue;
+      }
+      const weight = V2_VISUAL_WEIGHTS[obj.type] ?? 0;
+      if (weight <= 0) {
+        if (DEBUG_GUEST_TARGETS) {
+          // eslint-disable-next-line no-console
+          console.log(`[V2 guests] skip ${obj.id} (${_typeName(obj.type)}): weight 0`);
+        }
+        continue;
+      }
       const all = OV.getInteractionTiles(obj, gameState.tiles);
       const tiles = all.filter(t => !this.reservedTiles.has(this._tileKey(t.x, t.y)));
-      if (tiles.length === 0) continue;
+      if (tiles.length === 0) {
+        if (DEBUG_GUEST_TARGETS) {
+          // eslint-disable-next-line no-console
+          console.log(`[V2 guests] skip ${obj.id} (${_typeName(obj.type)}): no usable interaction tile`);
+        }
+        continue;
+      }
       candidates.push({ obj, weight, tiles });
       total += weight;
     }
-    if (total <= 0) return null;
+    if (total <= 0) {
+      if (DEBUG_GUEST_TARGETS) {
+        // eslint-disable-next-line no-console
+        console.log('[V2 guests] no eligible targets');
+      }
+      return null;
+    }
     let r = Math.random() * total;
     for (const c of candidates) {
       r -= c.weight;
       if (r < 0) {
         const tile = c.tiles[Math.floor(Math.random() * c.tiles.length)];
+        if (DEBUG_GUEST_TARGETS) {
+          // eslint-disable-next-line no-console
+          console.log(`[V2 guests] pick ${c.obj.id} (${_typeName(c.obj.type)}) w=${c.weight}`);
+        }
         return { tile, obj: c.obj };
       }
     }
     const last = candidates[candidates.length - 1];
+    if (DEBUG_GUEST_TARGETS) {
+      // eslint-disable-next-line no-console
+      console.log(`[V2 guests] pick (fallback) ${last.obj.id} (${_typeName(last.obj.type)})`);
+    }
     return {
       tile: last.tiles[Math.floor(Math.random() * last.tiles.length)],
       obj : last.obj,
