@@ -30,7 +30,6 @@ import { CameraControllerV2 } from './CameraControllerV2';
 import { InputControllerV2 } from './InputControllerV2';
 import { GuestVisualControllerV2 } from '../guests/GuestVisualControllerV2';
 import { ZoomControlsV2 } from '../ui/ZoomControlsV2';
-import { V2PreviewNotice } from '../ui/V2PreviewNotice';
 
 export class PresentationSceneV2 extends Phaser.Scene {
   private gfxFloor!       : Phaser.GameObjects.Graphics;
@@ -45,7 +44,6 @@ export class PresentationSceneV2 extends Phaser.Scene {
   private inputController!: InputControllerV2;
   private debugLabel!     : Phaser.GameObjects.Text;
   private zoomControls?   : ZoomControlsV2;
-  private previewNotice?  : V2PreviewNotice;
 
   constructor() {
     super({ key: 'PresentationSceneV2' });
@@ -79,7 +77,6 @@ export class PresentationSceneV2 extends Phaser.Scene {
     }).setDepth(100).setAlpha(0.7);
 
     this.zoomControls  = new ZoomControlsV2(this.camera);
-    this.previewNotice = new V2PreviewNotice();
 
     gameState.on('state_changed', () => {
       this._redraw();
@@ -96,8 +93,6 @@ export class PresentationSceneV2 extends Phaser.Scene {
       this.guestController.destroy();
       this.zoomControls?.destroy();
       this.zoomControls = undefined;
-      this.previewNotice?.destroy();
-      this.previewNotice = undefined;
     });
 
     this._redraw();

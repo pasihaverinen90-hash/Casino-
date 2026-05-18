@@ -17,7 +17,13 @@ import { Toast }       from './ui/Toast';
 import { ChallengeTicker } from './ui/ChallengeTicker';
 import { GoalCompletePopup } from './ui/GoalCompletePopup';
 import { StartScreen } from './ui/StartScreen';
+import { TopHUDV2 }    from './v2/ui/TopHUDV2';
+import { BottomBarV2 } from './v2/ui/BottomBarV2';
+import { SummaryCardV2 } from './v2/ui/SummaryCardV2';
 import * as Slots      from './state/SaveSlots';
+// V2 UI styles. Scoped under .v2-* class selectors so loading them in
+// V1 mode is harmless (no .v2-* roots exist in V1).
+import './v2/ui/styleV2.css';
 
 // ── DOM structure ─────────────────────────────────────────────────────────
 const appEl  = document.getElementById('app')!;
@@ -52,7 +58,13 @@ new Phaser.Game({
 });
 
 // ── HTML UI components ────────────────────────────────────────────────────
-const topHUD = new TopHUD(uiRoot);
+// Top HUD: V2 (premium casino-sim shell) when renderer=v2, else V1.
+// Both classes expose `setClock(idx)` so the TimeController wiring
+// below doesn't need a branch.
+const _v2Ui = _rendererId === 'v2';
+const topHUD: { setClock: (i: number) => void } = _v2Ui
+  ? new TopHUDV2(uiRoot)
+  : new TopHUD(uiRoot);
 new Toast(uiRoot);
 new ChallengeTicker(uiRoot);
 new GoalCompletePopup(uiRoot);
@@ -91,7 +103,22 @@ const startScreen = new StartScreen(uiRoot, () => {
 });
 startScreen.show();
 
-const bottomBar = new BottomBar(uiRoot, {
+// Summary card (V2-only): bottom-right "Today" pill.
+if (_v2Ui) new SummaryCardV2(uiRoot);
+
+// Bottom navigation: V2 premium nav when renderer=v2, else V1 bar.
+// Both classes share the same callback shape and public methods
+// (pressButton / pressDemolish / closeAll), so the keyboard shortcut
+// handlers below work for either renderer.
+const bottomBar = _v2Ui
+  ? new BottomBarV2(uiRoot, _bottomBarCallbacks())
+  : new BottomBar(uiRoot, _bottomBarCallbacks());
+
+function _bottomBarCallbacks(): {
+  onBuild: () => void; onHotel: () => void; onStats: () => void;
+  onDemolish: (active: boolean) => void;
+  onSave: () => void; onMenu: () => void; onCloseAll: () => void;
+} { return {
   onBuild: () => {
     hotelPanel.close(); statsPanel.close(); goalsPanel.close();
     uiBus.emit('toggle_demolish', false);
@@ -127,7 +154,7 @@ const bottomBar = new BottomBar(uiRoot, {
     _confirmReturnToMenu();
   },
   onCloseAll: _closeAll,
-});
+}; }
 
 function _confirmReturnToMenu(): void {
   // Pause while the modal is up; restore the player's prior speed on cancel.
