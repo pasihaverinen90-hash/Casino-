@@ -20,6 +20,7 @@ import { StartScreen } from './ui/StartScreen';
 import { TopHUDV2 }    from './v2/ui/TopHUDV2';
 import { BottomBarV2 } from './v2/ui/BottomBarV2';
 import { SummaryCardV2 } from './v2/ui/SummaryCardV2';
+import { BuildPanelV2 } from './v2/ui/BuildPanelV2';
 import * as Slots      from './state/SaveSlots';
 // V2 UI styles. Scoped under .v2-* class selectors so loading them in
 // V1 mode is harmless (no .v2-* roots exist in V1).
@@ -74,8 +75,13 @@ const statsPanel = new StatsPanel(uiRoot);
 const hotelPanel = new HotelPanel(uiRoot);
 // Build sidebar's X button routes through BottomBar.closeAll so the Build
 // button highlight is cleared and `_closeAll` runs (which emits
-// exit_placement and hides any other panels).
-const buildPanel = new BuildPanel(uiRoot, () => bottomBar.closeAll(_closeAll));
+// exit_placement and hides any other panels). V2 path uses the premium
+// BuildPanelV2 (left sidebar with 2×2 category grid); V1 keeps the
+// original BuildPanel. Both share the same public surface (open/close)
+// and the same uiBus 'start_placement' contract.
+const buildPanel: { open(): void; close(): void } = _v2Ui
+  ? new BuildPanelV2(uiRoot, () => bottomBar.closeAll(_closeAll))
+  : new BuildPanel  (uiRoot, () => bottomBar.closeAll(_closeAll));
 
 new GoalTicker(uiRoot, () => {
   _closeAll();
