@@ -32,10 +32,6 @@ const uiRoot = document.createElement('div');
 uiRoot.id    = 'ui-root';
 appEl.appendChild(uiRoot);
 
-// `.v2-root` scopes the shared-overlay CSS overrides in styleV2.css
-// (modal / toast / ticker base classes get V2 chrome under this root).
-uiRoot.classList.add('v2-root');
-
 // ── Phaser game ───────────────────────────────────────────────────────────
 new Phaser.Game({
   type      : Phaser.AUTO,
