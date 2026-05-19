@@ -1,9 +1,7 @@
 /* styleV2.css — Presentation V2 UI shell styles.
  *
- * All selectors are scoped under the .v2-* class prefix so they never
- * affect V1 HTML UI (.top-hud, .bottom-bar, etc.). Loaded statically
- * from main.ts; harmless when the renderer is V1 because no .v2-* root
- * is mounted in that path.
+ * All selectors are scoped under the .v2-* class prefix. Loaded
+ * statically from main.ts.
  *
  * Palette mirrors v2/render/PaletteV2 so the HTML chrome reads as the
  * same casino-room material as the in-scene render. Values inlined as
@@ -402,7 +400,7 @@
   letter-spacing: 0.02em;
 }
 
-/* ── V2 buttons (used inside V2 modals + V2-root overrides) ────────── */
+/* ── V2 buttons (BuildPanelV2 variant picker, action rows) ─────────── */
 .v2-btn {
   display: inline-flex;
   align-items: center;
