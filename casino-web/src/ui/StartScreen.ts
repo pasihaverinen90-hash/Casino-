@@ -2,7 +2,7 @@
 // premium save-slot cards. Confirmation modals reuse the shared
 // .v2-modal-* chrome so legacy modal-* CSS can stay deleted.
 //
-// Background image lives at `public/assets/start/start-casino-bg.png`;
+// Background image lives at `public/assets/start/start-casino-bg.jpg`;
 // the URL is composed via import.meta.env.BASE_URL so dev (`/`) and
 // GitHub Pages (`/Casino-hotel/`) both resolve correctly.
 /// <reference types="vite/client" />
@@ -10,7 +10,7 @@ import { gameState } from '../state/GameState';
 import * as Slots from '../state/SaveSlots';
 import { fmtCash } from './format';
 
-const BG_URL = `${import.meta.env.BASE_URL}assets/start/start-casino-bg.png`;
+const BG_URL = `${import.meta.env.BASE_URL}assets/start/start-casino-bg.jpg`;
 
 export class StartScreen {
   private el: HTMLElement;

@@ -425,20 +425,6 @@
 }
 .v2-btn:disabled { opacity: 0.45; cursor: default; }
 
-.v2-btn-primary {
-  background: linear-gradient(180deg,
-              rgba(160, 120, 32, 0.62) 0%,
-              rgba(120, 80, 30, 0.72) 100%);
-  border-color: var(--v2-brass-hi);
-  color: var(--v2-text-bright);
-}
-.v2-btn-primary:hover:not(:disabled) {
-  background: linear-gradient(180deg,
-              rgba(200, 150, 50, 0.78) 0%,
-              rgba(160, 110, 40, 0.85) 100%);
-  border-color: var(--v2-brass-hi);
-}
-
 .v2-btn-secondary {
   background: var(--v2-bg-glass-2);
   border-color: rgba(160, 120, 32, 0.45);
@@ -448,13 +434,6 @@
   border-color: var(--v2-brass);
   color: var(--v2-gold);
 }
-
-.v2-btn-danger {
-  background: rgba(180, 50, 50, 0.20);
-  border-color: rgba(220, 70, 70, 0.55);
-  color: #ff8888;
-}
-.v2-btn-danger:hover:not(:disabled) { background: rgba(220, 50, 50, 0.35); }
 
 /* ── V2 modal chrome (used by BuildPanelV2 variant picker) ─────────── */
 .v2-modal-overlay {
@@ -649,11 +628,6 @@
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.04em;
-}
-.v2-variant-meta {
-  color: var(--v2-gold-dim);
-  font-size: 11px;
-  letter-spacing: 0.02em;
 }
 
 /* ── V2 Toast ──────────────────────────────────────────────────────── */

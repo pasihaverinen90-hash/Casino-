@@ -27,7 +27,6 @@ Playable, in active development.
 
 **Planned / in progress**
 - Final sprite / art polish.
-- StartScreen polish (currently intentionally old-style).
 - Hotel room visuals and floor-plan presentation.
 - Theme / material / chapter system (deferred until hotel design lands).
 - Sound, music, animations.
@@ -210,8 +209,8 @@ casino-web/
 │   │       ├── TopHUDV2.ts, BottomBarV2.ts
 │   │       ├── BuildPanelV2.ts, HotelPanelV2.ts, StatsPanelV2.ts
 │   │       ├── ZoomControlsV2.ts        # mounts inside TopHUDV2
-│   │       └── styleV2.css              # .v2-* scoped styles + .v2-root overrides
-│   └── style.css                # Base / shared HTML styles for the shared overlays
+│   │       └── styleV2.css              # .v2-* scoped styles for every UI surface
+│   └── style.css                # Reset + app shell (#app / #ui-root / .interactive)
 ├── index.html
 ├── vite.config.ts               # base: '/Casino-hotel/' for GitHub Pages
 ├── tsconfig.json
@@ -220,7 +219,7 @@ casino-web/
 
 Three-layer separation is preserved: `logic/` is pure (testable without UI), `state/` runs the simulation and persists, `ui/` + `v2/` render and handle input. Components communicate through `events/UIBus.ts` and `state/EventEmitter` rather than direct references.
 
-V2 reuses the shared UI components in `ui/`: `StartScreen`, `Toast`, `GoalTicker`, `ChallengeTicker`, `GoalCompletePopup`, and `objectiveDetail`. They pick up V2 styling automatically through `.v2-root <selector>` overrides in `styleV2.css`.
+V2 reuses the shared UI components in `ui/`: `StartScreen`, `Toast`, `GoalTicker`, `ChallengeTicker`, `GoalCompletePopup`, and `objectiveDetail`. Each component emits `.v2-*` class names directly, so all of their styling lives in `styleV2.css` alongside the V2-only panels.
 
 ---
 
@@ -240,7 +239,7 @@ Vite's `base` is set to `/Casino-hotel/` so asset paths resolve under the repo's
 ## Near-term technical plan
 
 1. **Phases 9–10.** V2 default flip, V2 smoke-test bugfixes, V1 retirement. *Done.*
-2. **Phase 11 (in progress).** V2-only polish — main.ts split + shared-UI V2-native restyle landed; **StartScreen redesign** and **final sprite / art pass** still to come.
+2. **Phase 11.** V2-only polish — main.ts split, shared-UI V2-native restyle, StartScreen redesign, and the final CSS audit have all landed. The **sprite / art pass** is the remaining piece.
 3. **Later.** Hotel floor-plan visuals, theme / material / chapter system, sound / music / animations, mobile / touch polish, continued balancing.
 
 ---
