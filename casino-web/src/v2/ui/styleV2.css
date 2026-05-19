@@ -502,6 +502,17 @@
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  /* When the title sits directly inside a card (GoalCompletePopup,
+   * returnToMenuModal, objectiveDetail) it carries its own divider.
+   * Reset below for modals that wrap it in .v2-modal-header. */
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(160, 120, 32, 0.35);
+}
+.v2-modal-header .v2-modal-title {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
 }
 .v2-modal-close {
   background: transparent;
@@ -525,12 +536,88 @@
   color: var(--v2-text-bright);
   font-size: 13px;
   line-height: 1.55;
+  text-align: center;
+  margin-bottom: 16px;
+}
+/* Event-details modal body — left-aligned sections, capped width. Used
+ * by openObjectiveDetail for goal + challenge detail cards. */
+.v2-modal-body-detail {
+  text-align: left;
+  max-width: 360px;
 }
 .v2-modal-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
   margin-top: 14px;
+}
+
+/* Full-width stacked button used inside the in-game shared modals
+ * (GoalCompletePopup, returnToMenuModal, objectiveDetail Close button).
+ * Distinct from .v2-btn which is the inline button used in
+ * BuildPanelV2's variant picker. */
+.v2-modal-btn {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 10px 14px;
+  background: var(--v2-bg-glass-2);
+  border: 1px solid var(--v2-brass);
+  border-radius: var(--v2-radius);
+  color: var(--v2-gold);
+  font-family: var(--v2-font);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 120ms, border-color 120ms, color 120ms;
+}
+.v2-modal-btn:last-child { margin-bottom: 0; }
+.v2-modal-btn:hover {
+  background: var(--v2-bg-hover);
+  border-color: var(--v2-brass-hi);
+  color: var(--v2-text-bright);
+}
+.v2-modal-btn-danger {
+  background: rgba(180, 50, 50, 0.20);
+  border-color: rgba(220, 70, 70, 0.55);
+  color: #ff8888;
+}
+.v2-modal-btn-danger:hover { background: rgba(220, 50, 50, 0.35); }
+
+/* ── V2 event-section (objective + challenge detail card body) ────── */
+.v2-event-section { margin-bottom: 12px; }
+.v2-event-section:last-child { margin-bottom: 0; }
+.v2-event-section-label {
+  color: var(--v2-gold);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.v2-event-section-text { color: var(--v2-text-bright); line-height: 1.45; }
+.v2-event-section-list {
+  color: var(--v2-text-bright);
+  line-height: 1.55;
+  margin: 0;
+  padding-left: 18px;
+}
+.v2-event-section-progress {
+  margin-top: 6px;
+  height: 6px;
+  background: rgba(8, 6, 12, 0.65);
+  border: 1px solid rgba(160, 120, 32, 0.45);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.v2-event-section-progress-fill {
+  height: 100%;
+  background: linear-gradient(180deg,
+              rgba(232, 196, 98, 0.95) 0%,
+              rgba(160, 120, 32, 0.95) 100%);
+  transition: width 200ms ease;
 }
 
 /* ── V2 variant grid (table variant picker cards) ─────────────────── */
@@ -571,91 +658,11 @@
   letter-spacing: 0.02em;
 }
 
-/* ── V2-root overrides for shared V1 chrome ────────────────────────── */
-/* uiRoot gets the .v2-root class when renderer=v2 (see main.ts). Scoping
- * under that ancestor leaves V1 visuals untouched on the V1 path. These
- * restyle the V1 DOM produced by GoalCompletePopup, ChallengeTicker,
- * Toast, GoalTicker, and the main.ts return-to-menu modal. */
-
-.v2-root .modal-overlay {
-  background: rgba(6, 4, 10, 0.78);
-  z-index: 60;
-}
-.v2-root .modal-card {
-  background: linear-gradient(180deg,
-              rgba(28, 22, 32, 0.96) 0%,
-              rgba(16, 14, 22, 0.96) 100%);
-  border: 1px solid var(--v2-brass);
-  border-radius: var(--v2-radius);
-  box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.72),
-    0 0 0 1px rgba(160, 120, 32, 0.18) inset;
-  padding: 18px 20px 20px;
-  color: var(--v2-text-bright);
-  font-family: var(--v2-font);
-  min-width: 300px;
-}
-.v2-root .modal-title {
-  color: var(--v2-gold);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  margin-bottom: 14px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid rgba(160, 120, 32, 0.35);
-}
-.v2-root .modal-body {
-  color: var(--v2-text-bright);
-  font-size: 13px;
-  line-height: 1.55;
-}
-.v2-root .modal-btn {
-  background: var(--v2-bg-glass-2);
-  border: 1px solid var(--v2-brass);
-  color: var(--v2-gold);
-  border-radius: var(--v2-radius);
-  font-family: var(--v2-font);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  padding: 10px 14px;
-  transition: background-color 120ms, border-color 120ms, color 120ms;
-}
-.v2-root .modal-btn:hover {
-  background: var(--v2-bg-hover);
-  border-color: var(--v2-brass-hi);
-  color: var(--v2-text-bright);
-}
-.v2-root .modal-btn.danger {
-  background: rgba(180, 50, 50, 0.20);
-  border-color: rgba(220, 70, 70, 0.55);
-  color: #ff8888;
-}
-.v2-root .modal-btn.danger:hover { background: rgba(220, 50, 50, 0.35); }
-
-.v2-root .event-section-label { color: var(--v2-gold); }
-.v2-root .event-section-text  { color: var(--v2-text-bright); }
-.v2-root .event-section-list  { color: var(--v2-text-bright); }
-
-/* V2 progress bar inside the shared objective detail modal. Only used
- * by the active-goal click in V2 (challenges don't render a bar). V1
- * never renders this element, so V1 style.css is left alone. */
-.v2-root .event-section-progress {
-  margin-top: 6px;
-  height: 6px;
-  background: rgba(8, 6, 12, 0.65);
-  border: 1px solid rgba(160, 120, 32, 0.45);
-  border-radius: 3px;
-  overflow: hidden;
-}
-.v2-root .event-section-progress-fill {
-  height: 100%;
-  background: linear-gradient(180deg,
-              rgba(232, 196, 98, 0.95) 0%,
-              rgba(160, 120, 32, 0.95) 100%);
-  transition: width 200ms ease;
-}
+/* ── V2-root overrides for shared chrome ───────────────────────────── */
+/* uiRoot carries the .v2-root class. The in-game shared overlays
+ * (Toast, GoalTicker, ChallengeTicker) still mount under the old V1
+ * base classes — these rules give them V2 chrome until those
+ * components also migrate to native .v2-* classes. */
 
 /* Toast: keep V1 position-centric layout, just restyle the surface so
  * it reads as part of the V2 chrome. Shift below V2 TopHUD (56px). */

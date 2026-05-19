@@ -82,23 +82,23 @@ export class GoalCompletePopup {
 
   private _build(item: PopupItem): HTMLElement {
     const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay interactive';
+    overlay.className = 'v2-modal-overlay interactive';
 
     const card = document.createElement('div');
-    card.className = 'modal-card';
+    card.className = 'v2-modal-card';
 
     const title = document.createElement('div');
-    title.className   = 'modal-title';
+    title.className   = 'v2-modal-title';
     title.textContent = item.title;
     card.appendChild(title);
 
     const body = document.createElement('div');
-    body.className   = 'modal-body';
+    body.className   = 'v2-modal-body';
     body.textContent = item.body;
     card.appendChild(body);
 
     const reward = document.createElement('div');
-    reward.className   = 'modal-body';
+    reward.className   = 'v2-modal-body';
     reward.style.color = '#4dcc80';
     reward.style.fontWeight = '600';
     reward.textContent = `Reward: +${item.reward.toLocaleString()} 💰`;
@@ -109,7 +109,7 @@ export class GoalCompletePopup {
     // reward line above and keep this change scoped to one file.
     if (item.unlockLabel) {
       const unlock = document.createElement('div');
-      unlock.className   = 'modal-body';
+      unlock.className   = 'v2-modal-body';
       unlock.style.color = '#e6b31a';
       unlock.style.fontWeight = '700';
       unlock.textContent = `Unlocked: ${item.unlockLabel}`;
@@ -117,7 +117,7 @@ export class GoalCompletePopup {
     }
 
     const btn = document.createElement('button');
-    btn.className   = 'modal-btn';
+    btn.className   = 'v2-modal-btn';
     btn.textContent = item.cta;
     btn.onclick     = () => {
       overlay.remove();
