@@ -7,7 +7,7 @@ export class Toast {
 
   constructor(parent: HTMLElement) {
     this.el = document.createElement('div');
-    this.el.className = 'toast';
+    this.el.className = 'v2-toast';
     parent.appendChild(this.el);
 
     gameState.on<string>('toast_requested', msg => this.show(msg));

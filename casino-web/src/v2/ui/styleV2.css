@@ -658,16 +658,17 @@
   letter-spacing: 0.02em;
 }
 
-/* ── V2-root overrides for shared chrome ───────────────────────────── */
-/* uiRoot carries the .v2-root class. The in-game shared overlays
- * (Toast, GoalTicker, ChallengeTicker) still mount under the old V1
- * base classes — these rules give them V2 chrome until those
- * components also migrate to native .v2-* classes. */
-
-/* Toast: keep V1 position-centric layout, just restyle the surface so
- * it reads as part of the V2 chrome. Shift below V2 TopHUD (56px). */
-.v2-root .toast {
+/* ── V2 Toast ──────────────────────────────────────────────────────── */
+/* Centered pill that fades in/out via the `.visible` modifier. Shift
+ * below V2 TopHUD (56px) + 16px breathing. */
+.v2-toast {
+  position: absolute;
   top: 72px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  max-width: 420px;
+  min-width: 200px;
+  padding: 10px 24px;
   background: var(--v2-bg-glass);
   border: 1px solid var(--v2-brass);
   border-radius: var(--v2-radius);
@@ -676,18 +677,33 @@
   font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.02em;
+  text-align: center;
+  white-space: nowrap;
   box-shadow: var(--v2-shadow);
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.v2-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
-/* Goal + Challenge tickers — inset away from the BuildPanelV2 sidebar
- * (left) so they read whether the sidebar is open or closed, and pulled
- * in from the right so they don't span the full width of the screen.
- * Same V1 stacking (challenge above goal). */
-.v2-root .goal-ticker {
+/* ── V2 Goal + Challenge tickers ──────────────────────────────────── */
+/* Inset from the BuildPanelV2 sidebar (left) so they remain readable
+ * whether the sidebar is open or closed, and pulled in from the right
+ * so they don't span the full width. Challenge ticker stacks above the
+ * goal ticker. */
+.v2-goal-ticker {
+  position: absolute;
   left: 316px;             /* 300px sidebar + 16px gap */
   right: 252px;            /* leaves the right edge breathing room */
   bottom: 80px;            /* above 72px bottom nav + 8px breathing */
   height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: var(--v2-bg-glass);
   border: 1px solid var(--v2-brass);
   border-radius: var(--v2-radius);
@@ -698,15 +714,25 @@
   letter-spacing: 0.04em;
   box-shadow: var(--v2-shadow);
   padding: 0 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  user-select: none;
   z-index: 30;
+  transition: background 0.1s;
 }
-.v2-root .goal-ticker:active { background: var(--v2-bg-hover); }
+.v2-goal-ticker:active { background: var(--v2-bg-hover); }
 
-.v2-root .challenge-ticker {
+.v2-challenge-ticker {
+  position: absolute;
   left: 316px;
   right: 252px;
   bottom: 120px;           /* stacked above goal-ticker (height 32 + 8 gap) */
   height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: var(--v2-bg-glass);
   border: 1px solid rgba(80, 200, 180, 0.50);
   border-radius: var(--v2-radius);
@@ -717,6 +743,11 @@
   letter-spacing: 0.04em;
   box-shadow: var(--v2-shadow);
   padding: 0 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  user-select: none;
   z-index: 30;
 }
 

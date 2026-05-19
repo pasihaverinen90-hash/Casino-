@@ -13,7 +13,7 @@ export class GoalTicker {
 
   constructor(parent: HTMLElement, onOpen: () => void) {
     this.el = document.createElement('div');
-    this.el.className = 'goal-ticker interactive';
+    this.el.className = 'v2-goal-ticker interactive';
     this.el.onclick = onOpen;
     parent.appendChild(this.el);
 

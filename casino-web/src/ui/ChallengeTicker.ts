@@ -17,7 +17,7 @@ export class ChallengeTicker {
     this.el = document.createElement('div');
     // 'interactive' is the project-wide class that lets pointer events
     // through and matches the cursor/hover styling used by GoalTicker.
-    this.el.className = 'challenge-ticker interactive';
+    this.el.className = 'v2-challenge-ticker interactive';
     this.el.onclick   = () => this._showDetails();
     parent.appendChild(this.el);
 
