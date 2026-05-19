@@ -1,10 +1,8 @@
 // openActiveGoalDetail.ts — V2 helper that opens the shared objective
-// detail modal for the single active goal.
-//
-// Extracted from main.ts in Phase 11B. Mirrors the Challenge click
-// behaviour — same title + sections + Close panel shape — instead of
-// duplicating UI surfaces. StatsPanelV2 → Goals tab still hosts the
-// full goals list; this is the per-objective focus card.
+// detail modal for the single active goal. Same title + sections +
+// Close panel shape as the Challenge detail flow. StatsPanelV2 → Goals
+// tab still hosts the full goals list; this is the per-objective focus
+// card shown when the player clicks the bottom goal ticker.
 import { gameState } from '../../state/GameState';
 import * as GC from '../../logic/GameConstants';
 import {

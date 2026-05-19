@@ -1,12 +1,11 @@
 // TopHUDV2.ts — premium V2 top bar.
 //
-// Reuses V1's data sources (gameState.getDaySnapshot, TimeController,
-// format helpers) and V1's speed-control behaviour. Mounts in the same
-// uiRoot V1 panels use; uses .v2-* class scoping so V1 CSS is untouched.
+// Reads gameState.getDaySnapshot + TimeController, uses the shared
+// format helpers, and owns the speed-control segmented buttons.
+// Class names are scoped under .v2-* in styleV2.css.
 //
-// Public surface mirrors V1 TopHUD so main.ts's `time.on('clock', idx
-// => topHUD.setClock(idx))` works for either renderer without a
-// renderer branch in the wiring code.
+// setClock(idx) is called by main.ts on every quarter-hour tick so the
+// HUD repaints without polling.
 import { gameState } from '../../state/GameState';
 import { time, fmtClock, type Speed } from '../../state/TimeController';
 import { fmtCash } from '../../ui/format';
@@ -86,8 +85,7 @@ export class TopHUDV2 {
     this._refreshSpeed();
   }
 
-  // Called from main.ts on every quarter-hour tick — same contract V1
-  // TopHUD uses, so the wiring code in main.ts doesn't need a branch.
+  // Called from main.ts on every quarter-hour tick.
   setClock(_idx: number): void {
     this._refresh();
   }

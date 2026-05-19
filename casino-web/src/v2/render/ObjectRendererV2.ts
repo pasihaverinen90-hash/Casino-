@@ -8,10 +8,9 @@
 // original index in placedObjs so a stable ordering survives across
 // re-renders even when two objects share the same depth key.
 //
-// Phase 4 ships three recipes: SLOT_MACHINE, SMALL_TABLE, LARGE_TABLE.
-// Every other ObjType is skipped silently (no throw, no log) so a save
-// with wall services / keno / high-stakes loads cleanly. Phase 5 fills
-// in wall-service recipes.
+// Every ObjType in OBJ_DEFS has a recipe; the dispatcher's default case
+// silently skips unknown types so a save with a future ObjType added
+// before its recipe exists still loads cleanly.
 import Phaser from 'phaser';
 import * as GC from '../../logic/GameConstants';
 import * as Proj from './ProjectionV2';
@@ -51,8 +50,8 @@ export function drawObjects(
 
   for (const { obj } of ordered) {
     const isFunctional = functionalIds.has(obj.id);
-    // 1.0 functional / 0.45 inert — same dim convention as V1 so the
-    // signal is consistent across renderers while V1 is still in tree.
+    // 1.0 functional / 0.45 inert so the player can see at a glance
+    // which placements aren't currently operating.
     const alpha = isFunctional ? 1.0 : 0.45;
     const ctx: RecipeContext = {
       g, obj, tiles, baseX, baseY, ts, alpha, isFunctional,
@@ -68,7 +67,7 @@ export function drawObject(ctx: RecipeContext): void {
   _dispatch(ctx);
 }
 
-// Per-type dispatch. After Phase 5 every ObjType in OBJ_DEFS has a recipe;
+// Per-type dispatch. Every ObjType in OBJ_DEFS has a recipe today;
 // the default case stays as a safety net for any future ObjType added
 // before its recipe exists.
 function _dispatch(ctx: RecipeContext): void {

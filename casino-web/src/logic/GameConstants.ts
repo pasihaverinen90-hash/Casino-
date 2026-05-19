@@ -14,16 +14,16 @@ export const RATING_MIN      = 1.0;
 export const RATING_MAX      = 5.0;
 export const CROWDING_SMOOTH = 0.4;
 
-// ── Rating V2 ────────────────────────────────────────────────────────────────
-// Replaces V1's flat additive formula with a 0–100 internal score across six
-// weighted categories, mapped to the existing 1.0–5.0 range:
+// ── Rating ──────────────────────────────────────────────────────────────────
+// 0–100 internal score across six weighted categories, mapped to the
+// 1.0–5.0 rating range:
 //   rating = clamp(1.0 + (score / 100) × 4.0, 1.0, 5.0)
-// Each category is hard-capped, so spamming a single object type can no longer
-// dominate. Crowding is folded into the capacity pillar (no separate term on
-// the final rating). RATING_BASE above is V1 and is no longer read by Rating
-// V2; it stays exported to avoid touching unrelated callers. ObjDef.rating /
-// ratingPer are likewise still on metadata but are NOT summed by V2 — the
-// rules below own the full computation.
+// Each category is hard-capped, so spamming a single object type can no
+// longer dominate. Crowding is folded into the capacity pillar (no
+// separate term on the final rating). The legacy RATING_BASE constant
+// above is no longer read by the rating computation; it stays exported
+// to avoid touching unrelated callers. ObjDef.rating / ratingPer are
+// likewise still on metadata but are NOT summed by the current rules.
 export const RATING_WEIGHTS = {
   variety  : 25,
   comfort  : 25,
@@ -82,11 +82,11 @@ export const CAPACITY_DEMAND_BASELINE = 30;
 export const RATING_CAPACITY_CROWDING_MULTIPLIER = 1.25;
 export const RATING_CAPACITY_CROWDING_FLOOR      = 0.35;
 
-// ── Random Challenges V1 ─────────────────────────────────────────────────────
-// V1 ships one manually-triggered challenge (Slot Machine Promotion) plus the
-// minimal scaffolding for future random scheduling. State lives on GameState
-// (activeChallenge / activeBoost) and persists across saves with safe
-// defaults — old saves load with both fields null and no SAVE_VERSION bump.
+// ── Random Challenges ───────────────────────────────────────────────────────
+// Three challenges are currently authored: Slot Machine Promotion, Tourist
+// Bus, Comfort Check. State lives on GameState (activeChallenge /
+// activeBoost) and persists across saves with safe defaults — older saves
+// load with both fields null and no SAVE_VERSION bump.
 export type ChallengeId = 'slot_promotion' | 'tourist_bus' | 'comfort_check';
 export type BoostId     = 'slot_revenue_boost' | 'walkin_boost';
 
@@ -139,10 +139,10 @@ export const COMFORT_CHECK_REQUIREMENTS = {
   buffet  : 1,
 } as const;
 
-// ── Campaign Challenge Schedule V1 ───────────────────────────────────────────
+// ── Campaign Challenge Schedule ─────────────────────────────────────────────
 // Long-term goal is a campaign with multiple casino scenarios, each with its
-// own pre-authored challenge schedule. V1 has a single 'starter' casino and a
-// single scheduled entry. The scheduler runs on day rollover (see
+// own pre-authored challenge schedule. Today there is a single 'starter'
+// casino with a single scheduled entry. The scheduler runs on day rollover (see
 // GameState._tryStartScheduledChallenges) and only starts the earliest
 // untriggered entry whose day is ≤ dayNumber — so a scheduled challenge that
 // was blocked by an active challenge/boost is delayed rather than lost.
@@ -233,7 +233,7 @@ export const GOAL_REWARDS = [500, 800, 600, 1200, 1000, 1500, 1000, 2000, 1500, 
 // mode. Awarded exactly once per save; persisted via the endless_unlocked flag.
 export const ENDLESS_BONUS = 25_000;
 
-// Progression / Unlocks V1 — Phase U1.
+// Progression / Unlocks.
 // Object types that are buildable from the moment a new game starts. Anything
 // outside this set is locked until a goal whose GOAL_UNLOCKS entry names it
 // is completed.
@@ -244,8 +244,8 @@ export const ENDLESS_BONUS = 25_000;
 // unlocks did NOT require a SAVE_VERSION bump.
 //
 // We deliberately lock at object level (not at variant level) — variants
-// have no mechanical difference in V1, so locking poker-but-not-blackjack
-// would be UI noise without gameplay value.
+// have no mechanical difference, so locking poker-but-not-blackjack would
+// be UI noise without gameplay value.
 export const STARTING_UNLOCKS: readonly ObjType[] = [
   ObjType.SLOT_MACHINE,
   ObjType.WC,
@@ -285,22 +285,16 @@ export const GOAL_DESCS = [
   'Build the bar',
 ];
 
-// Phaser hex colours for tiles. COL_WALL and COL_BLOCKED stay dark and
-// neutral so they read clearly against the new burgundy carpet.
-//
-// V1.1 bumps COL_FLOOR and COL_FLOOR_ALT to dark burgundy tones so the
-// casino floor reads as a real red carpet instead of a grey grid. The
-// only consumers of these constants are GridScene._paintTile (the active
-// carpet recipe) and the legacy _tileColor switch, so the colour change
-// has no cross-system effect.
+// Legacy Phaser hex colours for tiles. Kept exported for any caller that
+// still needs a raw tile-type colour; the V2 renderer paints via
+// PaletteV2 rather than these constants.
 export const COL_FLOOR   = 0x3a1418;
 export const COL_WALL    = 0x1e2124;
 export const COL_LOBBY   = 0x403824;
 export const COL_BLOCKED = 0x262d40;
 
-// V1.1 carpet & lobby palette. Layered on top of the base tile colors by
-// GridScene._paintTile to give the casino a richer carpet / drop-shadow
-// feel without touching any gameplay coordinate or footprint.
+// Legacy carpet & lobby accent palette retained for the same reason as
+// above. The V2 renderer derives its carpet from PaletteV2 instead.
 //   COL_FLOOR_ALT     — slightly lighter red-brown, painted at moderate
 //                       alpha over alternate 2×2 floor groups for woven
 //                       variation.
@@ -356,10 +350,9 @@ export const enum ValResult {
 //   1 = at least one open neighbour (slot machines)
 //   2 = at least two open sides (tables — guests need to approach)
 //
-// Phase A1 metadata (additive — not yet consumed by Simulation/GameState/
-// GuestSprites/BuildPanel). Centralises per-type values that today live as
-// hard-codes scattered across logic + game + ui modules so future content
-// (ATM, Buffet, …) and guest types can be data-driven.
+// Per-object metadata. Centralises per-type values (category, rating,
+// revenue) so future content (additional service types / guest profiles)
+// can be data-driven instead of hard-coded across logic / ui modules.
 //   category    — build-panel grouping
 //   ratingPer   — per-instance rating contribution (matches Simulation.calcRating
 //                 coefficients; bar's flat 0.35 stays in Simulation for now,
@@ -402,9 +395,9 @@ export const OBJ_DEFS: Record<ObjType, ObjDef> = {
     is_wall: false, max: -1, rating: 0.02, flat: false,
     color: 0xccb31a, accessSides: 1, variants: [],
     category: 'slots', ratingPer: 0.01, revPerVisit: REV_SLOT,
-    // Visual dwell only — has no effect on Simulation/revenue (sim runs on
-    // aggregate counts, not on per-guest visits). Bumped in Guest Behavior
-    // V1 so guests visibly play a slot for ~1–2 in-game hours instead of
+    // Visual dwell only — has no effect on Simulation/revenue (sim runs
+    // on aggregate counts, not on per-guest visits). Long enough that
+    // guests visibly play a slot for ~1–2 in-game hours instead of
     // bouncing off after a few real seconds.
     dwellRange: [12, 24], targetWeight: 1, accessRule: 'slot',
   },
@@ -505,10 +498,9 @@ export function getDef(type: ObjType): ObjDef { return OBJ_DEFS[type]; }
 
 // Is this an object that uses the "table" geometry contract — full
 // open-floor buffer ring, reserved cardinal-side seat tiles, dealer-side
-// facing? Centralised so future table-like objects (e.g. Keno Lounge,
-// High-Stakes Table planned for Phase N2) can be opted in here once,
-// instead of expanding OR-chains scattered across PlacementValidator,
-// OperationalValidator, GameState, and GridScene.
+// facing? Centralised so future table-like objects can be opted in here
+// once, instead of expanding OR-chains scattered across PlacementValidator,
+// OperationalValidator, and GameState.
 export function isTableLike(type: ObjType): boolean {
   return type === ObjType.SMALL_TABLE
       || type === ObjType.LARGE_TABLE

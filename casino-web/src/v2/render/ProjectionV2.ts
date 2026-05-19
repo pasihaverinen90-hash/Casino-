@@ -6,7 +6,7 @@
 // separate from the floor projection so wall/object recipes can paint
 // at any elevation without alignment drift.
 //
-// Two height systems live here, intentionally decoupled (see Phase 5.3):
+// Two height systems live here, intentionally decoupled:
 //   • Walls         — wallVerticalOffset(ts) / liftWallPoint
 //   • Floor objects — objectVerticalOffset(ts, h) / liftObjectPoint
 //
@@ -25,17 +25,15 @@ export const SHEAR_Y_RATIO     = 0.42;
 // extent from wallVerticalOffset(ts) so a tuning pass only touches this
 // one constant.
 //
-// 3.0 — Phase 5.4 bump from 2.2. Walls represent exterior room walls;
-// nothing exists behind them, so a generous height is fine and reads
-// as a real casino room rather than a low rim. Wall-service facades
-// still occupy only the lower 55–75 % of this height (Phase 5.2
-// FACADE_FRACTIONs), leaving the upper wall as plain architecture
-// for future signs / lights.
+// Walls represent exterior room walls; nothing exists behind them, so
+// a generous height reads as a real casino room rather than a low rim.
+// Wall-service facades occupy only the lower 55–75 % of this height (see
+// each recipe's FACADE_FRACTION), leaving the upper wall as plain
+// architecture for future signs / lights.
 //
 // Slot / table heights are governed by their own per-recipe constants
 // (SLOT_CABINET_HEIGHT_TILES, *_RIM_HEIGHT_TILES, etc.) and flow
 // through liftObjectPoint — they do NOT scale with WALL_HEIGHT_TILES.
-// Wall and floor-object vertical systems were decoupled in Phase 5.3.
 export const WALL_HEIGHT_TILES = 3.0;
 
 export interface Vec2 {

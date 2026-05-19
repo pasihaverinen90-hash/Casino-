@@ -8,8 +8,8 @@
 //
 // Depth: the scene paints this renderer on its own Graphics layer above
 // ObjectRendererV2, so a guest will always appear in front of a slot or
-// table at the same tile. That's acceptable for Phase 6 — interleaved
-// per-guest/per-object depth sort is a Phase 11 polish item.
+// table at the same tile. That's acceptable for now —
+// a per-guest/per-object depth sort is a future polish item.
 import Phaser from 'phaser';
 import * as GC from '../../logic/GameConstants';
 import * as Proj from './ProjectionV2';

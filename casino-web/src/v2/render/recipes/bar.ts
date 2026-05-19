@@ -6,7 +6,7 @@
 // Brass cornice along the top of the facade, brass kickplate along the
 // bottom.
 //
-// Phase 5.2: the facade occupies the lower 75 % of the wall height —
+// The facade occupies the lower 75 % of the wall height —
 // bigger than the small services because a real bar is a substantial
 // wall feature — but plain wall + brass cap rail from WallRendererV2
 // remain visible above.

@@ -1,5 +1,5 @@
 // keyboardShortcuts.ts — registers the document-level keydown handler
-// extracted from main.ts in Phase 11B.
+// that drives the V2 UI shell.
 //
 // Shortcut map (preserves the prior main.ts behaviour byte-for-byte):
 //   B / H / S / G / D  — toggle Build / Hotel / Stats / Stats→Goals / Demolish

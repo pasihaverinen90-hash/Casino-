@@ -1,6 +1,6 @@
 // ZoomControlsV2.ts — V2 view (−/+) buttons that live inside TopHUDV2.
 //
-// Phase 8E.3 moved these out of a floating bottom-right overlay and into
+// The buttons mount inside
 // the TopHUDV2 "View" slot next to the speed controls. Layout is now
 // inline (no absolute positioning) — the buttons share the same visual
 // language as the speed buttons so the HUD reads as a single row of

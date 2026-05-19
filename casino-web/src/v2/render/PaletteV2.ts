@@ -1,9 +1,5 @@
 // PaletteV2.ts — colour palette for the Presentation V2 renderer.
 //
-// V2 owns its own constants — V1's COL_* values in GameConstants.ts are
-// not referenced and not mutated. When V1 retires, those legacy constants
-// can be deleted without touching this file.
-//
 // All values are 0xRRGGBB integers, ready for Phaser.Graphics fillStyle()
 // or Phaser.Text colour strings (call .toString(16).padStart(6, '0')).
 //
@@ -52,7 +48,7 @@ export const FELT_HIGH_STAKES  = 0x5a141a;
 // ── Slot machine ─────────────────────────────────────────────────────────
 // SLOT_BODY: the warm gold/brass cabinet face. More saturated than the
 //   wood palette so a slot reads as a metal-housed machine, less bright
-//   than BRASS_HIGHLIGHT so the top + rim trim still pop. Added Phase 4.
+//   than BRASS_HIGHLIGHT so the top + rim trim still pop.
 // SCREEN_DARK: dark inset for the slot screen, painted on the front face.
 //   SCREEN_GLOW overlays it at high alpha to suggest a lit display.
 export const SLOT_BODY         = 0xb89020;
@@ -73,8 +69,6 @@ export const BG_DARK           = 0x0a0a14;
 
 // ── Placement / demolish / selection overlays ────────────────────────────
 // Bright green for a valid placement ghost; bright red for an invalid
-// ghost and for demolish overlay/hover. Same hues V1 GridScene used so
-// the green/red signal reads identically across renderers while V1 is
-// still in tree.
+// ghost and for demolish overlay/hover.
 export const GHOST_OK          = 0x33e64d;
 export const GHOST_BAD         = 0xe63333;

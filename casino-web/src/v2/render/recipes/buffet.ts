@@ -4,7 +4,7 @@
 // glass sneeze-guard highlight, warm light glow, brass trim. Reads as
 // distinct from Bar (no bottles, domes instead).
 //
-// Phase 5.2: facade occupies lower 68 % of wall — substantial but
+// Facade occupies lower 68 % of wall — substantial but
 // noticeably shorter than the bar (75 %) and leaves plain wall +
 // brass cap visible above.
 import Phaser from 'phaser';

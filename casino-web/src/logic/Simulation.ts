@@ -22,7 +22,7 @@ export function calcCrowding(lastGuests: number, capacity: number, prevPenalty: 
 }
 
 // Rating V2 input — single object so call sites stay readable as the formula
-// pulls in finance/hotel/capacity terms that weren't in V1's flat signature.
+// pulls in finance/hotel/capacity terms that the prior flat rating formula didn't include.
 export interface RatingInput {
   slots            : number;
   smallTables      : number;
@@ -145,7 +145,7 @@ export function calcRatingBreakdown(s: RatingInput): RatingBreakdown {
 }
 
 // Rating V2 — six-category 0–100 score, mapped to the 1.0–5.0 rating range.
-// Replaces V1's flat additive formula. Crowding lives inside scoreCapacity
+// Replaces the prior flat additive formula. Crowding lives inside scoreCapacity
 // (no standalone "- crowdingPenalty" term), so the final rating is purely
 // the score-to-range mapping. See GameConstants.RATING_WEIGHTS for caps.
 export function calcRating(s: RatingInput): number {
@@ -190,7 +190,7 @@ export function calcRevenue(
   sportsbookCount: number = 0,
   kenoCount: number = 0,
   highStakesCount: number = 0,
-  // Random Challenges V1 — Slot Promotion reward multiplies slot revenue only.
+  // Random Challenges — Slot Promotion reward multiplies slot revenue only.
   // 1.0 by default so non-boosted calls behave identically.
   slotRevenueMultiplier: number = 1.0,
 ): {
@@ -288,7 +288,7 @@ export interface ProjectInput {
   prev_occupancy    : number;
   prev_revenue      : number;
   cumulative_income : number;
-  // Random Challenges V1 — multiplies slot revenue only. 1.0 = no boost.
+  // Random Challenges — multiplies slot revenue only. 1.0 = no boost.
   slot_revenue_multiplier : number;
   // Tourist Bus event — multiplies walk-in demand only. 1.0 = no boost.
   // Applied AFTER calcWalkin; does not affect rating, capacity, or revenue

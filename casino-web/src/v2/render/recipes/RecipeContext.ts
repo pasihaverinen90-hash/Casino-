@@ -4,7 +4,7 @@
 // import from ObjectRendererV2 (which would create a cycle once the
 // dispatcher imports the recipes back).
 //
-// Phase 5: added `tiles` so wall-service recipes can call
+// `tiles` is included so wall-service recipes can call
 // PlacementValidator.detectWallDir(...) to find which visible wall they
 // attach to. Tiles are read-only — recipes never mutate them.
 import Phaser from 'phaser';

@@ -1,6 +1,6 @@
 // V2PanelCoordinator.ts — centralizes panel open/close/demolish behavior.
 //
-// Before Phase 11B, main.ts open-fired each panel in 10+ places with the
+// main.ts used to open-fire each panel in 10+ places with the
 // same "close the other two + exit demolish + open this one" pattern.
 // This coordinator owns that contract end-to-end so callers (bottom-bar
 // callbacks, keyboard shortcuts, GoalTicker → Stats-Goals route) say

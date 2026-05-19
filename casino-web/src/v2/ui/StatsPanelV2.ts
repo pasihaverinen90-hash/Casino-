@@ -1,24 +1,19 @@
 // StatsPanelV2.ts — V2 premium Reports panel.
 //
-// Mirrors V1 StatsPanel verbatim from a data perspective:
-//   • Same `gameState.getDaySnapshot()` for "RIGHT NOW" + "YESTERDAY".
-//   • Same `gameState.statsRecords` walk for lifetime totals + revenue
-//     breakdown (Slots / Tables / Food & Drink / Services / Hotel) — the
-//     groupings (keno + highstakes folded into Tables; buffet folded into
-//     Food & Drink; atm + sportsbook into Services) match V1 line-for-line.
-//   • Same 60-day chart arrays (gameState.chart*).
-//   • Same `gameState.completedGoals` / `goalCompletedDays` / `GOAL_REWARDS`
-//     / `GOAL_DESCS` for the goal status list.
-//   • Read-only. No gameplay mutation.
+// Data sources (read-only — no gameplay mutation):
+//   • `gameState.getDaySnapshot()` for "RIGHT NOW" + "YESTERDAY".
+//   • `gameState.statsRecords` walk for lifetime totals + revenue
+//     breakdown. Categories: Slots / Tables (small + large + keno +
+//     highstakes) / Food & Drink (bar + buffet) / Services (atm +
+//     sportsbook) / Hotel.
+//   • 60-day chart arrays (gameState.chart*).
+//   • `gameState.completedGoals` / `goalCompletedDays` /
+//     `GOAL_REWARDS` / `GOAL_DESCS` for the goal status list.
 //
-// Visual chrome: right-side glass panel (mirrors HotelPanelV2/BuildPanelV2
-// design language) with Today / History tabs. History contains four
-// compact 60-day mini-charts (Revenue, Guests, Rating, Occupancy) plus
-// lifetime totals, revenue breakdown, and the goals list.
-//
-// Public surface (open / close) matches V1 StatsPanel so main.ts can pick
-// either via the structural-type ternary without rewiring keyboard
-// shortcuts or BottomBar callbacks.
+// Visual chrome: right-side glass panel (matches HotelPanelV2 /
+// BuildPanelV2 design language) with Today / History / Goals tabs.
+// History contains four compact 60-day mini-charts (Revenue, Guests,
+// Rating, Occupancy) plus lifetime totals and revenue breakdown.
 import * as GC from '../../logic/GameConstants';
 import { gameState } from '../../state/GameState';
 import { fmtCash, fmtInt, fmtPct, fmtRating, fmtOccupancy } from '../../ui/format';
@@ -182,7 +177,7 @@ export class StatsPanelV2 {
     this.rBrkAtm    = _statRow(this.paneHist);
     this.rBrkHotel  = _statRow(this.paneHist);
 
-    // Goals pane (split out of History in Phase 8E.1 — same data source).
+    // Goals pane — full 10-row goal status list.
     this.paneGoals = document.createElement('div');
     this.paneGoals.className = 'v2-stats-pane';
     this.paneGoals.style.display = 'none';
@@ -212,7 +207,7 @@ export class StatsPanelV2 {
     parent.appendChild(this.el);
     this.body = body;
 
-    // Same contract as V1: only repaint while visible.
+    // Only repaint while visible.
     gameState.on('state_changed', () => {
       if (!this.el.classList.contains('hidden')) this._refresh();
     });
@@ -234,8 +229,8 @@ export class StatsPanelV2 {
     this.el.classList.add('hidden');
   }
 
-  // Public tab switcher (Phase 10D): lets the global 'G' keyboard shortcut
-  // open the Goals tab directly now that the V1 GoalsPanel is gone.
+  // Public tab switcher — lets the global 'G' keyboard shortcut
+  // open the Goals tab directly.
   // 0 = Today · 1 = History · 2 = Goals.
   setTab(idx: 0 | 1 | 2): void {
     this._showTab(idx);
@@ -290,7 +285,7 @@ export class StatsPanelV2 {
     this.yBlock.style.display = '';
     this.yEmpty.style.display = 'none';
 
-    // Same grouping rules as V1 StatsPanel._refreshToday — Tables folds
+    // Tables folds
     // small + large + keno + highstakes; Food & Drink folds bar + buffet;
     // Services folds atm + sportsbook. Legacy records may lack any of the
     // newer fields — `?? 0` covers them.
@@ -314,7 +309,7 @@ export class StatsPanelV2 {
     const records = gameState.statsRecords;
     const hasData = records.length > 0;
 
-    // Lifetime totals — match V1 calculation exactly.
+    // Lifetime totals.
     let total = 0, totalGuests = 0;
     let best = records[0], bestG = records[0], bestR = records[0];
     for (const r of records) {
@@ -338,7 +333,7 @@ export class StatsPanelV2 {
             'Highest rating',
             hasData ? `★ ${fmtRating(bestR.rating)}  (Day ${bestR.day})` : '—');
 
-    // Revenue breakdown — same Phase N1/N2 groupings as V1.
+    // Revenue breakdown — same groupings used above.
     let sumSlot = 0, sumTables = 0, sumFood = 0, sumSvc = 0, sumHotel = 0;
     for (const r of records) {
       sumSlot   += r.slot_rev;

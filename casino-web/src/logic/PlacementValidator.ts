@@ -68,9 +68,9 @@ export function checkSpatial(
   if (def.is_wall) {
     const wallDir = detectWallDir(req.col, req.row, w, h, tiles);
     if (!wallDir) return GC.ValResult.FAIL_WALL_INVALID;
-    // Presentation V2 rule: wall services can only attach to the two
-    // visible casino walls — NORTH (top) and WEST (left). Single source
-    // of truth; V1 and V2 ghost feedback both flow through this check.
+    // Wall services can only attach to the two visible casino walls —
+    // NORTH (top) and WEST (left). Single source of truth: the ghost
+    // overlay and tryPlace both flow through this check.
     if (wallDir !== 'top' && wallDir !== 'left')
       return GC.ValResult.FAIL_WALL_SIDE_NOT_VISIBLE;
     const doors = getDoorTiles(req, w, h);

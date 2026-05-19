@@ -30,18 +30,14 @@
 //   • brass cap rail           — BRASS               (4% of wall height, ≥1px)
 //   • brass highlight strip    — BRASS_HIGHLIGHT     (1px at ts ≥ 22)
 //
-// Per-tile vertical dividers are intentionally NOT drawn in Phase 3 — they
-// risk reading as a fence at small zoom. Phase 5 (wall services) and
-// Phase 11 (polish) can add them once the wall has actual facades to
-// separate.
+// Per-tile vertical dividers are intentionally NOT drawn — they would
+// risk reading as a fence at small zoom. They can be added later once
+// the wall has actual signs / facades to separate.
 //
-// Phase 3.1 — corner refinement: the wood-column + brass-overhang corner
-// pillar drew too much attention (the wider brass capital sat above the
-// adjacent walls' brass cap rails, producing a small "T" artifact at the
-// top). It's now a subtle vertical shadow seam where the two walls meet:
-// 1px of SHADOW from floor to wall top, with no overhanging brass. The
-// walls' own brass cap rails naturally form an L at the corner top, which
-// is enough to read as a junction without a competing pillar.
+// Corner: the two walls meet at a subtle vertical shadow seam (1px of
+// SHADOW from floor to wall top, with no overhanging brass). The walls'
+// own brass cap rails naturally form an L at the corner top, which is
+// enough to read as a junction without a competing pillar.
 import Phaser from 'phaser';
 import * as GC from '../../logic/GameConstants';
 import * as Proj from './ProjectionV2';
@@ -58,18 +54,10 @@ const HIGHLIGHT_TS = 22;   // brass cap highlight strip
 
 // Range of wall segments to paint along each visible wall.
 //
-// Phase 3.2 — fixes the NW corner "spike" that was visible in the
-// screenshot. Each wall stood at the inside edge (world row=1 for N,
-// world col=1 for W), but the loop covered every wall tile from col=0
-// (or row=0) to GRID_COLS-1 (or GRID_ROWS-1). The col=0 segment of the
-// north wall extended LEFT-AND-UP of the NW corner; the row=0 segment
-// of the west wall extended RIGHT-AND-UP. Both extensions had brass cap
-// rails that crossed above the corner and read as a small spike.
-//
-// Cutting the ranges to [1, GRID_COLS-2] / [1, GRID_ROWS-2] terminates
-// each wall exactly at the inside corner (worldToScreen(1, 1)) — no
-// extension past it. The walls' brass cap rails now meet at the corner
-// instead of crossing above it.
+// Each wall stands at the inside edge (world row=1 for N, world col=1
+// for W). The loop ranges stop one tile short of the grid corners so
+// neither wall extends past the NW corner — otherwise their brass cap
+// rails would cross above the corner and read as a small spike.
 const N_COL_START = 1;
 const N_COL_END   = GC.GRID_COLS - 1;   // exclusive in the loop below
 const W_ROW_START = 1;
@@ -82,9 +70,9 @@ export function drawWalls(
   baseX: number, baseY: number,
   ts: number,
 ): void {
-  // Per-tile draw of each wall segment so Phase 5 can later replace
-  // individual segments with wall-service facades without touching the
-  // main wall-paint loop. Today every segment paints the same recipe.
+  // Per-tile draw of each wall segment so wall-service recipes can
+  // overpaint individual segments without touching the main wall-paint
+  // loop. Today every segment paints the same plain wall recipe.
 
   // NORTH wall — stands at world row = 1, spans full grid width.
   for (let col = N_COL_START; col < N_COL_END; col++) {
@@ -102,9 +90,8 @@ export function drawWalls(
     _paintWallSegment(g, bl, br, baseX, baseY, ts);
   }
 
-  // Corner seam LAST so it sits on top of both walls. Phase 3.1 — a
-  // subtle vertical shadow line replaces the prior wood-column pillar so
-  // the corner reads as a quiet wall junction rather than an artifact.
+  // Corner seam LAST so it sits on top of both walls. A subtle vertical
+  // shadow line reads as a quiet wall junction without a competing pillar.
   _paintCornerSeam(g, baseX, baseY, ts);
 }
 
@@ -121,10 +108,9 @@ function _paintWallSegment(
 ): void {
   const wallPx       = Proj.wallVerticalOffset(ts);
   const detail       = ts >= 14;
-  // Phase 5.2 retune for the taller (WALL_HEIGHT_TILES = 2.2) wall:
-  // wainscot drops to 28 % (lower band, ~25–30 % of wall as the room
-  // shell rule requires) and brass cap shrinks to 4 % so it stays a
-  // visible trim line without dominating the tall dark panel above it.
+  // Wainscot at 28 % of wall height (the room-shell lower band) and the
+  // brass cap at 4 % so it stays a visible trim line without dominating
+  // the tall dark panel above it.
   const capPx        = Math.max(1, Math.round(wallPx * 0.04));
   const separatorPx  = (detail && ts >= SEPARATOR_TS) ? 1 : 0;
   const highlightPx  = (detail && ts >= HIGHLIGHT_TS) ? 1 : 0;
@@ -181,10 +167,9 @@ function _band(
 
 // ── Corner seam ───────────────────────────────────────────────────────────
 
-// A thin vertical shadow line at the inside NW corner where the two walls
-// meet. Replaces the Phase 3 wood-column-with-brass-overhang treatment,
-// which had wider brass capital + base than the column body and produced
-// a small "T" artifact above the adjacent walls' brass cap rails.
+// A thin vertical shadow line at the inside NW corner where the two
+// walls meet. Quieter than a wood-column treatment, no overhanging
+// brass that would crowd the walls' own cap rails.
 //
 // The seam is just dark — no brass overhang, no flaring base, no part
 // of it extends beyond the column footprint. The walls' own brass cap

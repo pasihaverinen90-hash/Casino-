@@ -3,7 +3,7 @@
 // 1×1 wall service. Compact wall-mounted machine: small inset body,
 // lit screen, card-slot and cash-slot strips, brass trim.
 //
-// Phase 5.2: facade occupies lower 55 % of wall height. Plain wall
+// Facade occupies lower 55 % of wall height. Plain wall
 // remains visible above so the ATM reads as an inset device rather
 // than a full-height fixture.
 import type { RecipeContext } from './RecipeContext';

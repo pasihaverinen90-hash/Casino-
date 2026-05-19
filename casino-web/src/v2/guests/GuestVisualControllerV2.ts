@@ -1,14 +1,10 @@
-// GuestVisualControllerV2.ts — V2-only visual guest layer.
+// GuestVisualControllerV2.ts — visual guest layer for Presentation V2.
 //
-// Mirrors the population/state-machine pattern of V1's GuestSprites
-// (spawn at lobby → walk to a functional attraction's interaction tile
-// via GuestRouter → idle/dwell → maybe visit more → leave to lobby).
-// All state lives here; gameState is read-only. No revenue, rating,
-// goals, saves, or reservations on gameState are touched.
-//
-// V1's GuestSprites remains the authority for V1 rendering — V2 owns
-// its own controller so V1 stays untouched. After V2 fully ships,
-// the shared behaviour can be deduplicated.
+// Owns the on-screen population + state machine: spawn at lobby → walk
+// to a functional attraction's interaction tile via GuestRouter →
+// idle / dwell → maybe visit more → leave to lobby. All state lives
+// here; gameState is read-only. No revenue, rating, goals, saves, or
+// reservations on gameState are touched.
 import * as GC from '../../logic/GameConstants';
 import * as OV from '../../logic/OperationalValidator';
 import * as PV from '../../logic/PlacementValidator';
@@ -89,8 +85,8 @@ interface InternalGuest extends GuestVisualV2 {
   phaseTimer         : number;
 }
 
-// Visible-crowd sizing — mirrors V1's MIN/MAX/ratio. Caps at 36 so
-// even a packed casino renders smoothly on a single Graphics layer.
+// Visible-crowd sizing — caps at 36 so even a packed casino renders
+// smoothly on a single Graphics layer.
 const MIN_VISIBLE        = 4;
 const MAX_VISIBLE        = 36;
 const VISIBLE_PER_GUEST  = 0.25;
@@ -98,8 +94,8 @@ const SPAWN_INTERVAL_SEC = 1.0;
 const WALK_TILES_PER_SEC = 1.0;
 const BOB_RATE_RAD       = 8.0;
 
-// Stuck-recovery cascade (game-seconds). Cheaper than V1's full
-// four-tier cascade since V2 is visual-only; two tiers suffice.
+// Stuck-recovery cascade (game-seconds). Two tiers — the layer is
+// visual-only, so cheaper than a full simulation pathing recovery.
 const STUCK_REPICK_SEC  = 4.0;
 const STUCK_EXIT_SEC    = 8.0;
 
@@ -108,12 +104,13 @@ const DWELL_FALLBACK: [number, number] = [3, 6];
 // Distance (in tile units) at which a guest "arrives" at a target.
 const ARRIVE_EPSILON = 0.05;
 
-// ── V2 visual target weights ──────────────────────────────────────────────
-// V1's ObjDef.targetWeight is the simulation/economy weight — it sets WC
-// and BAR to 0 because V1 didn't want visible guests queueing for them.
-// V2 is purely visual, so we want guests to occasionally walk to every
-// functional service (including WC and BAR) for visual life. Local table
-// owned by this file; gameplay-side ObjDef is unchanged.
+// ── Visual target weights ────────────────────────────────────────────────
+// ObjDef.targetWeight is the simulation/economy weight — it sets WC
+// and BAR to 0 because the economy doesn't want guests queueing for
+// them. This layer is purely visual, so we want guests to occasionally
+// walk to every functional service (including WC and BAR) for visual
+// life. Local table owned by this file; gameplay-side ObjDef is
+// unchanged.
 //
 // Adjust here if a service feels over- or under-used. Missing entries
 // default to 0 (never selected) — added safety for future ObjTypes.
@@ -180,7 +177,7 @@ export class GuestVisualControllerV2 {
 
   // Called every frame from PresentationSceneV2.update. dtMs is real
   // milliseconds; we scale by the current game speed so paused = freeze
-  // and 4× = guests walk 4× faster (matches V1).
+  // and 4× = guests walk 4× faster.
   update(dtMs: number): void {
     if (dtMs <= 0) return;
     const speed = time.speed;
@@ -380,7 +377,7 @@ export class GuestVisualControllerV2 {
       exitRow     : exit.row,
       idleSec     : 0,
       curKind     : target.obj.type,
-      // Total of 3..5 attractions per guest (matches V1).
+      // Total of 3..5 attractions per guest.
       visitsLeft  : 2 + Math.floor(Math.random() * 3),
       stuck       : 0,
       route       : findRoute(gameState.tiles, exit.col, exit.row, tCol, tRow) ?? [],
@@ -393,7 +390,7 @@ export class GuestVisualControllerV2 {
     };
   }
 
-  // Random lobby tile centre — same range as V1.
+  // Random lobby tile centre.
   private _lobbySpawn(): { col: number; row: number } {
     const span = GC.LOBBY_END_COL - GC.LOBBY_START_COL + 1;
     const c    = GC.LOBBY_START_COL + Math.floor(Math.random() * span);
@@ -403,7 +400,7 @@ export class GuestVisualControllerV2 {
 
   // V2 visual-weighted attraction picker → an interaction tile. Uses
   // V2_VISUAL_WEIGHTS (not GC.ObjDef.targetWeight) so wall services
-  // like WC and BAR — which V1 deliberately excludes from its picker
+  // like WC and BAR — which the economy deliberately excludes from its picker
   // by setting targetWeight=0 — still get visual visits in V2. Skips
   // already-reserved tiles so V2 guests don't all aim at the same seat.
   private _pickInteractionTile(): { tile: GC.Vec2; obj: GC.PlacedObj } | null {
@@ -645,7 +642,8 @@ export class GuestVisualControllerV2 {
     if (wallDir === 'left') {
       return { visible: { col: tCol - WALL_SERVICE_BIAS, row: tRow } };
     }
-    // Phase 3 placement rule rejects S/E, so this is a safety fallback.
+    // The N/W-only placement rule rejects S/E walls, so this is a
+    // safety fallback that should never fire in practice.
     return null;
   }
 

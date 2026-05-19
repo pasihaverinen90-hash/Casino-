@@ -1,20 +1,15 @@
 // BottomBarV2.ts — premium V2 bottom navigation.
 //
-// Same callback shape and public methods as V1 BottomBar so main.ts can
-// substitute it without renaming anything in the wiring code (keyboard
-// shortcuts in main.ts still call .pressButton('build') / .pressDemolish()
-// / .closeAll(cb?) verbatim).
+// Public methods: pressButton / pressDemolish / closeAll. The keyboard
+// shortcut module calls them by name so each shortcut maps to the same
+// path as the corresponding button click.
 //
-// Speed controls are NOT here — they live in TopHUDV2 in the V2 layout.
-// Save and Menu live in this bar to keep proximity with the build/demolish
-// actions.
+// Speed controls live in TopHUDV2, not here. Save and Menu live in this
+// bar to keep proximity with the build/demolish actions.
 import { uiBus } from '../../events/UIBus';
 
 type PanelId = 'build' | 'hotel' | 'stats' | '';
 
-// Re-uses the exact V1 BottomBarCallbacks shape so main.ts can pass the
-// same object to either renderer. Imported as a type to avoid coupling
-// at runtime.
 export interface BottomBarV2Callbacks {
   onBuild   : () => void;
   onHotel   : () => void;
@@ -70,8 +65,7 @@ export class BottomBarV2 {
     });
   }
 
-  // Public methods mirror V1 BottomBar — keyboard shortcuts in main.ts
-  // call these directly.
+  // Public methods — the keyboard shortcut module calls these directly.
   pressButton(id: 'build' | 'hotel' | 'stats'): void {
     ({ build: this.btnBuild, hotel: this.btnHotel, stats: this.btnStats }[id]).click();
   }

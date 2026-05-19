@@ -11,7 +11,7 @@ import {
 } from '../PaletteV2';
 import { fillQuad, lerpVec } from './drawHelpers';
 
-// Felt colour per variant. craps is the only V1 variant that swaps to red
+// Felt colour per variant. craps is the only variant that swaps to red
 // felt; everything else stays on the standard green. Add per-variant
 // overrides here as table content grows.
 export function feltColorForVariant(variant: string): number {
@@ -81,7 +81,7 @@ export function drawDealerBand(
 // Variant centrepiece painted at the felt top's centre. Default is a
 // small brass disk with a brighter rim; specific variants tweak the
 // interior to hint at the game (roulette wheel, craps dice marks,
-// poker concentric ring, blackjack arc). Visual polish — Phase 4 is
+// poker concentric ring, blackjack arc). Visual polish is
 // intentionally simple; richer marks land later.
 //
 // TODO (phase 11 polish): replace with real per-variant motifs (wheel

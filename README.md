@@ -79,7 +79,7 @@ npm run preview       # serve the production build
 | `Space` | Toggle pause |
 | `1` / `2` / `4` | Set speed 1× / 2× / 4× |
 
-The speed buttons live in the top HUD (V2) or the bottom bar (V1). 0× pause sits next to them as ⏸.
+The speed buttons live in the top HUD. 0× pause sits next to them as ⏸.
 
 ---
 
@@ -239,8 +239,8 @@ Vite's `base` is set to `/Casino-hotel/` so asset paths resolve under the repo's
 
 ## Near-term technical plan
 
-1. **Phase 9–10.** V2 default flip, V2 smoke-test bugfixes, V1 retirement. *Done.*
-2. **Phase 11 (next).** V2-only polish backlog — StartScreen redesign, shared-UI V2-native restyle (replace `.v2-root <V1-class>` overrides with native `.v2-*` rules), final sprite / art pass.
+1. **Phases 9–10.** V2 default flip, V2 smoke-test bugfixes, V1 retirement. *Done.*
+2. **Phase 11 (in progress).** V2-only polish — main.ts split + shared-UI V2-native restyle landed; **StartScreen redesign** and **final sprite / art pass** still to come.
 3. **Later.** Hotel floor-plan visuals, theme / material / chapter system, sound / music / animations, mobile / touch polish, continued balancing.
 
 ---

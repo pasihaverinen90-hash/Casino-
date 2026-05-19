@@ -5,7 +5,7 @@
 // above the door with simple male/female figure dots as a pictogram
 // hint (graphics-only — no Phaser.Text yet).
 //
-// Phase 5.2: the facade occupies only the lower 60 % of the wall.
+// The facade occupies only the lower 60 % of the wall.
 // WallRendererV2's upper panel + brass cap remain visible above so
 // the WC reads as embedded into the wall, not a full-height fixture.
 import type { RecipeContext } from './RecipeContext';

@@ -1,27 +1,23 @@
 // wallShared.ts — shared geometry + paint helpers for V2 wall-service
 // recipes (WC, Cashier, ATM, Bar, Buffet, Sportsbook).
 //
-// The Phase 3 placement validator guarantees that any wall service in
-// gameState.placedObjs attaches to the NORTH (top) or WEST (left) visible
-// wall. This module reads tiles via PlacementValidator.detectWallDir and
-// converts the object's footprint into a screen-space wall section that
-// the recipe paints into.
+// The placement validator guarantees that any wall service in
+// gameState.placedObjs attaches to the NORTH (top) or WEST (left)
+// visible wall. This module reads tiles via PlacementValidator
+// .detectWallDir and converts the object's footprint into a screen-
+// space wall section that the recipe paints into.
 //
-// All projection math goes through ProjectionV2. Vertical extrusion uses
-// wallVerticalOffset(ts) — no literal multipliers on ts for wall height.
+// All projection math goes through ProjectionV2. Vertical extrusion
+// uses wallVerticalOffset(ts) — no literal multipliers on ts for wall
+// height.
 //
 // Section geometry: the bottom edge of the section sits on the SAME
 // projected plane as WallRendererV2's wall — for N this is world row=1
 // (i.e. obj.row, since N wall services have obj.row = 1 against the
-// north border); for W this is world col=1 (obj.col).
-//
-// Phase 5.1 fix: the original Phase 5 implementation anchored facades
-// at the *room-facing* edge (row + h / col + w), placing them one tile
-// in front of the wall — wall services looked like floating kiosks
-// instead of embedded facades. Anchoring at the wall-side edge
-// (obj.row / obj.col) makes the facade exactly overpaint the wall
-// segments WallRendererV2 paints for those tiles. When an object is
-// absent, the base wall paint shows through naturally.
+// north border); for W this is world col=1 (obj.col). Anchoring at the
+// wall-side edge makes the facade exactly overpaint the wall segments
+// WallRendererV2 paints for those tiles; when an object is absent, the
+// base wall paint shows through naturally.
 import Phaser from 'phaser';
 import * as GC from '../../../logic/GameConstants';
 import { detectWallDir } from '../../../logic/PlacementValidator';
@@ -56,7 +52,7 @@ export function getWallSection(
 ): WallSection | null {
   // PV.detectWallDir expects a mutable array, but only reads from it.
   // The cast keeps the wallShared API readonly without changing PV's
-  // signature (PV is shared with V1 and we don't want to churn it).
+  // signature (PV is the source of truth and we don't want to churn it).
   const wallDir = detectWallDir(obj.col, obj.row, obj.w, obj.h, tiles as GC.Tile[]);
   if (wallDir !== 'top' && wallDir !== 'left') return null;
 
@@ -104,7 +100,7 @@ export function fillWallQuad(
 // call this first so any leftover WallRendererV2 wall behind the
 // facade is hidden by the recipe's own composition.
 //
-// Phase 5.2: `facadeFraction` lets recipes void only the lower
+// `facadeFraction` lets recipes void only the lower
 // facade slice (e.g. 0.6) instead of the whole wall section, leaving
 // the upper wall paint from WallRendererV2 visible above. Defaults to
 // 1.0 for callers that still want the full void.
@@ -174,7 +170,7 @@ export function drawInsetRectOnWall(
 
 // ── Facade-fraction helpers ──────────────────────────────────────────────
 //
-// Wall services in Phase 5.2 don't fill the whole wall — they paint into
+// Wall services don't fill the whole wall — they paint into
 // a lower facade slice (typically 50–80 % of wall height). These helpers
 // let recipes keep their internal y-fractions in [0, 1] of the facade,
 // converted on the fly to wall y-fractions. The recipe just declares

@@ -1,10 +1,10 @@
 // PresentationSceneV2.ts — Presentation V2 scene.
 //
-// Phase 7: V2 is now functionally interactive. Placement, demolish,
-// rotation, hover, and selection are wired via InputControllerV2 which
-// consumes the same uiBus event contracts as V1 GridScene. Validation
-// goes through PlacementValidator and commit through gameState.tryPlace
-// / gameState.demolish — V2 does not duplicate any gameplay rules.
+// Interactive placement, demolish, rotation, hover, and selection are
+// owned by InputControllerV2, which talks to the rest of the app via
+// the uiBus event contracts. Validation runs through PlacementValidator
+// and commit through gameState.tryPlace / gameState.demolish — the
+// scene does not duplicate gameplay rules.
 //
 // Layer order:
 //   0  floor
@@ -68,7 +68,7 @@ export class PresentationSceneV2 extends Phaser.Scene {
       this, this.camera, this.guestController, () => this._redrawOverlays(),
     );
 
-    // Zoom buttons live inside the TopHUDV2 "view" slot (Phase 8E.3).
+    // Zoom buttons live inside the TopHUDV2 "view" slot.
     // Skip mounting if the slot is missing (e.g. running the scene
     // without TopHUDV2 in a test harness); keyboard zoom still works.
     const viewSlot = document.getElementById('v2-view-group');

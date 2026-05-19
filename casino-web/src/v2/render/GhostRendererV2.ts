@@ -6,8 +6,7 @@
 //      shape they're about to place, not just an empty rectangle).
 //   2. A green or red footprint quad tint + outline so the validation
 //      verdict is unmistakable.
-//   3. Interaction-tile markers (slot chair / table seats) where
-//      cheap — same convention as V1 GridScene's ghost.
+//   3. Interaction-tile markers (slot chair / table seats) where cheap.
 import Phaser from 'phaser';
 import * as GC from '../../logic/GameConstants';
 import * as Proj from './ProjectionV2';
@@ -58,7 +57,7 @@ export function drawGhost(
   // Reset line style so any later strokes don't inherit ghost colour.
   g.lineStyle(0, 0, 0);
 
-  // 3. Interaction-tile markers — same set V1 paints for ghost feedback.
+  // 3. Interaction-tile markers — slot chair / table seats / door tiles.
   _drawInteractionMarkers(g, type, col, row, facing, baseX, baseY, ts, ok);
 }
 
@@ -107,8 +106,8 @@ function _drawInteractionMarkers(
 
 // Inline computation of door-inward tiles. PlacementValidator owns the
 // canonical version (getDoorTiles + getInward) but those expect a wall
-// direction; for the ghost overlay we mirror the same axis test V1
-// uses (horizontal footprint → door on south edge of footprint).
+// direction; for the ghost overlay we mirror the same axis test
+// (horizontal footprint → door on south edge of footprint).
 function _wallServiceDoorInwardTiles(
   type: GC.ObjType, col: number, row: number, facing: GC.Orientation,
 ): GC.Vec2[] {

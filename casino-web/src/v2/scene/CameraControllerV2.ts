@@ -9,22 +9,20 @@
 // Tells the scene when state changed via an onChange callback — caller
 // repaints. The controller does not own a Graphics object or call gameState.
 //
-// No placement, no hit-testing, no input handlers beyond pan/zoom. Click
-// dispatch lands in InputControllerV2 (Phase 7).
+// No placement, no hit-testing, no input handlers beyond pan/zoom.
+// Click dispatch lands in InputControllerV2.
 import Phaser from 'phaser';
 import * as GC from '../../logic/GameConstants';
 import * as Proj from '../render/ProjectionV2';
 
 // Discrete Hoyle-style zoom levels. Users snap between authored levels
-// via the wheel or the on-screen zoom buttons.
-//
-// Phase 5.4 widened the spread so the far zoom shows the room shell
-// nearly end-to-end while the close zoom is meaningfully closer than
-// before:
-//   0 → 14  far overview     (was 20)
-//   1 → 22  medium overview  (was 24)
-//   2 → 28  default play zoom (matches Phases 1–5.3 default)
-//   3 → 46  close detail zoom (was 36)
+// via the wheel or the on-screen zoom buttons. The spread is wide so the
+// far zoom shows the room shell nearly end-to-end while the close zoom
+// shows individual object detail:
+//   0 → 14  far overview
+//   1 → 22  medium overview
+//   2 → 28  default play zoom
+//   3 → 46  close detail zoom
 export const ZOOM_LEVELS         = [14, 22, 28, 46] as const;
 export const DEFAULT_ZOOM_INDEX  = 2;
 const DRAG_THRESHOLD_PX          = 6;
@@ -63,7 +61,7 @@ export class CameraControllerV2 {
     scene.input.on('pointerup',   this._onPointerUp,   this);
 
     // Native wheel listener so we can call preventDefault — without this
-    // the page scrolls instead of zooming. Mirrors V1 GridScene's pattern.
+    // the page scrolls instead of zooming.
     this._wheelHandler = (e: WheelEvent) => this._onWheel(e);
     scene.sys.game.canvas.addEventListener('wheel', this._wheelHandler, { passive: false });
   }
@@ -176,7 +174,7 @@ export class CameraControllerV2 {
   }
 
   // Clamp the offset so the projected grid keeps at least padX/padY of its
-  // body inside the canvas — V1's "generous pan" behaviour: half-canvas pad
+  // body inside the canvas — half-canvas pad gives generous panning so
   // on each axis, so the user can push the grid mostly off-screen but never
   // lose it entirely.
   private _clamp(): void {

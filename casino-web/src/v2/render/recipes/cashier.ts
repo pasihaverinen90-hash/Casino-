@@ -4,7 +4,7 @@
 // dark glass with a small attendant silhouette behind it, lower counter
 // ledge, brass coin pip as the "$" cue.
 //
-// Phase 5.2: facade occupies lower 58 % of wall height. Plain wall
+// Facade occupies lower 58 % of wall height. Plain wall
 // remains visible above the facade.
 import type { RecipeContext } from './RecipeContext';
 import {

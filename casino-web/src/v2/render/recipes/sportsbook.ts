@@ -5,7 +5,7 @@
 // bottles) and Buffet (no domes) — instead, multiple glowing rectangles
 // dominate the facade.
 //
-// Phase 5.2: facade occupies lower 70 % of wall height; plain wall +
+// Facade occupies lower 70 % of wall height; plain wall +
 // brass cap from WallRendererV2 stays visible above the screen bank.
 import type { RecipeContext } from './RecipeContext';
 import {

@@ -1,15 +1,13 @@
 // HotelPanelV2.ts — V2 premium Hotel sidebar.
 //
-// Mirrors V1 HotelPanel verbatim:
-//   • Same stat fields (roomCount, qualityLevel, bookedRooms, occupancyRate,
-//     hotel income estimate as bookedRooms * 25 💰/day).
-//   • Same ROOM_OPTIONS table (+2/1000, +4/1800, +8/3200).
-//   • Same UPGRADE_COSTS [0, 2000, 4000] with L3 = max quality.
-//   • Same actions: gameState.buyRooms(rooms, cost) / gameState.upgradeQuality().
-//   • Same refresh pattern: subscribe to 'state_changed', re-render when open.
+// Stat fields shown: roomCount, qualityLevel, bookedRooms, occupancyRate,
+// hotel income estimate (bookedRooms × 25 💰/day).
 //
-// Public surface (open / close) matches V1 HotelPanel so main.ts can pick
-// either at mount time without renaming anything in the wiring code.
+// Room purchase batches: +2 / 1000, +4 / 1800, +8 / 3200.
+// Quality upgrade costs: [0, 2000, 4000] with L3 as the max.
+//
+// Actions dispatch directly into gameState.buyRooms / upgradeQuality;
+// the panel re-renders on the 'state_changed' event while it is open.
 //
 // Styling lives in styleV2.css under .v2-hotel-* class selectors.
 import { gameState } from '../../state/GameState';
@@ -21,7 +19,7 @@ interface RoomOption {
   label : string;
 }
 
-// Same options and prices as V1 HotelPanel.ts. Kept local so the V2 panel
+// Room option table — kept local so the panel
 // reads as a self-contained unit; the gameplay rule still lives in
 // gameState.buyRooms which validates cash and emits state_changed.
 const ROOM_OPTIONS: RoomOption[] = [
@@ -98,7 +96,7 @@ export class HotelPanelV2 {
     this.el.append(header, stats, body);
     parent.appendChild(this.el);
 
-    // Same refresh contract as V1 HotelPanel: only repaint while visible.
+    // Only repaint while visible.
     gameState.on('state_changed', () => {
       if (!this.el.classList.contains('hidden')) this._refresh();
     });

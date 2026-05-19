@@ -26,7 +26,7 @@ import {
 // Per-recipe height. Independent of wall height — wall and floor object
 // heights are unrelated. Tune here without touching any other file.
 //
-// Phase 5.4: bumped 0.85 → 1.10 so slots read as upright machines, and
+// Slot cabinet height of 1.10 reads as an upright machine, and
 // the body is inset inside the tile so the cabinet is slimmer than the
 // floor footprint (it stands on a small plinth). Cabinet : floor-tile
 // ratio is now ≈ 1.10 : 0.80 ≈ 1.38, which feels like a stand-up

@@ -19,7 +19,7 @@ import {
 
 // Per-recipe rim height. Independent of wall height. Tables stay low
 // because the felt is the read surface — too tall and they fight slots.
-// Phase 5.4: bumped 0.18 → 0.25 so tables feel like physical low
+// Rim height 0.25 makes tables feel like physical low
 // furniture rather than felt mats; still well under the new ~1.10
 // slot cabinet height.
 const SMALL_TABLE_RIM_HEIGHT_TILES = 0.25;

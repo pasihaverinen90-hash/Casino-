@@ -1,19 +1,17 @@
 // BuildPanelV2.ts — V2 premium Build sidebar.
 //
-// Behaviour mirrors V1 BuildPanel verbatim (same items, same ordering,
-// same lock / affordability / variant rules, same uiBus events):
-//   • Categories derived from ObjDef.category
-//   • Lock state: !gameState.isUnlocked(t) → 🔒 + goal-unlock hint
-//   • Bar at-limit + unaffordable both disable the card
-//   • Click handler emits uiBus 'start_placement' with the V1 payload
-//   • Selection highlight tracks placement_confirmed / cancelled / exit
+// Behaviour:
+//   • Categories derived from ObjDef.category.
+//   • Lock state: !gameState.isUnlocked(t) → 🔒 + goal-unlock hint.
+//   • Bar at-limit + unaffordable both disable the card.
+//   • Click handler emits uiBus 'start_placement' with { type, variant }.
+//   • Selection highlight tracks placement_confirmed / cancelled / exit.
 //
 // Visually a left-side glass panel with a 2×2 category grid above a
-// scrollable item list. All styling lives in styleV2.css under
+// scrollable item list. All styling lives in styleV2.css under the
 // .v2-build-* class selectors.
 //
-// Public surface matches V1 BuildPanel so main.ts can swap between
-// renderers without renaming anything in the wiring code.
+// Public surface: open() / close().
 import * as GC from '../../logic/GameConstants';
 import { gameState } from '../../state/GameState';
 import { uiBus } from '../../events/UIBus';
@@ -24,7 +22,7 @@ interface BuildCategoryV2 {
   icon  : string;
 }
 
-// Same display ordering V1 BuildPanel uses.
+// Visible category tabs, in display order.
 const CATEGORIES: BuildCategoryV2[] = [
   { id: 'slots',    label: 'Slots',        icon: '🎰' },
   { id: 'tables',   label: 'Tables',       icon: '🎲' },
@@ -32,7 +30,7 @@ const CATEGORIES: BuildCategoryV2[] = [
   { id: 'food',     label: 'Food & Drink', icon: '🍷' },
 ];
 
-// Same display order V1 uses inside each category.
+// Buildable object types in their preferred display order.
 const ITEM_TYPES: GC.ObjType[] = [
   GC.ObjType.SLOT_MACHINE,
   GC.ObjType.SMALL_TABLE,
@@ -85,7 +83,7 @@ export class BuildPanelV2 {
     btnClose.title       = 'Close';
     // Route through the host callback (bottomBar.closeAll(_closeAll))
     // so the BottomBarV2 Build button highlight stays in sync, the V2
-    // scene exits placement, and other panels close — same flow as V1.
+    // scene exits placement, and other panels close.
     btnClose.onclick = () => onCloseClick();
 
     header.append(title, btnClose);
@@ -183,7 +181,7 @@ export class BuildPanelV2 {
     b.dataset['type'] = String(t);
     b.onclick         = () => this._onItemClick(t, def);
 
-    // Phase 10B.1: thumbnails removed. Final sprite art will land in a
+    // Thumbnails removed for now. Final sprite art will land in a
     // later phase; until then the build cards read better as clean text.
     // Category icons in the 2×2 grid above are still rendered.
     const meta = document.createElement('div');
@@ -261,7 +259,7 @@ export class BuildPanelV2 {
   }
 
   // Variant picker modal — V2 chrome (.v2-modal-* / .v2-variant-* / .v2-btn-*).
-  // Same content shape as V1 BuildPanel._showVariantPicker: same payload,
+  // Variant picker — same payload,
   // same uiBus emit, same selection-highlight behaviour. Pure CSS swap.
   private _showVariantPicker(t: GC.ObjType, variants: string[]): void {
     const overlay = document.createElement('div');

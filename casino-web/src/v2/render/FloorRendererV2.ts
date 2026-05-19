@@ -11,7 +11,8 @@
 //             groups, antique-gold motif dot at each 4x4 group centre.
 //   LOBBY   — richer red base with a small gold accent dot, so it reads as
 //             distinct from regular floor.
-//   WALL    — flat dark panel placeholder. Real N/W wall rendering is Phase 3.
+//   WALL    — flat dark panel placeholder. N/W wall extrusion is drawn
+//             by WallRendererV2 over the top of these tiles.
 //   BLOCKED — darker placeholder so non-buildable tiles read as obstacles.
 //
 // Detail overlays (alt, motif, lobby accent) only paint at ts >= DETAIL_TS
@@ -25,8 +26,8 @@ import {
   WALL_PANEL, WOOD_DARK,
 } from './PaletteV2';
 
-// Below this tile size, draw bases only (no alt / motif / accent). Matches
-// the V1 readability threshold so the look degrades the same way on zoom-out.
+// Below this tile size, draw bases only (no alt / motif / accent) so the
+// floor doesn't read as noisy at the smallest zoom levels.
 const DETAIL_TS = 14;
 
 export function drawFloor(
@@ -79,8 +80,8 @@ function _paintTile(
       return;
     }
     case GC.TileType.WALL: {
-      // Phase 2 placeholder. Phase 3 replaces N/W walls with proper
-      // wall panels; S/E walls keep a similar flat fill.
+      // Flat placeholder fill. WallRendererV2 overpaints the N/W edges
+      // with the proper extruded panels; S/E walls keep this flat fill.
       _fillQuad(g, quad, WALL_PANEL, 1);
       return;
     }

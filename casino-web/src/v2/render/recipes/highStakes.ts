@@ -16,7 +16,7 @@ import {
   drawSoftShadow, drawStoolAtTileCenter,
 } from './drawHelpers';
 
-// Phase 5.4 — taller rim than regular large tables so the premium
+// Taller rim than regular large tables so the premium
 // silhouette is unmistakable. Centrepiece + corner studs still carry
 // the visual differentiation beyond just height.
 const HIGH_STAKES_RIM_HEIGHT_TILES = 0.32;

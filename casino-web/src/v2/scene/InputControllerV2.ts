@@ -1,16 +1,15 @@
 // InputControllerV2.ts — pointer + keyboard input for Presentation V2.
 //
-// Owns V2's placement / demolish / hover state and converts pointer
-// coordinates to grid coordinates through ProjectionV2. Mirrors V1
-// GridScene's event contracts exactly:
+// Owns placement / demolish / hover state and converts pointer
+// coordinates to grid coordinates through ProjectionV2. Event contracts:
 //   uiBus → 'start_placement' / 'exit_placement' / 'toggle_demolish'
 //   uiBus ← 'placement_confirmed' / 'placement_cancelled' /
 //           'demolish_cancelled' / 'object_tapped'
-// Validation goes through PlacementValidator (the V1 path) and commit
-// through gameState.tryPlace / gameState.demolish — V2 does NOT
-// duplicate placement rules. The only V2-specific UX is wall-service
-// snap (cursor near the N or W wall snaps the anchor to that wall),
-// which is purely a convenience and never bypasses the validator.
+// Validation goes through PlacementValidator and commit through
+// gameState.tryPlace / gameState.demolish — this controller never
+// duplicates placement rules. The only renderer-specific UX is wall-
+// service snap (cursor near the N or W wall snaps the anchor to that
+// wall), which is purely a convenience and never bypasses the validator.
 import Phaser from 'phaser';
 import * as GC from '../../logic/GameConstants';
 import * as PV from '../../logic/PlacementValidator';
@@ -37,8 +36,8 @@ export interface PlacementGhostV2 {
 // is within this many tile-rows / columns of the wall plane.
 const WALL_SNAP_TILES = 4;
 
-// Drag threshold (screen px). Matches V1 — distinguishes a click from
-// a pan so a small jitter while clicking still registers as a tap.
+// Drag threshold (screen px). Distinguishes a click from a pan so a
+// small jitter while clicking still registers as a tap.
 const DRAG_THRESHOLD_PX = 6;
 
 type ChangeCb = () => void;
@@ -78,7 +77,7 @@ export class InputControllerV2 {
     this.placing      = true;
     this.placeType    = e.type as GC.ObjType;
     this.placeVariant = e.variant;
-    this.placeFacing  = 'S';      // matches V1 default
+    this.placeFacing  = 'S';      // default facing
     this.demolishing  = false;
     this.cursorCol    = -1;
     this.cursorRow    = -1;
@@ -118,7 +117,7 @@ export class InputControllerV2 {
     this.dragStartY = ptr.y;
     this.dragged    = false;
 
-    // Right-click rotates the ghost — same as V1.
+    // Right-click rotates the ghost.
     if (ptr.rightButtonDown() && this.placing) {
       this.placeFacing = GC.nextFacing(this.placeFacing);
       this._updateGhost(ptr.x, ptr.y);
@@ -179,7 +178,7 @@ export class InputControllerV2 {
   };
 
   private _onKeydownR = (event: KeyboardEvent): void => {
-    // Skip Ctrl+Shift+R (reserved for the V1 rating-breakdown shortcut).
+    // Skip Ctrl+Shift+R (reserved for the dev rating-breakdown shortcut).
     if (event.ctrlKey && event.shiftKey) return;
     if (!this.placing) return;
     this.placeFacing = GC.nextFacing(this.placeFacing);
@@ -198,7 +197,7 @@ export class InputControllerV2 {
     this.guests   = guests;
     this.onChange = onChange;
 
-    // uiBus listeners — mirror exactly what V1 GridScene subscribes to.
+    // uiBus listeners — the BuildPanelV2 / BottomBarV2 contracts.
     uiBus.on('start_placement',   this._onStartPlacement);
     uiBus.on('exit_placement',    this._onExitPlacement);
     uiBus.on('toggle_demolish',   this._onToggleDemolish);
@@ -209,7 +208,7 @@ export class InputControllerV2 {
     scene.input.on('pointermove', this._onPointerMove, this);
     scene.input.on('pointerup',   this._onPointerUp,   this);
 
-    // Keyboard — mirror V1's R + Esc bindings.
+    // Keyboard — R rotates the ghost, Esc cancels placement / demolish.
     scene.input.keyboard?.on('keydown-ESC', this._onKeydownEsc);
     scene.input.keyboard?.on('keydown-R',   this._onKeydownR);
 
@@ -237,10 +236,9 @@ export class InputControllerV2 {
 
   // ── Pointer → grid conversion ───────────────────────────────────────────
 
-  // Approximate "inside grid area" check. V1 used HUD_H / TICKER_H /
-  // BOTTOMBAR_H zones tied to a specific HTML layout; V2 is more
-  // permissive (input applies anywhere on the canvas except the very
-  // top HUD strip the V1 HTML overlay covers).
+  // Approximate "inside grid area" check — input applies anywhere on
+  // the canvas (the HTML overlays sit above the canvas and handle their
+  // own pointer events).
   private _inGridArea(py: number): boolean {
     return py >= 0 && py < this.scene.scale.height;
   }
@@ -257,8 +255,8 @@ export class InputControllerV2 {
   }
 
   // Convert a cursor tile to the placement anchor (bounds top-left)
-  // the validator and gameState.tryPlace expect. Slot + tables use
-  // their existing V1 helpers; wall services use V2 wall-snap UX.
+  // the validator and gameState.tryPlace expect. Slots + tables use
+  // the shared GameConstants helpers; wall services use wall-snap UX.
   private _placeAnchor(curCol: number, curRow: number): { col: number; row: number } {
     const type = this.placeType;
     if (type === GC.ObjType.SLOT_MACHINE) {
@@ -285,11 +283,11 @@ export class InputControllerV2 {
     return null;
   }
 
-  // Wall-service auto-orient (Phase 10B). Wall services have no genuine
-  // "user-chosen" facing — the facing only controls the horiz/vert
-  // dimsFor flip and the door-tile axis, both of which must match the
-  // wall the service attaches to. Force the facing to match the snapped
-  // wall side so the player never has to press R for a valid placement.
+  // Wall-service auto-orient. Wall services have no genuine "user-
+  // chosen" facing — the facing only controls the horiz/vert dimsFor
+  // flip and the door-tile axis, both of which must match the wall the
+  // service attaches to. Force the facing to match the snapped wall
+  // side so the player never has to press R for a valid placement.
   // R is still wired (so the player can dodge a guest standing in the
   // way etc.), but the next hover normalizes the facing back.
   private _autoOrientForWall(curCol: number, curRow: number): void {
@@ -302,7 +300,7 @@ export class InputControllerV2 {
     // validator rejects cleanly with the existing wall-side toast.
   }
 
-  // Wall-service snap. The Phase 3 validator rule rejects S/E walls;
+  // Wall-service snap. The N/W-only validator rule rejects S/E walls;
   // this snap is purely UX — when the cursor is near the N or W wall,
   // pin the perpendicular coordinate to row=1 / col=1 so the player
   // doesn't have to find the exact row/col. The validator remains the
@@ -403,7 +401,7 @@ export class InputControllerV2 {
 
     // Pre-validate so we don't displace guests for a placement that will
     // fail anyway (lets gameState.tryPlace emit its own canonical
-    // failure toast). Same guarding pattern as V1.
+    // failure toast).
     const pre = PV.validate(
       { type: objType, col: a.col, row: a.row, facing: this.placeFacing },
       gameState.tiles, gameState.cash, gameState.barExists,
@@ -416,7 +414,7 @@ export class InputControllerV2 {
 
     const ok = gameState.tryPlace(a.col, a.row, objType, this.placeFacing, this.placeVariant);
     if (ok) {
-      // Ctrl-click keeps placement mode open for repeats — matches V1.
+      // Ctrl-click keeps placement mode open for repeated placements.
       const ev   = ptr.event as MouseEvent | PointerEvent | undefined;
       const ctrl = !!(ev && ev.ctrlKey);
       if (!ctrl) {
@@ -434,9 +432,8 @@ export class InputControllerV2 {
   }
 
   // Tiles that will become unwalkable for visible guests after placement
-  // — footprint plus seat reservations for table-likes. Same set V1's
-  // _computePlacementBlockedTiles produces; included here so the V2
-  // guest layer can step out of the way before tryPlace mutates tiles.
+  // — footprint plus seat reservations for table-likes. The guest layer
+  // uses this to step out of the way before tryPlace mutates tiles.
   private _computeBlockedTiles(
     type: GC.ObjType, col: number, row: number, facing: GC.Orientation,
   ): GC.Vec2[] {

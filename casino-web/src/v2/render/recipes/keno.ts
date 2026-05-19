@@ -15,7 +15,7 @@ import {
 } from './drawHelpers';
 import { feltColorForVariant, drawFeltRim } from './tableShared';
 
-// Phase 5.4 — slightly thicker rim so the keno table reads as
+// Slightly thicker rim so the keno table reads as
 // physical furniture; display height unchanged (still the dominant
 // silhouette cue vs. regular tables).
 const KENO_RIM_HEIGHT_TILES     = 0.28;

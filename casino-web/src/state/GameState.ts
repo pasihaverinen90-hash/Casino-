@@ -38,15 +38,15 @@ interface SavePayload {
   // is null for an incomplete goal; null is also legitimate for a goal
   // that was already completed in a pre-1.5.0 save (the day was lost).
   completed_days: (number | null)[];
-  // Random Challenges V1 — added without a SAVE_VERSION bump. Both fields
-  // default to null via normalizeSave so pre-V1 saves load unchanged.
+  // Random Challenges system — added without a SAVE_VERSION bump. Both
+  // fields default to null via normalizeSave so older saves load unchanged.
   active_challenge : GC.ActiveChallenge | null;
   active_boost     : GC.ActiveBoost     | null;
-  // Campaign Challenge Schedule V1 — stable keys for scheduled entries that
+  // Campaign Challenge Schedule — stable keys for scheduled entries that
   // have already fired. Defaults to [] in normalizeSave so old saves load.
   triggered_scheduled_challenges : string[];
-  // Phase 10B: in-day clock position in game-minutes (0..1439). Lets a
-  // loaded save resume at the exact saved HH:MM instead of always
+  // In-day clock position in game-minutes (0..1439). Lets a loaded save
+  // resume at the exact saved HH:MM instead of always
   // restarting at 00:00. Defaults to 0 in normalizeSave so legacy saves
   // still load (and behave as before — start-of-day).
   clock_min   : number;
@@ -220,9 +220,10 @@ class GameState extends EventEmitter {
   // Fed into Simulation so non-functional objects contribute nothing.
   funcCounts : Record<GC.ObjType, number> = GC.makeObjTypeRecord(0);
   // Bar shorthands derived from counts/funcCounts. Kept as public fields
-  // because external callers (GridScene PV.validate, BuildPanel limit
-  // check, DaySnapshot) are simpler against a boolean than against
-  // `counts[ObjType.BAR] > 0`. Re-derived in `_updateCounts`.
+  // because external callers (PlacementValidator limit check, the
+  // BuildPanel at-limit indicator, DaySnapshot) are simpler against a
+  // boolean than against `counts[ObjType.BAR] > 0`. Re-derived in
+  // `_updateCounts`.
   barExists        = false;
   funcBarExists    = false;
   // Set of placed object ids that are currently functional. Recomputed
@@ -270,18 +271,18 @@ class GameState extends EventEmitter {
   // popup never replays on load. Player can keep playing forever after.
   endlessUnlocked = false;
 
-  // ── Random Challenges V1 ─────────────────────────────────────────────────
-  // At most one challenge and one boost active at a time in V1. Progress is
-  // updated from tryPlace (slot placements only, V1). Day-based lifecycle is
-  // resolved in endDay(). Both fields persist via SavePayload with safe nulls
-  // for pre-V1 saves — no SAVE_VERSION bump required.
+  // ── Random Challenges ────────────────────────────────────────────────────
+  // At most one challenge and one boost active at a time. Progress is
+  // updated from tryPlace (slot placements only). Day-based lifecycle is
+  // resolved in endDay(). Both fields persist via SavePayload with safe
+  // nulls for older saves — no SAVE_VERSION bump required.
   activeChallenge : GC.ActiveChallenge | null = null;
   activeBoost     : GC.ActiveBoost     | null = null;
 
-  // Campaign Challenge Schedule V1 — stable keys of scheduled entries that
+  // Campaign Challenge Schedule — stable keys of scheduled entries that
   // have already fired. See GC.CAMPAIGN_CHALLENGE_SCHEDULE and
-  // _tryStartScheduledChallenges. Resets to [] on new game and on load when
-  // the save predates the field.
+  // _tryStartScheduledChallenges. Resets to [] on new game and on load
+  // when the save predates the field.
   triggeredScheduledChallenges : string[] = [];
 
   // Stats history
@@ -450,7 +451,7 @@ class GameState extends EventEmitter {
     this.cash -= def.cost;
     this._updateCounts();
     this._checkGoals();
-    // Random Challenges V1 — Slot Promotion progress. Counts NEW slot
+    // Random Challenges — Slot Promotion progress. Counts NEW slot
     // placements only (loaded slots never come through tryPlace), and only
     // while the slot_promotion challenge is active.
     if (objType === GC.ObjType.SLOT_MACHINE
@@ -612,7 +613,7 @@ class GameState extends EventEmitter {
     this._hoursThisDay = 0;
     this.dayNumber++;
 
-    // Random Challenges V1 — day-based lifecycle. Order matters:
+    // Random Challenges — day-based lifecycle. Order matters:
     //   1. update comfort-check progress so a deadline-day pass wins
     //   2. expire the active challenge (failure announcement)
     //   3. expire the active boost (which may have been awarded last tick)
@@ -620,7 +621,7 @@ class GameState extends EventEmitter {
     this._expireChallengeIfDue();
     this._expireBoostIfDue();
 
-    // Campaign Challenge Schedule V1 — run after expiries so a newly-cleared
+    // Campaign Challenge Schedule — run after expiries so a newly-cleared
     // slot can immediately receive its scheduled challenge on the same
     // rollover. If a challenge is still active or a boost is still running,
     // the scheduler is a no-op and the entry waits for a later day.
@@ -690,7 +691,7 @@ class GameState extends EventEmitter {
       prev_occupancy    : this.occupancyRate,
       prev_revenue      : this.dailyRevenue,
       cumulative_income : this.cumulativeIncome,
-      // Random Challenges V1 — Slot Promotion reward, when active.
+      // Random Challenges — Slot Promotion reward, when active.
       slot_revenue_multiplier:
         this.activeBoost?.id === 'slot_revenue_boost'
           ? this.activeBoost.multiplier
@@ -840,7 +841,7 @@ class GameState extends EventEmitter {
     this.emit('toast_requested', 'Rating breakdown printed to console.');
   }
 
-  // ── Random Challenges V1 ─────────────────────────────────────────────────
+  // ── Random Challenges ─────────────────────────────────────────────────
 
   // Hidden dev shortcut for production testing — wired to Ctrl+Shift+C in
   // main.ts. Delegates to the shared start method so the manual path and
@@ -871,7 +872,7 @@ class GameState extends EventEmitter {
     };
     // Schedule-sourced starts use the "new challenge" framing so the player
     // reads it as an in-world event; debug starts keep the verbose framing
-    // they had in Random Challenges V1 for testing legibility.
+    // they had in Random Challenges for testing legibility.
     const msg = source === 'schedule'
       ? `New Challenge: Slot Promotion — Build ${GC.SLOT_PROMOTION_TARGET} Slot Machines in ${GC.SLOT_PROMOTION_DURATION_DAYS} days.`
       : `Challenge Started: Build ${GC.SLOT_PROMOTION_TARGET} Slot Machines in ${GC.SLOT_PROMOTION_DURATION_DAYS} days.`;
@@ -1041,9 +1042,10 @@ class GameState extends EventEmitter {
   }
 
   // Called from endDay() after dayNumber++. Fails the active challenge
-  // silently-with-toast if its deadline has passed; V1 applies no penalty.
-  // Tourist Bus uses its own copy so the boost isn't cleared on challenge
-  // failure — the walk-in boost is owned by _expireBoostIfDue.
+  // silently-with-toast if its deadline has passed; the current rules
+  // apply no penalty for missing it. Tourist Bus uses its own copy so
+  // the boost isn't cleared on challenge failure — the walk-in boost
+  // is owned by _expireBoostIfDue.
   private _expireChallengeIfDue(): void {
     const c = this.activeChallenge;
     if (!c) return;
@@ -1202,9 +1204,9 @@ class GameState extends EventEmitter {
       };
       const _v = PV.checkSpatial(req, this.tiles);
       if (_v !== GC.ValResult.VALID) {
-        // Dev-only breadcrumb. Helps notice when a save load silently drops
-        // an object because validator rules tightened (e.g. V2 N/W-only
-        // wall services in Phase 3 retroactively rejects legacy S/E
+        // Dev-only breadcrumb. Helps notice when a save load silently
+        // drops an object because validator rules tightened (e.g. the
+        // N/W-only wall-services rule retroactively rejects legacy S/E
         // placements). Not surfaced in UI; no refund; no save mutation.
         // eslint-disable-next-line no-console
         console.warn(
